@@ -24,6 +24,7 @@ import { Loading } from '../components/Loading.jsx';
 import { endpoints } from '../services/api.js';
 import { currency } from '../utils/format.js';
 import { useApi } from '../hooks/useApi.js';
+import { useSettings } from '../context/SettingsContext.jsx';
 
 const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
 const tabs = [
@@ -139,6 +140,7 @@ function MealCard({ item, favorite, onFavorite, onAdd }) {
 
 export default function PublicPortal() {
   const { data, loading, error, refetch } = useApi(() => endpoints.publicMenu(), []);
+  const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState('home');
   const [favorites, setFavorites] = useState([]);
   const [cart, setCart] = useState([]);
@@ -157,6 +159,7 @@ export default function PublicPortal() {
   const filteredItems = items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase()));
   const favoriteItems = items.filter((item) => favorites.includes(item.id));
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
+  const grandTotal = total + Number(settings.deliveryFee || 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
@@ -249,7 +252,7 @@ export default function PublicPortal() {
                 <Utensils size={23} />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-black uppercase text-red-600">Food delivery</p>
+                <p className="text-xs font-black uppercase text-red-600">{settings.shortName}</p>
                 <p className="flex items-center gap-1 truncate text-sm font-black text-stone-950">
                   <MapPin size={15} className="text-red-600" />
                   {orderForm.deliveryAddress || 'Choose delivery location'}
@@ -271,7 +274,7 @@ export default function PublicPortal() {
                 <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} />
               ))}
             </nav>
-            <button className="mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-red-50 text-sm font-black text-red-600" onClick={() => setReservationOpen(true)}>
+            <button className="mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-red-50 text-sm font-black text-red-600 disabled:opacity-50" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
               <CalendarClock size={17} /> Reserve
             </button>
             <a className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl bg-stone-50 text-sm font-black text-stone-700" href="/login">Admin login</a>
@@ -381,7 +384,7 @@ export default function PublicPortal() {
                       <p className="text-sm font-semibold text-stone-600">Anonymous checkout enabled</p>
                     </div>
                   </div>
-                  <RedButton className="mt-5 w-full" onClick={() => setReservationOpen(true)}><CalendarClock size={17} /> Reserve a meal</RedButton>
+                  <RedButton className="mt-5 w-full" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}><CalendarClock size={17} /> Reserve a meal</RedButton>
                   <a className="mt-3 flex h-11 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-red-600" href="/login">Admin login</a>
                 </div>
 
@@ -418,13 +421,13 @@ export default function PublicPortal() {
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-4 text-lg font-black">
               <span>Total</span>
-              <span className="text-red-600">{currency(total)}</span>
+              <span className="text-red-600">{currency(grandTotal)}</span>
             </div>
-            <RedButton className="mt-4 w-full" onClick={() => setOrderOpen(true)}>Checkout</RedButton>
+            <RedButton className="mt-4 w-full" disabled={!settings.publicOrdering} onClick={() => setOrderOpen(true)}>Checkout</RedButton>
           </aside>
         </div>
 
-        <button className="fixed bottom-5 right-4 z-30 flex h-14 items-center gap-2 rounded-full bg-red-600 px-5 font-black text-white shadow-xl shadow-red-300 lg:hidden" onClick={() => setOrderOpen(true)}>
+        <button className="fixed bottom-5 right-4 z-30 flex h-14 items-center gap-2 rounded-full bg-red-600 px-5 font-black text-white shadow-xl shadow-red-300 disabled:opacity-50 lg:hidden" disabled={!settings.publicOrdering} onClick={() => setOrderOpen(true)}>
           <ShoppingBag size={20} />
           {cartCount ? `${cartCount} item${cartCount > 1 ? 's' : ''}` : 'Basket'}
         </button>
@@ -463,7 +466,7 @@ export default function PublicPortal() {
           </div>
           <div className="mt-5 flex items-center justify-between border-t border-stone-100 pt-4 text-lg font-black">
             <span>Total</span>
-            <span className="text-red-600">{currency(total)}</span>
+            <span className="text-red-600">{currency(grandTotal)}</span>
           </div>
           <RedButton className="mt-4 w-full" disabled={submitting}>{submitting ? 'Submitting...' : 'Place order'}</RedButton>
         </form>

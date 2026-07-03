@@ -85,8 +85,8 @@ export default function Stock() {
             key: 'status',
             label: 'Status',
             render: (row) => Number(row.quantity) <= Number(row.reorderLevel)
-              ? <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-bold text-rose-700">Low</span>
-              : <span className="rounded-full bg-brand-50 px-2 py-1 text-xs font-bold text-brand-700">Healthy</span>
+              ? <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-black text-red-700">Low</span>
+              : <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-black text-green-700">Healthy</span>
           },
           { key: 'reorderLevel', label: 'Reorder level', render: (row) => `${Number(row.reorderLevel)} ${row.unit}` },
           { key: 'unitCost', label: 'Unit cost', render: (row) => currency(row.unitCost) },
@@ -104,7 +104,7 @@ export default function Stock() {
         ]}
       />
       <div className="mt-5">
-        <h2 className="mb-3 font-bold">Recent stock movements</h2>
+        <h2 className="mb-3 font-black">Recent stock movements</h2>
         <DataTable
           rows={movements.data?.items || []}
           empty="No stock movements yet"

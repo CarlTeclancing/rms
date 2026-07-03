@@ -6,6 +6,8 @@ const range = (query) => ({
   lte: query.to ? new Date(query.to) : new Date()
 });
 
+const optionalFindMany = (delegate, args) => (delegate?.findMany ? delegate.findMany(args).catch(() => []) : Promise.resolve([]));
+
 export const salesReport = asyncHandler(async (req, res) => {
   const createdAt = range(req.query);
   const sales = await prisma.sale.findMany({
@@ -13,7 +15,7 @@ export const salesReport = asyncHandler(async (req, res) => {
     include: { saleItems: { include: { menuItem: true } }, payments: true },
     orderBy: { createdAt: 'desc' }
   });
-  const onlineOrders = await prisma.onlineOrder.findMany({
+  const onlineOrders = await optionalFindMany(prisma.onlineOrder, {
     where: { createdAt, status: { not: 'CANCELLED' } },
     include: { items: { include: { menuItem: true } } },
     orderBy: { createdAt: 'desc' }

@@ -1,4 +1,4 @@
-import { Plus, Upload } from 'lucide-react';
+import { Edit2, Plus, Trash2, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { DataTable } from '../components/DataTable.jsx';
@@ -14,6 +14,7 @@ export default function Expenses() {
   const { data, loading, error, refetch } = useApi(() => endpoints.expenses({ limit: 100 }), []);
   const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [file, setFile] = useState(null);
   const [form, setForm] = useState({ title: '', amount: '', categoryId: '', note: '' });
 
@@ -31,9 +32,11 @@ export default function Expenses() {
         const upload = await endpoints.uploadReceipt(uploadData);
         receiptUrl = upload.data.url;
       }
-      await endpoints.createExpense({ ...form, receiptUrl });
-      toast.success('Expense recorded');
+      if (editing) await endpoints.updateExpense(editing.id, { ...form, ...(receiptUrl ? { receiptUrl } : {}) });
+      else await endpoints.createExpense({ ...form, receiptUrl });
+      toast.success(editing ? 'Expense updated' : 'Expense recorded');
       setOpen(false);
+      setEditing(null);
       setFile(null);
       setForm({ title: '', amount: '', categoryId: '', note: '' });
       refetch();
@@ -42,12 +45,26 @@ export default function Expenses() {
     }
   };
 
+  const openEditor = (expense = null) => {
+    setEditing(expense);
+    setForm(expense ? { title: expense.title, amount: expense.amount, categoryId: expense.categoryId, note: expense.note || '' } : { title: '', amount: '', categoryId: '', note: '' });
+    setFile(null);
+    setOpen(true);
+  };
+
+  const remove = async (expense) => {
+    if (!confirm(`Delete ${expense.title}?`)) return;
+    await endpoints.deleteExpense(expense.id);
+    toast.success('Expense deleted');
+    refetch();
+  };
+
   if (loading) return <Loading label="Loading expenses" />;
   if (error || !data) return <EmptyState title="Expenses unavailable" message="Expenses could not be loaded from the API." onRetry={refetch} />;
 
   return (
     <>
-      <PageHeader title="Expenses" description="Record operating costs and upload receipt images." action={<button className="btn-primary" onClick={() => setOpen(true)}><Plus size={18} /> Add expense</button>} />
+      <PageHeader title="Expenses" description="Record, edit, delete, and review operating costs with receipts." action={<button className="btn-primary" onClick={() => openEditor()}><Plus size={18} /> Add expense</button>} />
       <DataTable
         rows={data.items || []}
         columns={[
@@ -55,10 +72,20 @@ export default function Expenses() {
           { key: 'category', label: 'Category', render: (row) => row.category?.name },
           { key: 'amount', label: 'Amount', render: (row) => currency(row.amount) },
           { key: 'expenseDate', label: 'Date', render: (row) => compactDate(row.expenseDate) },
-          { key: 'receiptUrl', label: 'Receipt', render: (row) => (row.receiptUrl ? <a className="font-semibold text-brand-700" href={row.receiptUrl} target="_blank">View</a> : '-') }
+          { key: 'receiptUrl', label: 'Receipt', render: (row) => (row.receiptUrl ? <a className="font-black text-red-700" href={row.receiptUrl} target="_blank">View</a> : '-') },
+          {
+            key: 'actions',
+            label: 'Actions',
+            render: (row) => (
+              <div className="flex gap-2">
+                <button className="btn-secondary h-8 w-8 p-0" onClick={() => openEditor(row)}><Edit2 size={15} /></button>
+                <button className="btn-secondary h-8 w-8 p-0" onClick={() => remove(row)}><Trash2 size={15} /></button>
+              </div>
+            )
+          }
         ]}
       />
-      <Modal title="Add expense" open={open} onClose={() => setOpen(false)}>
+      <Modal title={editing ? 'Edit expense' : 'Add expense'} open={open} onClose={() => setOpen(false)}>
         <form className="space-y-4" onSubmit={submit}>
           <div>
             <label className="label">Title</label>
@@ -84,7 +111,7 @@ export default function Expenses() {
               <input className="hidden" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0])} />
             </label>
           </div>
-          <button className="btn-primary w-full">Save expense</button>
+          <button className="btn-primary w-full">{editing ? 'Update expense' : 'Save expense'}</button>
         </form>
       </Modal>
     </>

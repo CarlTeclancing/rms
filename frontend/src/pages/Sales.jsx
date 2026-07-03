@@ -62,8 +62,8 @@ export default function Sales() {
       <PageHeader title="Sales / POS" description="Tap items into the cart and complete cash sales." />
       <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {(data.items || []).map((item) => (
-            <button key={item.id} className="card p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-200" onClick={() => add(item)}>
+          {(data.items || []).filter((item) => item.isAvailable).map((item) => (
+            <button key={item.id} className="card p-4 text-left transition hover:-translate-y-0.5 hover:border-red-300" onClick={() => add(item)}>
               <img
                 className="mb-3 h-32 w-full rounded-lg object-cover"
                 src={item.imageUrl || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80'}
@@ -74,7 +74,7 @@ export default function Sales() {
                   <p className="font-bold">{item.name}</p>
                   <p className="mt-1 text-sm text-stone-500">{item.category?.name}</p>
                 </div>
-                <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-bold text-brand-700">{currency(item.price)}</span>
+                <span className="rounded-full bg-red-50 px-3 py-1 text-sm font-black text-red-700">{currency(item.price)}</span>
               </div>
             </button>
           ))}
@@ -82,7 +82,7 @@ export default function Sales() {
         <aside className="card sticky top-20 self-start p-4">
           <div className="flex items-center justify-between">
             <h2 className="font-bold">Current order</h2>
-            <ShoppingBag size={20} className="text-brand-600" />
+            <ShoppingBag size={20} className="text-red-600" />
           </div>
           <div className="mt-4 space-y-3">
             {cart.length ? (

@@ -42,7 +42,7 @@ export function ChartPanel({ title, labels, values, type = 'bar', color = '#2096
 
   return (
     <div className="card p-4">
-      <h2 className="font-bold">{title}</h2>
+      <h2 className="font-black">{title}</h2>
       <div className="mt-4 h-72">
         <Chart data={data} options={baseOptions} />
       </div>

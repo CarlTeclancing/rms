@@ -37,8 +37,8 @@ export default function Reports() {
         <StatCard title="Orders" value={sales.data.orders} icon={ShoppingCart} tone="blue" />
       </div>
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-        <ChartPanel title="Sales channels" labels={['POS', 'Online']} values={[sales.data.posSales || 0, sales.data.onlineSales || 0]} color="#20966d" />
-        <ChartPanel title="Expenses by category" labels={categoryData.map((item) => item.name)} values={categoryData.map((item) => item.amount)} color="#d97706" />
+        <ChartPanel title="Sales channels" labels={['POS', 'Online']} values={[sales.data.posSales || 0, sales.data.onlineSales || 0]} color="#dc2626" />
+        <ChartPanel title="Expenses by category" labels={categoryData.map((item) => item.name)} values={categoryData.map((item) => item.amount)} color="#f97316" />
       </div>
     </>
   );

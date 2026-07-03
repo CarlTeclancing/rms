@@ -1,4 +1,4 @@
-import { Edit2, Plus, Trash2 } from 'lucide-react';
+import { Edit2, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { DataTable } from '../components/DataTable.jsx';
@@ -15,7 +15,7 @@ export default function Menu() {
   const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', price: '', categoryId: '', description: '', imageUrl: '' });
+  const [form, setForm] = useState({ name: '', price: '', categoryId: '', description: '', imageUrl: '', isAvailable: true });
 
   useEffect(() => {
     endpoints.menuCategories().then((res) => setCategories(res.data));
@@ -29,7 +29,7 @@ export default function Menu() {
       toast.success(editing ? 'Menu item updated' : 'Menu item added');
       setOpen(false);
       setEditing(null);
-      setForm({ name: '', price: '', categoryId: '', description: '', imageUrl: '' });
+      setForm({ name: '', price: '', categoryId: '', description: '', imageUrl: '', isAvailable: true });
       refetch();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Could not save menu item');
@@ -38,8 +38,14 @@ export default function Menu() {
 
   const openEditor = (item = null) => {
     setEditing(item);
-    setForm(item ? { name: item.name, price: item.price, categoryId: item.categoryId, description: item.description || '', imageUrl: item.imageUrl || '' } : { name: '', price: '', categoryId: '', description: '', imageUrl: '' });
+    setForm(item ? { name: item.name, price: item.price, categoryId: item.categoryId, description: item.description || '', imageUrl: item.imageUrl || '', isAvailable: item.isAvailable } : { name: '', price: '', categoryId: '', description: '', imageUrl: '', isAvailable: true });
     setOpen(true);
+  };
+
+  const toggleAvailability = async (item) => {
+    await endpoints.updateMenuItem(item.id, { isAvailable: !item.isAvailable });
+    toast.success(item.isAvailable ? 'Product hidden' : 'Product available');
+    refetch();
   };
 
   const remove = async (item) => {
@@ -56,7 +62,7 @@ export default function Menu() {
     <>
       <PageHeader
         title="Menu management"
-        description="Create dishes, set prices, and organize categories."
+        description="Create dishes, set prices, upload visuals, and control public availability."
         action={<button className="btn-primary" onClick={() => openEditor()}><Plus size={18} /> Add item</button>}
       />
       <DataTable
@@ -74,12 +80,21 @@ export default function Menu() {
           },
           { key: 'category', label: 'Category', render: (row) => row.category?.name },
           { key: 'price', label: 'Price', render: (row) => currency(row.price) },
-          { key: 'isAvailable', label: 'Status', render: (row) => (row.isAvailable ? 'Available' : 'Hidden') },
+          {
+            key: 'isAvailable',
+            label: 'Status',
+            render: (row) => row.isAvailable
+              ? <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-700">Available</span>
+              : <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">Hidden</span>
+          },
           {
             key: 'actions',
             label: 'Actions',
             render: (row) => (
               <div className="flex gap-2">
+                <button className="btn-secondary h-8 w-8 p-0" onClick={() => toggleAvailability(row)} title={row.isAvailable ? 'Hide product' : 'Show product'}>
+                  {row.isAvailable ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
                 <button className="btn-secondary h-8 w-8 p-0" onClick={() => openEditor(row)}><Edit2 size={15} /></button>
                 <button className="btn-secondary h-8 w-8 p-0" onClick={() => remove(row)}><Trash2 size={15} /></button>
               </div>
@@ -114,6 +129,13 @@ export default function Menu() {
             <label className="label">Product image URL</label>
             <input className="input mt-1" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
           </div>
+          <label className="flex items-center justify-between rounded-2xl bg-red-50 p-3">
+            <span>
+              <span className="block text-sm font-black text-stone-900">Available to sell</span>
+              <span className="text-xs font-semibold text-stone-500">Turn off to hide from POS and online ordering.</span>
+            </span>
+            <input className="h-5 w-5 accent-red-600" type="checkbox" checked={form.isAvailable} onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })} />
+          </label>
           <button className="btn-primary w-full">{editing ? 'Update item' : 'Save item'}</button>
         </form>
       </Modal>

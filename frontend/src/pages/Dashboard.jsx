@@ -28,13 +28,13 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <ChartPanel title="Top selling items" labels={(data.topItems || []).map((item) => item.name)} values={(data.topItems || []).map((item) => item.quantity)} />
+        <ChartPanel title="Top selling items" labels={(data.topItems || []).map((item) => item.name)} values={(data.topItems || []).map((item) => item.quantity)} color="#dc2626" />
         <div className="card p-4">
           <h2 className="font-bold">Low stock</h2>
           <div className="mt-4 space-y-3">
             {data.lowStockItems?.length ? (
               (data.lowStockItems || []).map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-lg bg-stone-50 p-3">
+                <div key={item.id} className="flex items-center justify-between rounded-2xl bg-red-50 p-3">
                   <div>
                     <p className="font-semibold">{item.name}</p>
                     <p className="text-xs text-stone-500">Reorder at {Number(item.reorderLevel)} {item.unit}</p>
@@ -51,7 +51,7 @@ export default function Dashboard() {
         </div>
       </div>
       <div className="mt-6">
-        <ChartPanel title="Inventory on hand" labels={(data.stockItems || []).map((item) => item.name)} values={(data.stockItems || []).map((item) => Number(item.quantity))} color="#0284c7" />
+        <ChartPanel title="Inventory on hand" labels={(data.stockItems || []).map((item) => item.name)} values={(data.stockItems || []).map((item) => Number(item.quantity))} color="#dc2626" />
       </div>
     </>
   );

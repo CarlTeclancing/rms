@@ -5,6 +5,7 @@ const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.
 const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
 const sumDecimal = (rows, field) => rows.reduce((sum, row) => sum + Number(row[field] || 0), 0);
+const optionalFindMany = (delegate, args) => (delegate?.findMany ? delegate.findMany(args).catch(() => []) : Promise.resolve([]));
 
 export const getStats = asyncHandler(async (_req, res) => {
   const now = new Date();
@@ -27,8 +28,8 @@ export const getStats = asyncHandler(async (_req, res) => {
       orderBy: { _sum: { quantity: 'desc' } },
       take: 5
     }),
-    prisma.onlineOrder.findMany({ where: { createdAt: { gte: month } } }),
-    prisma.reservation.findMany({ where: { reservationAt: { gte: today } } })
+    optionalFindMany(prisma.onlineOrder, { where: { createdAt: { gte: month } } }),
+    optionalFindMany(prisma.reservation, { where: { reservationAt: { gte: today } } })
   ]);
 
   const settled = [dailySales, monthlySales, monthlyExpenses, stockItems, recentSales, topItems].map((result) => {
