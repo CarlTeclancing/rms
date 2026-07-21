@@ -20,14 +20,44 @@ import { openApiSpec } from './docs/openapi.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 export const app = express();
+const allowedOrigins = env.frontendUrl.split(',').map((origin) => origin.trim()).filter(Boolean);
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+
+  try {
+    const hostname = new URL(origin).hostname;
+    return hostname === 'app.chopasap.com' || hostname === 'www.app.chopasap.com' || hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+};
 
 app.use(helmet());
-app.use(cors({ origin: env.frontendUrl, credentials: true }));
+app.use(cors({
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`CORS blocked origin: ${origin}`));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(env.nodeEnv === 'development' ? 'dev' : 'combined'));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 300 }));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'restaurant-system-api' }));
+app.get('/api', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'restaurant-system-api',
+    docs: '/api-docs',
+    health: '/health',
+    publicMenu: '/api/public/menu'
+  });
+});
 app.get('/api-docs.json', (_req, res) => res.json(openApiSpec));
 app.get('/api-docs', (_req, res) => {
   res.setHeader(
