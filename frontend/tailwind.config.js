@@ -3,20 +3,23 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+        sans: ['Poppins', 'ui-sans-serif', 'system-ui', 'sans-serif']
       },
       colors: {
         brand: {
-          50: '#eef8f3',
-          100: '#d8f0e3',
-          500: '#20966d',
-          600: '#187b5a',
-          700: '#146348'
+          50: '#fff8e3',
+          100: '#fff1ca',
+          200: '#ffd071',
+          500: '#d71920',
+          600: '#bd151c',
+          700: '#971116'
         },
+        app: '#eef8fa',
         ink: '#17211f'
       },
       boxShadow: {
-        soft: '0 18px 60px rgba(23, 33, 31, 0.08)'
+        soft: '0 18px 60px rgba(40, 50, 60, 0.08)',
+        brand: '0 14px 28px rgba(215, 25, 32, 0.16)'
       }
     }
   },

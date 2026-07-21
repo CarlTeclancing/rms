@@ -15,7 +15,9 @@ export default function Menu() {
   const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', price: '', categoryId: '', description: '', imageUrl: '', isAvailable: true });
+  const emptyForm = { name: '', price: '', categoryId: '', description: '', imageUrl: '', isAvailable: true, variations: [] };
+  const [form, setForm] = useState(emptyForm);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     endpoints.menuCategories().then((res) => setCategories(res.data));
@@ -29,17 +31,49 @@ export default function Menu() {
       toast.success(editing ? 'Menu item updated' : 'Menu item added');
       setOpen(false);
       setEditing(null);
-      setForm({ name: '', price: '', categoryId: '', description: '', imageUrl: '', isAvailable: true });
+      setForm(emptyForm);
       refetch();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Could not save menu item');
     }
   };
 
+  const uploadImage = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append('image', file);
+      uploadData.append('folder', 'restaurant-system/menu');
+      const response = await endpoints.uploadImage(uploadData);
+      setForm((current) => ({ ...current, imageUrl: response.data.url }));
+      toast.success('Image uploaded');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not upload image');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const openEditor = (item = null) => {
     setEditing(item);
-    setForm(item ? { name: item.name, price: item.price, categoryId: item.categoryId, description: item.description || '', imageUrl: item.imageUrl || '', isAvailable: item.isAvailable } : { name: '', price: '', categoryId: '', description: '', imageUrl: '', isAvailable: true });
+    setForm(item ? { name: item.name, price: item.price, categoryId: item.categoryId, description: item.description || '', imageUrl: item.imageUrl || '', isAvailable: item.isAvailable, variations: Array.isArray(item.variations) ? item.variations : [] } : emptyForm);
     setOpen(true);
+  };
+
+  const updateVariation = (index, field, value) => {
+    setForm((current) => ({
+      ...current,
+      variations: current.variations.map((variation, variationIndex) => (variationIndex === index ? { ...variation, [field]: value } : variation))
+    }));
+  };
+
+  const addVariation = () => {
+    setForm((current) => ({ ...current, variations: [...current.variations, { name: '', price: current.price || '' }] }));
+  };
+
+  const removeVariation = (index) => {
+    setForm((current) => ({ ...current, variations: current.variations.filter((_, variationIndex) => variationIndex !== index) }));
   };
 
   const toggleAvailability = async (item) => {
@@ -81,11 +115,18 @@ export default function Menu() {
           { key: 'category', label: 'Category', render: (row) => row.category?.name },
           { key: 'price', label: 'Price', render: (row) => currency(row.price) },
           {
+            key: 'variations',
+            label: 'Type',
+            render: (row) => Array.isArray(row.variations) && row.variations.length
+              ? <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-black text-sky-700">{row.variations.length} variations</span>
+              : <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-black text-stone-600">Standard</span>
+          },
+          {
             key: 'isAvailable',
             label: 'Status',
             render: (row) => row.isAvailable
               ? <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-700">Available</span>
-              : <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">Hidden</span>
+              : <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-black text-brand-500">Hidden</span>
           },
           {
             key: 'actions',
@@ -125,16 +166,45 @@ export default function Menu() {
             <label className="label">Description</label>
             <textarea className="input mt-1 h-24 py-3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
-          <div>
-            <label className="label">Product image URL</label>
-            <input className="input mt-1" value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })} placeholder="https://..." />
+          <div className="rounded-xl border border-[#dbe5e8] bg-brand-50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <label className="label">Meal variations</label>
+                <p className="mt-1 text-xs font-semibold text-stone-500">Use this for meals like With fish or With chicken. Leave empty for a normal meal.</p>
+              </div>
+              <button className="btn-secondary h-9 px-3" type="button" onClick={addVariation}><Plus size={15} /> Add</button>
+            </div>
+            {form.variations.length ? (
+              <div className="mt-3 grid gap-2">
+                {form.variations.map((variation, index) => (
+                  <div key={index} className="grid gap-2 sm:grid-cols-[1fr_130px_36px]">
+                    <input className="input h-10" placeholder="Variation name" value={variation.name} onChange={(e) => updateVariation(index, 'name', e.target.value)} />
+                    <input className="input h-10" type="number" min="0" step="0.01" placeholder="Price" value={variation.price} onChange={(e) => updateVariation(index, 'price', e.target.value)} />
+                    <button className="btn-secondary h-10 w-10 p-0" type="button" onClick={() => removeVariation(index)} aria-label="Remove variation"><Trash2 size={15} /></button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <label className="flex items-center justify-between rounded-2xl bg-red-50 p-3">
+          <div>
+            <label className="label">Product image</label>
+            <div className="mt-1 grid gap-3 sm:grid-cols-[96px_1fr]">
+              <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-xl border border-[#dbe5e8] bg-brand-50">
+                {form.imageUrl ? <img className="h-full w-full object-cover" src={form.imageUrl} alt="Menu item preview" /> : <Plus className="text-brand-500" size={24} />}
+              </div>
+              <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-xl border border-dashed border-[#dbe5e8] bg-white px-4 text-sm font-semibold text-[#6f7a86] hover:border-brand-500">
+                <span className="font-black text-[#151923]">{uploading ? 'Uploading...' : 'Upload image'}</span>
+                <span className="mt-1 text-xs">PNG, JPG, or WEBP up to 5MB.</span>
+                <input className="hidden" type="file" accept="image/*" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} />
+              </label>
+            </div>
+          </div>
+          <label className="flex items-center justify-between rounded-xl bg-brand-50 p-3">
             <span>
               <span className="block text-sm font-black text-stone-900">Available to sell</span>
               <span className="text-xs font-semibold text-stone-500">Turn off to hide from POS and online ordering.</span>
             </span>
-            <input className="h-5 w-5 accent-red-600" type="checkbox" checked={form.isAvailable} onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })} />
+            <input className="h-5 w-5 accent-brand-500" type="checkbox" checked={form.isAvailable} onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })} />
           </label>
           <button className="btn-primary w-full">{editing ? 'Update item' : 'Save item'}</button>
         </form>

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,7 +12,7 @@
   body {
     margin: 0;
     min-height: 100vh;
-    background: #fff1f2;
+    background: #eef8fa;
     color: #17211f;
   }
 
@@ -24,7 +26,7 @@
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-red-100 bg-white shadow-soft;
+    @apply rounded-xl border border-[#dbe5e8] bg-white shadow-soft;
   }
 
   .btn {
@@ -32,15 +34,15 @@
   }
 
   .btn-primary {
-    @apply btn bg-red-600 text-white shadow-sm shadow-red-200 hover:bg-red-700;
+    @apply btn bg-brand-500 text-white shadow-brand hover:bg-brand-600;
   }
 
   .btn-secondary {
-    @apply btn border border-red-100 bg-white text-ink hover:bg-red-50 hover:text-red-700;
+    @apply btn border border-[#dbe5e8] bg-white text-ink hover:bg-brand-100 hover:text-brand-500;
   }
 
   .input {
-    @apply h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-stone-400 focus:border-red-500 focus:ring-4 focus:ring-red-100;
+    @apply h-11 w-full rounded-xl border border-[#dbe5e8] bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-stone-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100;
   }
 
   .label {

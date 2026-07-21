@@ -9,6 +9,7 @@ const saleInclude = {
   saleItems: { include: { menuItem: true } },
   payments: true
 };
+const saleTransactionOptions = { maxWait: 10000, timeout: 20000 };
 
 export const listSales = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query);
@@ -23,42 +24,45 @@ export const createSale = asyncHandler(async (req, res) => {
   const { items, paymentMethod = 'CASH', amountPaid, discount = 0, tax = 0 } = req.body;
   if (!items?.length) throw new ApiError(422, 'At least one sale item is required');
 
-  const sale = await prisma.$transaction(async (tx) => {
-    const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items);
+  const sale = await prisma.$transaction(
+    async (tx) => {
+      const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items);
 
-    const subtotal = itemRows.reduce((sum, item) => sum + item.total, 0);
-    const total = subtotal + Number(tax) - Number(discount);
+      const subtotal = itemRows.reduce((sum, item) => sum + item.total, 0);
+      const total = subtotal + Number(tax) - Number(discount);
 
-    const created = await tx.sale.create({
-      data: {
-        orderNo: `ORD-${Date.now()}`,
-        userId: req.user.id,
-        subtotal,
-        tax: Number(tax),
-        discount: Number(discount),
-        total,
-        saleItems: {
-          create: itemRows.map((row) => ({
-            menuItemId: row.menuItem.id,
-            quantity: row.quantity,
-            unitPrice: row.unitPrice,
-            total: row.total
-          }))
-        },
-        payments: {
-          create: {
-            method: paymentMethod,
-            amount: Number(amountPaid || total)
+      const created = await tx.sale.create({
+        data: {
+          orderNo: `ORD-${Date.now()}`,
+          userId: req.user.id,
+          subtotal,
+          tax: Number(tax),
+          discount: Number(discount),
+          total,
+          saleItems: {
+            create: itemRows.map((row) => ({
+              menuItemId: row.menuItem.id,
+              quantity: row.quantity,
+              unitPrice: row.unitPrice,
+              total: row.total
+            }))
+          },
+          payments: {
+            create: {
+              method: paymentMethod,
+              amount: Number(amountPaid || total)
+            }
           }
-        }
-      },
-      include: saleInclude
-    });
+        },
+        include: saleInclude
+      });
 
-    await applyStockDeductions(tx, deductions, `Sale ${created.orderNo}`);
+      await applyStockDeductions(tx, deductions, `Sale ${created.orderNo}`);
 
-    return created;
-  });
+      return created;
+    },
+    saleTransactionOptions
+  );
 
   res.status(201).json(sale);
 });

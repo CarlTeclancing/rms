@@ -34,7 +34,7 @@ export default function Dashboard() {
           <div className="mt-4 space-y-3">
             {data.lowStockItems?.length ? (
               (data.lowStockItems || []).map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-2xl bg-red-50 p-3">
+                <div key={item.id} className="flex items-center justify-between rounded-xl bg-brand-50 p-3">
                   <div>
                     <p className="font-semibold">{item.name}</p>
                     <p className="text-xs text-stone-500">Reorder at {Number(item.reorderLevel)} {item.unit}</p>

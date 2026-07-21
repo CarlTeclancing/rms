@@ -72,7 +72,7 @@ export default function Expenses() {
           { key: 'category', label: 'Category', render: (row) => row.category?.name },
           { key: 'amount', label: 'Amount', render: (row) => currency(row.amount) },
           { key: 'expenseDate', label: 'Date', render: (row) => compactDate(row.expenseDate) },
-          { key: 'receiptUrl', label: 'Receipt', render: (row) => (row.receiptUrl ? <a className="font-black text-red-700" href={row.receiptUrl} target="_blank">View</a> : '-') },
+          { key: 'receiptUrl', label: 'Receipt', render: (row) => (row.receiptUrl ? <a className="font-black text-brand-500" href={row.receiptUrl} target="_blank">View</a> : '-') },
           {
             key: 'actions',
             label: 'Actions',

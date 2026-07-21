@@ -4,6 +4,10 @@ export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 });
 
+const publicApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+});
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('rms_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -26,9 +30,12 @@ export const endpoints = {
   login: (data) => api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
   dashboard: () => api.get('/dashboard/stats'),
-  publicMenu: () => api.get('/public/menu'),
-  createOnlineOrder: (data) => api.post('/public/orders', data),
-  createReservation: (data) => api.post('/public/reservations', data),
+  publicMenu: () => publicApi.get('/public/menu'),
+  publicPromotions: () => publicApi.get('/public/promotions'),
+  submitPromotionRequest: (data) => publicApi.post('/public/promotions', data),
+  uploadPublicPromotionImage: (data) => publicApi.post('/public/upload/promotion-image', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  createOnlineOrder: (data) => publicApi.post('/public/orders', data),
+  createReservation: (data) => publicApi.post('/public/reservations', data),
   menuItems: (params) => api.get('/menu-items', { params }),
   createMenuItem: (data) => api.post('/menu-items', data),
   updateMenuItem: (id, data) => api.put(`/menu-items/${id}`, data),
@@ -53,8 +60,15 @@ export const endpoints = {
   deleteExpense: (id) => api.delete(`/expenses/${id}`),
   expenseCategories: () => api.get('/expense-categories'),
   uploadReceipt: (data) => api.post('/upload/receipt', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  uploadImage: (data) => api.post('/upload/image', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   salesReport: (params) => api.get('/reports/sales', { params }),
   expensesReport: (params) => api.get('/reports/expenses', { params }),
+  businessIntelligence: (params) => api.get('/analytics/business-intelligence', { params }),
+  exportBusinessIntelligence: (params) => api.get('/reports/business-intelligence/export', { params, responseType: 'blob' }),
+  promotions: (params) => api.get('/promotions', { params }),
+  createPromotion: (data) => api.post('/promotions', data),
+  updatePromotion: (id, data) => api.put(`/promotions/${id}`, data),
+  deletePromotion: (id) => api.delete(`/promotions/${id}`),
   users: (params) => api.get('/users', { params }),
   createUser: (data) => api.post('/users', data),
   updateUser: (id, data) => api.put(`/users/${id}`, data),

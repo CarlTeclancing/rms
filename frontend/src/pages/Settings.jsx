@@ -27,12 +27,12 @@ export default function Settings() {
       <div className="grid gap-5 xl:grid-cols-[1.2fr_1fr]">
         <form className="card p-5" onSubmit={submit}>
           <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-red-700">
+            <div className="grid h-12 w-12 place-items-center rounded-xl bg-brand-100 text-brand-500">
               <Store size={22} />
             </div>
             <div>
               <h2 className="font-black">Storefront settings</h2>
-              <p className="text-sm font-semibold text-stone-500">These values update the admin shell and customer portal.</p>
+              <p className="text-sm font-semibold text-stone-500">These values update the management console and customer portal.</p>
             </div>
           </div>
 
@@ -65,25 +65,25 @@ export default function Settings() {
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <label className="flex items-center justify-between rounded-2xl bg-red-50 p-4">
+            <label className="flex items-center justify-between rounded-xl bg-brand-50 p-4">
               <span className="flex items-center gap-3">
-                <Truck className="text-red-700" size={20} />
+                <Truck className="text-brand-500" size={20} />
                 <span>
                   <span className="block text-sm font-black">Online ordering</span>
                   <span className="text-xs font-semibold text-stone-500">Enable customer delivery orders.</span>
                 </span>
               </span>
-              <input className="h-5 w-5 accent-red-600" type="checkbox" checked={form.publicOrdering} onChange={(e) => setForm({ ...form, publicOrdering: e.target.checked })} />
+              <input className="h-5 w-5 accent-brand-500" type="checkbox" checked={form.publicOrdering} onChange={(e) => setForm({ ...form, publicOrdering: e.target.checked })} />
             </label>
-            <label className="flex items-center justify-between rounded-2xl bg-red-50 p-4">
+            <label className="flex items-center justify-between rounded-xl bg-brand-50 p-4">
               <span className="flex items-center gap-3">
-                <Bell className="text-red-700" size={20} />
+                <Bell className="text-brand-500" size={20} />
                 <span>
                   <span className="block text-sm font-black">Reservations</span>
                   <span className="text-xs font-semibold text-stone-500">Enable meal booking requests.</span>
                 </span>
               </span>
-              <input className="h-5 w-5 accent-red-600" type="checkbox" checked={form.reservations} onChange={(e) => setForm({ ...form, reservations: e.target.checked })} />
+              <input className="h-5 w-5 accent-brand-500" type="checkbox" checked={form.reservations} onChange={(e) => setForm({ ...form, reservations: e.target.checked })} />
             </label>
           </div>
 
@@ -96,7 +96,7 @@ export default function Settings() {
             return (
               <div key={item.title} className="card p-5">
                 <div className="flex items-start gap-4">
-                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-red-50 text-red-700">
+                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-brand-100 text-brand-500">
                     <Icon size={21} />
                   </div>
                   <div>

@@ -11,8 +11,10 @@ export const buildSaleRowsAndDeductions = async (tx, items) => {
   const itemRows = items.map((item) => {
     const menuItem = menuItems.find((entry) => entry.id === item.menuItemId);
     const quantity = Number(item.quantity);
-    const unitPrice = Number(menuItem.price);
-    return { menuItem, quantity, unitPrice, total: unitPrice * quantity };
+    const variations = Array.isArray(menuItem.variations) ? menuItem.variations : [];
+    const variation = item.variationName ? variations.find((entry) => entry.name === item.variationName) : null;
+    const unitPrice = variation ? Number(variation.price) : Number(menuItem.price);
+    return { menuItem, variationName: variation?.name || null, quantity, unitPrice, total: unitPrice * quantity };
   });
 
   const deductions = new Map();

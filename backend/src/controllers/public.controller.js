@@ -4,6 +4,7 @@ import { ApiError } from '../utils/apiError.js';
 import { applyStockDeductions, buildSaleRowsAndDeductions } from '../services/stock.service.js';
 
 const menuInclude = { category: true };
+const orderTransactionOptions = { maxWait: 10000, timeout: 20000 };
 
 export const publicMenu = asyncHandler(async (_req, res) => {
   const items = await prisma.menuItem.findMany({
@@ -18,39 +19,43 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
   const { items, deliveryFee = 0, latitude, longitude, ...customer } = req.body;
   if (!items?.length) throw new ApiError(422, 'At least one item is required');
 
-  const order = await prisma.$transaction(async (tx) => {
-    const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items);
-    const subtotal = itemRows.reduce((sum, item) => sum + item.total, 0);
-    const total = subtotal + Number(deliveryFee || 0);
+  const order = await prisma.$transaction(
+    async (tx) => {
+      const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items);
+      const subtotal = itemRows.reduce((sum, item) => sum + item.total, 0);
+      const total = subtotal + Number(deliveryFee || 0);
 
-    const created = await tx.onlineOrder.create({
-      data: {
-        orderNo: `WEB-${Date.now()}`,
-        customerName: customer.customerName,
-        customerPhone: customer.customerPhone,
-        customerEmail: customer.customerEmail || null,
-        deliveryAddress: customer.deliveryAddress,
-        deliveryNote: customer.deliveryNote || null,
-        latitude: latitude === undefined || latitude === '' ? null : Number(latitude),
-        longitude: longitude === undefined || longitude === '' ? null : Number(longitude),
-        subtotal,
-        deliveryFee: Number(deliveryFee || 0),
-        total,
-        items: {
-          create: itemRows.map((row) => ({
-            menuItemId: row.menuItem.id,
-            quantity: row.quantity,
-            unitPrice: row.unitPrice,
-            total: row.total
-          }))
-        }
-      },
-      include: { items: { include: { menuItem: true } } }
-    });
+      const created = await tx.onlineOrder.create({
+        data: {
+          orderNo: `WEB-${Date.now()}`,
+          customerName: customer.customerName,
+          customerPhone: customer.customerPhone,
+          customerEmail: customer.customerEmail || null,
+          deliveryAddress: customer.deliveryAddress,
+          deliveryNote: customer.deliveryNote || null,
+          latitude: latitude === undefined || latitude === '' ? null : Number(latitude),
+          longitude: longitude === undefined || longitude === '' ? null : Number(longitude),
+          subtotal,
+          deliveryFee: Number(deliveryFee || 0),
+          total,
+          items: {
+            create: itemRows.map((row) => ({
+              menuItemId: row.menuItem.id,
+              variationName: row.variationName,
+              quantity: row.quantity,
+              unitPrice: row.unitPrice,
+              total: row.total
+            }))
+          }
+        },
+        include: { items: { include: { menuItem: true } } }
+      });
 
-    await applyStockDeductions(tx, deductions, `Online order ${created.orderNo}`);
-    return created;
-  });
+      await applyStockDeductions(tx, deductions, `Online order ${created.orderNo}`);
+      return created;
+    },
+    orderTransactionOptions
+  );
 
   res.status(201).json(order);
 });

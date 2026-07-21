@@ -48,6 +48,19 @@ enum ReservationStatus {
   CANCELLED
 }
 
+enum PromotionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAUSED
+}
+
+enum PromotionPlacement {
+  PORTAL_HOME
+  MENU_TOP
+  CATEGORY
+}
+
 model Role {
   id          String   @id @default(cuid())
   name        String   @unique
@@ -86,6 +99,7 @@ model MenuItem {
   name              String
   description       String?
   price             Decimal            @db.Decimal(10, 2)
+  variations        Json               @default("[]")
   imageUrl          String?
   isAvailable       Boolean            @default(true)
   categoryId        String
@@ -208,6 +222,7 @@ model OnlineOrderItem {
   onlineOrder   OnlineOrder @relation(fields: [onlineOrderId], references: [id], onDelete: Cascade)
   menuItemId    String
   menuItem      MenuItem    @relation(fields: [menuItemId], references: [id])
+  variationName String?
   quantity      Int
   unitPrice     Decimal     @db.Decimal(10, 2)
   total         Decimal     @db.Decimal(10, 2)
@@ -226,6 +241,30 @@ model Reservation {
   note          String?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
+}
+
+model Promotion {
+  id            String             @id @default(cuid())
+  businessName  String
+  contactName   String
+  contactPhone  String
+  contactEmail  String?
+  title         String
+  description   String
+  imageUrl      String?
+  ctaLabel      String             @default("Contact our Team")
+  ctaUrl        String?
+  placement     PromotionPlacement @default(PORTAL_HOME)
+  status        PromotionStatus    @default(PENDING)
+  adminNote     String?
+  startsAt      DateTime?
+  endsAt        DateTime?
+  approvedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([status, placement])
+  @@index([startsAt, endsAt])
 }
 
 model Payment {

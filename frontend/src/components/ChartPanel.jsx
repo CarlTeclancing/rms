@@ -25,7 +25,7 @@ const baseOptions = {
   }
 };
 
-export function ChartPanel({ title, labels, values, type = 'bar', color = '#20966d' }) {
+export function ChartPanel({ title, labels, values, type = 'bar', color = '#d71920' }) {
   const data = {
     labels,
     datasets: [

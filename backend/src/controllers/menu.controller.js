@@ -24,10 +24,16 @@ export const listMenuItems = asyncHandler(async (req, res) => {
 
 export const createMenuItem = asyncHandler(async (req, res) => {
   const { recipeIngredients = [], ...data } = req.body;
+  const variations = Array.isArray(data.variations)
+    ? data.variations
+        .filter((variation) => variation?.name)
+        .map((variation) => ({ name: variation.name.trim(), price: Number(variation.price || data.price || 0) }))
+    : [];
   const item = await prisma.menuItem.create({
     data: {
       ...data,
       price: Number(data.price),
+      variations,
       recipeIngredients: {
         create: recipeIngredients.map((ingredient) => ({
           ingredientId: ingredient.ingredientId,
@@ -42,6 +48,11 @@ export const createMenuItem = asyncHandler(async (req, res) => {
 
 export const updateMenuItem = asyncHandler(async (req, res) => {
   const { recipeIngredients, ...data } = req.body;
+  const variations = Array.isArray(data.variations)
+    ? data.variations
+        .filter((variation) => variation?.name)
+        .map((variation) => ({ name: variation.name.trim(), price: Number(variation.price || data.price || 0) }))
+    : undefined;
   const item = await prisma.$transaction(async (tx) => {
     if (recipeIngredients) {
       await tx.recipeIngredient.deleteMany({ where: { menuItemId: req.params.id } });
@@ -51,6 +62,7 @@ export const updateMenuItem = asyncHandler(async (req, res) => {
       data: {
         ...data,
         ...(data.price !== undefined ? { price: Number(data.price) } : {}),
+        ...(variations !== undefined ? { variations } : {}),
         ...(recipeIngredients
           ? {
               recipeIngredients: {

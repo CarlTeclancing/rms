@@ -12,6 +12,8 @@ const permissions = [
   'expenses:read',
   'expenses:write',
   'reports:read',
+  'promotions:read',
+  'promotions:write',
   'users:write'
 ];
 

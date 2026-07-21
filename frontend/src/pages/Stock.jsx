@@ -85,7 +85,7 @@ export default function Stock() {
             key: 'status',
             label: 'Status',
             render: (row) => Number(row.quantity) <= Number(row.reorderLevel)
-              ? <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-black text-red-700">Low</span>
+              ? <span className="rounded-full bg-brand-100 px-2 py-1 text-xs font-black text-brand-500">Low</span>
               : <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-black text-green-700">Healthy</span>
           },
           { key: 'reorderLevel', label: 'Reorder level', render: (row) => `${Number(row.reorderLevel)} ${row.unit}` },

@@ -1,7 +1,9 @@
-import { ChefHat, Lock, Mail } from 'lucide-react';
+import { Lock, Mail, ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext.jsx';
+
+const chopasapLogo = '/chopasap-logo.png';
 
 export default function Login() {
   const { login } = useAuth();
@@ -22,25 +24,20 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f7f4] px-4 py-8">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1fr_420px]">
-        <section className="hidden lg:block">
-          <div className="inline-grid h-14 w-14 place-items-center rounded-lg bg-brand-600 text-white">
-            <ChefHat size={30} />
+    <div className="grid min-h-screen place-items-center bg-[#eef8fa] px-4 py-8 text-[#151923]">
+      <div className="w-full max-w-[440px]">
+        <div className="mb-6 text-center">
+          <div className="mx-auto grid h-20 w-20 place-items-center overflow-hidden rounded-xl bg-brand-200 shadow-md">
+            <img className="h-full w-full object-cover" src={chopasapLogo} alt="ChopASAP" />
           </div>
-          <h1 className="mt-6 max-w-xl text-5xl font-bold tracking-normal">Restaurant Management System</h1>
-          <p className="mt-4 max-w-lg text-lg text-stone-600">
-            Manage sales, stock, expenses, menu items, reports, and users from one responsive owner console.
-          </p>
-        </section>
+          <p className="mt-4 text-xl font-black uppercase tracking-normal text-brand-500">CHOP ASAP</p>
+          <p className="mt-1 text-sm font-semibold text-[#6f7a86]">Restaurant operations console</p>
+        </div>
 
-        <form className="card mx-auto w-full max-w-md p-6" onSubmit={submit}>
-          <div className="mb-6 text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-lg bg-brand-600 text-white lg:hidden">
-              <ChefHat size={28} />
-            </div>
-            <h2 className="mt-4 text-2xl font-bold">Sign in</h2>
-            <p className="mt-1 text-sm text-stone-500">Use your restaurant account to continue.</p>
+        <form className="rounded-xl border border-[#dbe5e8] bg-white p-6 shadow-soft" onSubmit={submit}>
+          <div className="mb-6">
+            <h1 className="text-2xl font-black tracking-normal">Login</h1>
+            <p className="mt-1 text-sm font-semibold text-[#6f7a86]">Enter your account details to continue.</p>
           </div>
           <label className="label">Email</label>
           <div className="relative mt-1">
@@ -52,10 +49,12 @@ export default function Login() {
             <Lock className="pointer-events-none absolute left-3 top-3 text-stone-400" size={18} />
             <input className="input pl-10" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
           </div>
-          <button className="btn-primary mt-6 w-full" disabled={loading}>
-            {loading ? 'Signing in...' : 'Sign in'}
+          <button className="btn-primary mt-6 w-full rounded-full" disabled={loading}>
+            {loading ? 'Signing in...' : 'Login'}
           </button>
-          <a className="btn-secondary mt-3 w-full" href="/portal">Open ordering portal</a>
+          <a className="btn-secondary mt-3 w-full rounded-full" href="/portal">
+            <ShoppingBag size={17} /> Open ordering portal
+          </a>
         </form>
       </div>
     </div>
