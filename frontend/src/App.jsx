@@ -25,10 +25,11 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/" element={<PublicPortal />} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/admin" replace /> : <Login />} />
       <Route path="/portal" element={<PublicPortal />} />
       <Route element={<ProtectedRoute />}>
-        <Route index element={<Dashboard />} />
+        <Route path="admin" element={<Dashboard />} />
         <Route path="sales" element={<Sales />} />
         <Route path="online-orders" element={<OnlineOrders />} />
         <Route path="menu" element={<Menu />} />

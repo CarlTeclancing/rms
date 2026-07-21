@@ -23,7 +23,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: Home },
+  { to: '/admin', label: 'Dashboard', icon: Home },
   { to: '/sales', label: 'Sales', icon: ShoppingCart },
   { to: '/online-orders', label: 'Orders', icon: ShoppingBag },
   { to: '/stock', label: 'Stock', icon: Boxes },
