@@ -29,7 +29,7 @@ import {
   X
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Loading } from '../components/Loading.jsx';
@@ -148,6 +148,28 @@ function Modal({ title, open, onClose, children }) {
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+function InstallAppPrompt({ canInstall, onInstall, onDismiss }) {
+  return (
+    <div className="fixed left-4 right-4 top-4 z-[70] mx-auto max-w-md rounded-xl border border-[#ffd5d7] bg-white p-3 shadow-[0_16px_40px_rgba(17,24,39,0.18)]">
+      <div className="flex items-center gap-3">
+        <img className="h-11 w-11 rounded-xl object-cover" src={chopasapLogo} alt="ChopASAP" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-[#151923]">Add ChopASAP to your phone</p>
+          <p className="mt-0.5 text-xs font-semibold text-[#6d6f76]">{canInstall ? 'Install the app for faster meal ordering.' : 'Use your browser menu to add ChopASAP to your home screen.'}</p>
+        </div>
+        <button className="grid h-8 w-8 place-items-center rounded-full bg-stone-100 text-[#29384d]" onClick={onDismiss} aria-label="Dismiss install prompt">
+          <X size={16} />
+        </button>
+      </div>
+      {canInstall ? (
+        <button className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#d71920] text-sm font-black text-white" onClick={onInstall}>
+          <Smartphone size={17} /> Add app
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -416,6 +438,8 @@ export default function PublicPortal() {
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm);
   const [submitting, setSubmitting] = useState(false);
   const [promotionImageUploading, setPromotionImageUploading] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [notifications, setNotifications] = useState([
     { id: 'welcome', title: 'Welcome', body: 'Fresh meals are ready for delivery.' }
   ]);
@@ -438,6 +462,37 @@ export default function PublicPortal() {
 
   const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
   const toggleFavorite = (id) => setFavorites((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone || localStorage.getItem('chopasap_install_dismissed') === 'true') return undefined;
+
+    const showTimer = window.setTimeout(() => setShowInstallPrompt(true), 1200);
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+      setShowInstallPrompt(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => {
+      window.clearTimeout(showTimer);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const dismissInstallPrompt = () => {
+    localStorage.setItem('chopasap_install_dismissed', 'true');
+    setShowInstallPrompt(false);
+  };
+
+  const installApp = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+    dismissInstallPrompt();
+  };
 
   const openMealDetail = (item) => {
     const variations = mealVariations(item);
@@ -615,6 +670,7 @@ export default function PublicPortal() {
   return (
     <div className="min-h-screen bg-[#eaf5f8] text-stone-950">
       <div className="mx-auto min-h-screen max-w-7xl bg-[#eef8fa]">
+        {showInstallPrompt ? <InstallAppPrompt canInstall={Boolean(installPrompt)} onInstall={installApp} onDismiss={dismissInstallPrompt} /> : null}
         <header className="sticky top-0 z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
