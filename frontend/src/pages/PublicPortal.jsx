@@ -457,7 +457,18 @@ export default function PublicPortal() {
   const categories = [...new Set(items.map((item) => item.category?.name).filter(Boolean))];
   const filteredItems = items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase()));
   const favoriteItems = items.filter((item) => favorites.includes(item.id));
-  const featuredPromotion = promotions.data?.items?.[0];
+  const promotionSlides = [
+    ...(promotions.data?.items || []),
+    {
+      id: 'request-promotion',
+      title: 'Promote with us and reach more customers',
+      description: 'Submit your brand, service, or store for admin approval and placement on ChopASAP.',
+      ctaLabel: 'Request promotion',
+      requestSlide: true
+    }
+  ];
+  const [promotionIndex, setPromotionIndex] = useState(0);
+  const featuredPromotion = promotionSlides[promotionIndex] || promotionSlides[0];
   const visibleCategoryTiles = categoryTiles.map((tile, index) => ({
     ...tile,
     label: categories[index] || tile.label,
@@ -471,6 +482,19 @@ export default function PublicPortal() {
 
   const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
   const toggleFavorite = (id) => setFavorites((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
+
+  useEffect(() => {
+    if (promotionIndex < promotionSlides.length) return;
+    setPromotionIndex(0);
+  }, [promotionIndex, promotionSlides.length]);
+
+  useEffect(() => {
+    if (promotionSlides.length <= 1) return undefined;
+    const timer = window.setInterval(() => {
+      setPromotionIndex((current) => (current + 1) % promotionSlides.length);
+    }, 6500);
+    return () => window.clearInterval(timer);
+  }, [promotionSlides.length]);
   const requestOrderNotificationPermission = async () => {
     if (!('Notification' in window) || Notification.permission !== 'default') return;
     try {
@@ -721,9 +745,9 @@ export default function PublicPortal() {
     }
   };
 
-  const handlePromotionCta = () => {
-    if (featuredPromotion?.ctaUrl) {
-      window.open(featuredPromotion.ctaUrl, '_blank', 'noopener,noreferrer');
+  const handlePromotionCta = (promotion = featuredPromotion) => {
+    if (promotion?.ctaUrl && !promotion.requestSlide) {
+      window.open(promotion.ctaUrl, '_blank', 'noopener,noreferrer');
       return;
     }
     setPromotionOpen(true);
@@ -824,22 +848,68 @@ export default function PublicPortal() {
                   ))}
                 </section>
 
-                <section className="mt-5 overflow-hidden rounded-xl bg-[#ffd071] shadow-sm">
-                  <div className="grid grid-cols-[1.2fr_0.8fr]">
-                    <div className="p-4">
-                      <p className="text-sm font-black leading-5 text-[#151923]">{featuredPromotion?.title || 'Promote with us now and get more sales and listings'}</p>
-                      <p className="mt-1 line-clamp-2 text-xs font-bold leading-4 text-[#6c6250]">{featuredPromotion?.description || 'Submit your brand or store for admin approval and portal placement.'}</p>
-                      <button className="mt-3 inline-flex h-8 items-center gap-1 rounded-full bg-white px-3 text-xs font-black text-[#6c6250]" onClick={handlePromotionCta}>
-                        {featuredPromotion?.ctaLabel || 'Contact our Team'} <ChevronRight size={14} />
-                      </button>
+                <section className="mt-5 overflow-hidden rounded-xl bg-white shadow-sm" aria-label="Promotions">
+                  <div className="relative min-h-[142px] bg-[#ffd071]">
+                    <div className="grid min-h-[142px] grid-cols-[1.25fr_0.75fr]">
+                      <div className="p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8b5f00]">
+                          {featuredPromotion?.requestSlide ? 'Advertise on ChopASAP' : featuredPromotion?.businessName || 'Featured'}
+                        </p>
+                        <p className="mt-1 text-base font-bold leading-5 text-[#151923]">{featuredPromotion?.title}</p>
+                        <p className="mt-1 line-clamp-2 text-xs font-medium leading-4 text-[#6c6250]">{featuredPromotion?.description}</p>
+                        <button
+                          className="mt-3 inline-flex h-8 items-center gap-1 rounded-full bg-white px-3 text-xs font-semibold text-[#6c6250] shadow-sm"
+                          onClick={() => handlePromotionCta(featuredPromotion)}
+                        >
+                          {featuredPromotion?.ctaLabel || 'Contact our Team'} <ChevronRight size={14} />
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-center bg-[#ffe6a3] p-3">
+                        {featuredPromotion?.imageUrl ? (
+                          <img className="h-full max-h-28 w-full rounded-lg object-cover" src={featuredPromotion.imageUrl} alt={featuredPromotion.title} />
+                        ) : (
+                          <div className="grid h-20 w-20 place-items-center rounded-2xl bg-white/70 text-[#d71920]">
+                            <ShoppingBag size={44} />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-center bg-[#ffe6a3] p-3">
-                      {featuredPromotion?.imageUrl ? (
-                        <img className="h-full max-h-28 w-full rounded-lg object-cover" src={featuredPromotion.imageUrl} alt={featuredPromotion.title} />
-                      ) : (
-                        <ShoppingBag size={58} className="text-[#d71920]" />
-                      )}
+
+                    {promotionSlides.length > 1 ? (
+                      <>
+                        <button
+                          className="absolute left-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-[#29384d] shadow-sm"
+                          onClick={() => setPromotionIndex((current) => (current - 1 + promotionSlides.length) % promotionSlides.length)}
+                          aria-label="Previous promotion"
+                        >
+                          <ChevronLeft size={17} />
+                        </button>
+                        <button
+                          className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-[#29384d] shadow-sm"
+                          onClick={() => setPromotionIndex((current) => (current + 1) % promotionSlides.length)}
+                          aria-label="Next promotion"
+                        >
+                          <ChevronRight size={17} />
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 px-4 py-2">
+                    <div className="flex gap-1.5" aria-label="Promotion slides">
+                      {promotionSlides.map((slide, index) => (
+                        <button
+                          key={slide.id}
+                          className={clsx('h-2 rounded-full transition-all', index === promotionIndex ? 'w-5 bg-[#d71920]' : 'w-2 bg-[#e1e6e8]')}
+                          onClick={() => setPromotionIndex(index)}
+                          aria-label={`Show promotion ${index + 1}`}
+                          aria-current={index === promotionIndex}
+                        />
+                      ))}
                     </div>
+                    <button className="text-xs font-semibold text-[#d71920]" onClick={() => setPromotionOpen(true)}>
+                      Promote here
+                    </button>
                   </div>
                 </section>
 

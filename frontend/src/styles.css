@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -14,6 +14,9 @@
     min-height: 100vh;
     background: #eef8fa;
     color: #17211f;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   button,
@@ -30,7 +33,7 @@
   }
 
   .btn {
-    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-extrabold transition disabled:cursor-not-allowed disabled:opacity-60;
+    @apply inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60;
   }
 
   .btn-primary {
@@ -42,10 +45,24 @@
   }
 
   .input {
-    @apply h-11 w-full rounded-xl border border-[#dbe5e8] bg-white px-3 text-sm font-semibold outline-none transition placeholder:text-stone-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100;
+    @apply h-11 w-full rounded-xl border border-[#dbe5e8] bg-white px-3 text-sm font-medium outline-none transition placeholder:text-stone-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100;
   }
 
   .label {
-    @apply text-xs font-semibold uppercase tracking-wide text-stone-500;
+    @apply text-xs font-medium uppercase tracking-wide text-stone-500;
+  }
+}
+
+@layer utilities {
+  .font-black {
+    font-weight: 700;
+  }
+
+  .font-extrabold {
+    font-weight: 600;
+  }
+
+  .font-bold {
+    font-weight: 600;
   }
 }
