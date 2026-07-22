@@ -15,6 +15,8 @@ export default function Users() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', roleId: '' });
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState('');
 
   useEffect(() => {
     endpoints.roles().then((res) => setRoles(res.data));
@@ -22,6 +24,7 @@ export default function Users() {
 
   const submit = async (event) => {
     event.preventDefault();
+    setSaving(true);
     try {
       const payload = { ...form };
       if (editing && !payload.password) delete payload.password;
@@ -34,6 +37,8 @@ export default function Users() {
       refetch();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Could not create user');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -45,9 +50,16 @@ export default function Users() {
 
   const remove = async (user) => {
     if (!confirm(`Delete ${user.name}?`)) return;
-    await endpoints.deleteUser(user.id);
-    toast.success('User deleted');
-    refetch();
+    setDeletingId(user.id);
+    try {
+      await endpoints.deleteUser(user.id);
+      toast.success('User deleted');
+      refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not delete user');
+    } finally {
+      setDeletingId('');
+    }
   };
 
   if (loading) return <Loading label="Loading users" />;
@@ -74,8 +86,8 @@ export default function Users() {
             label: 'Actions',
             render: (row) => (
               <div className="flex gap-2">
-                <button className="btn-secondary h-8 w-8 p-0" onClick={() => openEditor(row)}><Edit2 size={15} /></button>
-                <button className="btn-secondary h-8 w-8 p-0" onClick={() => remove(row)}><Trash2 size={15} /></button>
+                <button className="btn-secondary h-8 w-8 p-0" disabled={Boolean(deletingId)} onClick={() => openEditor(row)}><Edit2 size={15} /></button>
+                <button className="btn-secondary h-8 w-8 p-0" disabled={Boolean(deletingId)} onClick={() => remove(row)}>{deletingId === row.id ? '...' : <Trash2 size={15} />}</button>
               </div>
             )
           }
@@ -104,7 +116,7 @@ export default function Users() {
               <option value="INACTIVE">Inactive</option>
             </select>
           ) : null}
-          <button className="btn-primary w-full">{editing ? 'Update user' : 'Create user'}</button>
+          <button className="btn-primary w-full" disabled={saving}>{saving ? 'Saving...' : editing ? 'Update user' : 'Create user'}</button>
         </form>
       </Modal>
     </>

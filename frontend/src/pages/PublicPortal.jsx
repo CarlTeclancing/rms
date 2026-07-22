@@ -446,6 +446,8 @@ export default function PublicPortal() {
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm);
   const [submitting, setSubmitting] = useState(false);
   const [promotionImageUploading, setPromotionImageUploading] = useState(false);
+  const [promotionUploadProgress, setPromotionUploadProgress] = useState(0);
+  const [promotionUploadStatus, setPromotionUploadStatus] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [notifications, setNotifications] = useState([
@@ -732,13 +734,25 @@ export default function PublicPortal() {
   const uploadPromotionImage = async (file) => {
     if (!file) return;
     setPromotionImageUploading(true);
+    setPromotionUploadProgress(0);
+    setPromotionUploadStatus('Uploading image...');
     try {
       const uploadData = new FormData();
       uploadData.append('image', file);
-      const response = await endpoints.uploadPublicPromotionImage(uploadData);
+      const response = await endpoints.uploadPublicPromotionImage(uploadData, {
+        onUploadProgress: (progressEvent) => {
+          if (!progressEvent.total) return;
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setPromotionUploadProgress(progress);
+          if (progress >= 100) setPromotionUploadStatus('Finishing upload...');
+        }
+      });
       setPromotionForm((current) => ({ ...current, imageUrl: response.data.url }));
+      setPromotionUploadProgress(100);
+      setPromotionUploadStatus('Image uploaded');
       toast.success('Image uploaded');
     } catch (err) {
+      setPromotionUploadStatus('Upload failed');
       toast.error(err.response?.data?.message || 'Could not upload image');
     } finally {
       setPromotionImageUploading(false);
@@ -1333,9 +1347,14 @@ export default function PublicPortal() {
                   {promotionForm.imageUrl ? <img className="h-full w-full object-cover" src={promotionForm.imageUrl} alt="Promotion preview" /> : <ShoppingBag className="text-[#d71920]" size={24} />}
                 </div>
                 <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-xl border border-dashed border-[#dbe5e8] bg-white px-4 text-sm font-semibold text-[#6f7a86]">
-                  <span className="font-black text-[#151923]">{promotionImageUploading ? 'Uploading...' : 'Upload image'}</span>
+                  <span className="font-black text-[#151923]">{promotionImageUploading ? promotionUploadStatus : promotionForm.imageUrl ? 'Image uploaded' : 'Upload image'}</span>
                   <span className="mt-1 text-xs">PNG, JPG, or WEBP up to 5MB.</span>
                   <input className="hidden" type="file" accept="image/*" disabled={promotionImageUploading} onChange={(e) => uploadPromotionImage(e.target.files?.[0])} />
+                  {promotionImageUploading || promotionUploadStatus ? (
+                    <span className="mt-3 block h-2 overflow-hidden rounded-full bg-stone-100">
+                      <span className="block h-full rounded-full bg-[#d71920] transition-all" style={{ width: `${promotionUploadProgress}%` }} />
+                    </span>
+                  ) : null}
                 </label>
               </div>
             </div>

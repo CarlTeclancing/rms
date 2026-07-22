@@ -1,4 +1,5 @@
 import { ClipboardList, MapPin, Phone, RefreshCw, Truck } from 'lucide-react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Loading } from '../components/Loading.jsx';
@@ -23,17 +24,21 @@ const formatStatus = (status = 'PENDING') => status.replaceAll('_', ' ');
 
 export default function OnlineOrders() {
   const { data, loading, error, refetch } = useApi(() => endpoints.onlineOrders(), []);
+  const [updatingId, setUpdatingId] = useState('');
   const orders = data?.items || [];
   const activeOrders = orders.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status));
   const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
 
   const updateOrderStatus = async (id, status) => {
+    setUpdatingId(id);
     try {
       await endpoints.updateOnlineOrderStatus(id, { status });
       toast.success('Order status updated');
       refetch();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not update order');
+    } finally {
+      setUpdatingId('');
     }
   };
 
@@ -82,9 +87,10 @@ export default function OnlineOrders() {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-[180px_180px] lg:flex lg:flex-col">
-                  <select className="input h-10" value={order.status || 'PENDING'} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
+                  <select className="input h-10" disabled={updatingId === order.id} value={order.status || 'PENDING'} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
                     {statuses.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
                   </select>
+                  {updatingId === order.id ? <p className="text-xs font-semibold text-stone-500">Updating status...</p> : null}
                   <div className="rounded-lg bg-brand-50 px-3 py-2 text-right">
                     <p className="text-xs font-black uppercase text-brand-500">Total</p>
                     <p className="text-lg font-black">{currency(order.total)}</p>

@@ -114,6 +114,8 @@ export default function Sales() {
   const [cart, setCart] = useState([]);
   const [saving, setSaving] = useState(false);
   const [menuSearch, setMenuSearch] = useState('');
+  const [updatingOrderId, setUpdatingOrderId] = useState('');
+  const [updatingReservationId, setUpdatingReservationId] = useState('');
 
   const menuItems = menu.data?.items || [];
   const availableItems = menuItems.filter((item) => item.isAvailable);
@@ -157,22 +159,28 @@ export default function Sales() {
   };
 
   const updateOrderStatus = async (id, status) => {
+    setUpdatingOrderId(id);
     try {
       await endpoints.updateOnlineOrderStatus(id, { status });
       toast.success('Order status updated');
       onlineOrders.refetch();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Could not update order');
+    } finally {
+      setUpdatingOrderId('');
     }
   };
 
   const updateReservationStatus = async (id, status) => {
+    setUpdatingReservationId(id);
     try {
       await endpoints.updateReservationStatus(id, { status });
       toast.success('Reservation status updated');
       reservations.refetch();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Could not update reservation');
+    } finally {
+      setUpdatingReservationId('');
     }
   };
 
@@ -351,9 +359,10 @@ export default function Sales() {
                   <div className="grid gap-3 self-start">
                     <label>
                       <span className="label">Status</span>
-                      <select className="input mt-1 h-10" value={order.status || 'PENDING'} onChange={(event) => updateOrderStatus(order.id, event.target.value)}>
+                      <select className="input mt-1 h-10" disabled={updatingOrderId === order.id} value={order.status || 'PENDING'} onChange={(event) => updateOrderStatus(order.id, event.target.value)}>
                         {orderStatuses.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
                       </select>
+                      {updatingOrderId === order.id ? <span className="mt-1 block text-xs font-semibold text-stone-500">Updating status...</span> : null}
                     </label>
                     <div className="rounded-lg bg-brand-50 px-3 py-2 text-right">
                       <p className="text-xs font-black uppercase text-brand-500">Total</p>
@@ -401,9 +410,10 @@ export default function Sales() {
                 </div>
                 <label className="mt-4 block">
                   <span className="label">Reservation status</span>
-                  <select className="input mt-1 h-10" value={reservation.status || 'PENDING'} onChange={(event) => updateReservationStatus(reservation.id, event.target.value)}>
+                  <select className="input mt-1 h-10" disabled={updatingReservationId === reservation.id} value={reservation.status || 'PENDING'} onChange={(event) => updateReservationStatus(reservation.id, event.target.value)}>
                     {reservationStatuses.map((status) => <option key={status} value={status}>{formatStatus(status)}</option>)}
                   </select>
+                  {updatingReservationId === reservation.id ? <span className="mt-1 block text-xs font-semibold text-stone-500">Updating status...</span> : null}
                 </label>
               </article>
             ))}

@@ -43,19 +43,35 @@ export default function Promotions() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [busyAction, setBusyAction] = useState('');
   const { data, loading, error, refetch } = useApi(() => endpoints.promotions(params), [params]);
 
   const uploadImage = async (file) => {
     if (!file) return;
     setUploading(true);
+    setUploadProgress(0);
+    setUploadStatus('Uploading image...');
     try {
       const uploadData = new FormData();
       uploadData.append('image', file);
       uploadData.append('folder', 'restaurant-system/promotions');
-      const response = await endpoints.uploadImage(uploadData);
+      const response = await endpoints.uploadImage(uploadData, {
+        onUploadProgress: (progressEvent) => {
+          if (!progressEvent.total) return;
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(progress);
+          if (progress >= 100) setUploadStatus('Finishing upload...');
+        }
+      });
       setForm((current) => ({ ...current, imageUrl: response.data.url }));
+      setUploadProgress(100);
+      setUploadStatus('Image uploaded');
       toast.success('Image uploaded');
     } catch (error) {
+      setUploadStatus('Upload failed');
       toast.error(error.response?.data?.message || 'Could not upload image');
     } finally {
       setUploading(false);
@@ -64,23 +80,46 @@ export default function Promotions() {
 
   const save = async (event) => {
     event.preventDefault();
-    await endpoints.createPromotion(form);
-    toast.success('Promotion created');
-    setForm(emptyForm);
-    setOpen(false);
-    refetch();
+    setSaving(true);
+    try {
+      await endpoints.createPromotion(form);
+      toast.success('Promotion created');
+      setForm(emptyForm);
+      setUploadProgress(0);
+      setUploadStatus('');
+      setOpen(false);
+      refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not save promotion');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateStatus = async (row, status) => {
-    await endpoints.updatePromotion(row.id, { status });
-    toast.success(`Promotion ${status.toLowerCase()}`);
-    refetch();
+    setBusyAction(`${row.id}:${status}`);
+    try {
+      await endpoints.updatePromotion(row.id, { status });
+      toast.success(`Promotion ${status.toLowerCase()}`);
+      refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not update promotion');
+    } finally {
+      setBusyAction('');
+    }
   };
 
   const remove = async (row) => {
-    await endpoints.deletePromotion(row.id);
-    toast.success('Promotion deleted');
-    refetch();
+    setBusyAction(`${row.id}:delete`);
+    try {
+      await endpoints.deletePromotion(row.id);
+      toast.success('Promotion deleted');
+      refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not delete promotion');
+    } finally {
+      setBusyAction('');
+    }
   };
 
   const columns = useMemo(
@@ -95,10 +134,10 @@ export default function Promotions() {
         label: 'Actions',
         render: (row) => (
           <div className="flex gap-2">
-            <button className="btn-secondary h-8 px-2" onClick={() => updateStatus(row, 'APPROVED')} title="Approve"><Check size={15} /></button>
-            <button className="btn-secondary h-8 px-2" onClick={() => updateStatus(row, 'PAUSED')} title="Pause"><Pause size={15} /></button>
-            <button className="btn-secondary h-8 px-2" onClick={() => updateStatus(row, 'REJECTED')} title="Reject"><X size={15} /></button>
-            <button className="btn-secondary h-8 px-2 text-rose-600" onClick={() => remove(row)} title="Delete"><Trash2 size={15} /></button>
+            <button className="btn-secondary h-8 px-2" disabled={Boolean(busyAction)} onClick={() => updateStatus(row, 'APPROVED')} title="Approve">{busyAction === `${row.id}:APPROVED` ? '...' : <Check size={15} />}</button>
+            <button className="btn-secondary h-8 px-2" disabled={Boolean(busyAction)} onClick={() => updateStatus(row, 'PAUSED')} title="Pause">{busyAction === `${row.id}:PAUSED` ? '...' : <Pause size={15} />}</button>
+            <button className="btn-secondary h-8 px-2" disabled={Boolean(busyAction)} onClick={() => updateStatus(row, 'REJECTED')} title="Reject">{busyAction === `${row.id}:REJECTED` ? '...' : <X size={15} />}</button>
+            <button className="btn-secondary h-8 px-2 text-rose-600" disabled={Boolean(busyAction)} onClick={() => remove(row)} title="Delete">{busyAction === `${row.id}:delete` ? '...' : <Trash2 size={15} />}</button>
           </div>
         )
       }
@@ -148,9 +187,14 @@ export default function Promotions() {
                 {form.imageUrl ? <img className="h-full w-full object-cover" src={form.imageUrl} alt="Promotion preview" /> : <Megaphone className="text-brand-500" size={24} />}
               </div>
               <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-xl border border-dashed border-[#dbe5e8] bg-white px-4 text-sm font-semibold text-[#6f7a86] hover:border-brand-500">
-                <span className="font-black text-[#151923]">{uploading ? 'Uploading...' : 'Upload image'}</span>
+                <span className="font-black text-[#151923]">{uploading ? uploadStatus : form.imageUrl ? 'Image uploaded' : 'Upload image'}</span>
                 <span className="mt-1 text-xs">PNG, JPG, or WEBP up to 5MB.</span>
                 <input className="hidden" type="file" accept="image/*" disabled={uploading} onChange={(e) => uploadImage(e.target.files?.[0])} />
+                {uploading || uploadStatus ? (
+                  <span className="mt-3 block h-2 overflow-hidden rounded-full bg-stone-100">
+                    <span className="block h-full rounded-full bg-brand-500 transition-all" style={{ width: `${uploadProgress}%` }} />
+                  </span>
+                ) : null}
               </label>
             </div>
           </div>
@@ -162,7 +206,7 @@ export default function Promotions() {
             <input className="input" type="date" value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} />
             <input className="input" type="date" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} />
           </div>
-          <button className="btn-primary"><Megaphone size={17} /> Save promotion</button>
+          <button className="btn-primary" disabled={saving || uploading}><Megaphone size={17} /> {saving ? 'Saving...' : 'Save promotion'}</button>
         </form>
       </Modal>
     </>

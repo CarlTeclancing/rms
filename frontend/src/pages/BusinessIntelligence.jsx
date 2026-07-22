@@ -1,5 +1,6 @@
 import { AlertTriangle, Download, FileText, Search, Target, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 import { ChartPanel } from '../components/ChartPanel.jsx';
 import { DataTable } from '../components/DataTable.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
@@ -25,6 +26,7 @@ function Badge({ value }) {
 export default function BusinessIntelligence() {
   const [filters, setFilters] = useState({ from: '', to: '' });
   const [params, setParams] = useState({});
+  const [exporting, setExporting] = useState('');
   const { data, loading, error, refetch } = useApi(() => endpoints.businessIntelligence(params), [params]);
 
   const recommendationColumns = useMemo(
@@ -50,15 +52,22 @@ export default function BusinessIntelligence() {
   );
 
   const downloadReport = async (format) => {
-    const response = await endpoints.exportBusinessIntelligence({ ...params, format });
-    const type = format === 'pdf' ? 'application/pdf' : 'text/csv';
-    const extension = format === 'pdf' ? 'pdf' : 'csv';
-    const url = URL.createObjectURL(new Blob([response.data], { type }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `business-intelligence-report.${extension}`;
-    link.click();
-    URL.revokeObjectURL(url);
+    setExporting(format);
+    try {
+      const response = await endpoints.exportBusinessIntelligence({ ...params, format });
+      const type = format === 'pdf' ? 'application/pdf' : 'text/csv';
+      const extension = format === 'pdf' ? 'pdf' : 'csv';
+      const url = URL.createObjectURL(new Blob([response.data], { type }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `business-intelligence-report.${extension}`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not export report');
+    } finally {
+      setExporting('');
+    }
   };
 
   if (loading) return <Loading label="Loading business intelligence" />;
@@ -71,11 +80,11 @@ export default function BusinessIntelligence() {
         description="Profit, cash flow, stock risk, forecasts, alerts, and management recommendations."
         action={
           <div className="flex gap-2">
-            <button className="btn-secondary" onClick={() => downloadReport('csv')}>
-              <Download size={17} /> Excel
+            <button className="btn-secondary" disabled={Boolean(exporting)} onClick={() => downloadReport('csv')}>
+              <Download size={17} /> {exporting === 'csv' ? 'Exporting...' : 'Excel'}
             </button>
-            <button className="btn-secondary" onClick={() => downloadReport('pdf')}>
-              <FileText size={17} /> PDF
+            <button className="btn-secondary" disabled={Boolean(exporting)} onClick={() => downloadReport('pdf')}>
+              <FileText size={17} /> {exporting === 'pdf' ? 'Exporting...' : 'PDF'}
             </button>
           </div>
         }

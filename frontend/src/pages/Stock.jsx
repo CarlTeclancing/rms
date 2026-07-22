@@ -18,9 +18,13 @@ export default function Stock() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ name: '', unit: 'kg', quantity: '', reorderLevel: '', unitCost: '' });
   const [movementForm, setMovementForm] = useState({ stockItemId: '', type: 'IN', quantity: '', note: '' });
+  const [saving, setSaving] = useState(false);
+  const [savingMovement, setSavingMovement] = useState(false);
+  const [deletingId, setDeletingId] = useState('');
 
   const submit = async (event) => {
     event.preventDefault();
+    setSaving(true);
     try {
       if (editing) await endpoints.updateStockItem(editing.id, form);
       else await endpoints.createStockItem(form);
@@ -31,11 +35,14 @@ export default function Stock() {
       refetch();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Could not save stock item');
+    } finally {
+      setSaving(false);
     }
   };
 
   const submitMovement = async (event) => {
     event.preventDefault();
+    setSavingMovement(true);
     try {
       await endpoints.stockMovement(movementForm);
       toast.success('Stock movement recorded');
@@ -45,6 +52,8 @@ export default function Stock() {
       movements.refetch();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not record stock movement');
+    } finally {
+      setSavingMovement(false);
     }
   };
 
@@ -56,9 +65,16 @@ export default function Stock() {
 
   const remove = async (item) => {
     if (!confirm(`Delete ${item.name}?`)) return;
-    await endpoints.deleteStockItem(item.id);
-    toast.success('Stock item deleted');
-    refetch();
+    setDeletingId(item.id);
+    try {
+      await endpoints.deleteStockItem(item.id);
+      toast.success('Stock item deleted');
+      refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not delete stock item');
+    } finally {
+      setDeletingId('');
+    }
   };
 
   if (loading) return <Loading label="Loading stock" />;
@@ -96,8 +112,8 @@ export default function Stock() {
             label: 'Actions',
             render: (row) => (
               <div className="flex gap-2">
-                <button className="btn-secondary h-8 w-8 p-0" onClick={() => openEditor(row)}><Edit2 size={15} /></button>
-                <button className="btn-secondary h-8 w-8 p-0" onClick={() => remove(row)}><Trash2 size={15} /></button>
+                <button className="btn-secondary h-8 w-8 p-0" disabled={Boolean(deletingId)} onClick={() => openEditor(row)}><Edit2 size={15} /></button>
+                <button className="btn-secondary h-8 w-8 p-0" disabled={Boolean(deletingId)} onClick={() => remove(row)}>{deletingId === row.id ? '...' : <Trash2 size={15} />}</button>
               </div>
             )
           }
@@ -130,7 +146,7 @@ export default function Stock() {
               </div>
             ))}
           </div>
-          <button className="btn-primary w-full">{editing ? 'Update stock' : 'Save stock'}</button>
+          <button className="btn-primary w-full" disabled={saving}>{saving ? 'Saving...' : editing ? 'Update stock' : 'Save stock'}</button>
         </form>
       </Modal>
       <Modal title="Record stock movement" open={movementOpen} onClose={() => setMovementOpen(false)}>
@@ -160,7 +176,7 @@ export default function Stock() {
             <label className="label">Note</label>
             <textarea className="input mt-1 h-20 py-3" value={movementForm.note} onChange={(e) => setMovementForm({ ...movementForm, note: e.target.value })} />
           </div>
-          <button className="btn-primary w-full">Record movement</button>
+          <button className="btn-primary w-full" disabled={savingMovement}>{savingMovement ? 'Recording...' : 'Record movement'}</button>
         </form>
       </Modal>
     </>

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import {
   createExpense,
+  createExpenseCategory,
   deleteExpense,
   listExpenseCategories,
   listExpenses,
@@ -17,5 +18,6 @@ router.post('/expenses', authenticate, authorize('expenses:write'), [body('title
 router.put('/expenses/:id', authenticate, authorize('expenses:write'), updateExpense);
 router.delete('/expenses/:id', authenticate, authorize('expenses:write'), deleteExpense);
 router.get('/expense-categories', authenticate, listExpenseCategories);
+router.post('/expense-categories', authenticate, authorize('expenses:write'), [body('name').notEmpty(), validate], createExpenseCategory);
 
 export default router;

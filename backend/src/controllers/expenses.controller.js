@@ -51,3 +51,14 @@ export const deleteExpense = asyncHandler(async (req, res) => {
 export const listExpenseCategories = asyncHandler(async (_req, res) => {
   res.json(await prisma.expenseCategory.findMany({ orderBy: { name: 'asc' } }));
 });
+
+export const createExpenseCategory = asyncHandler(async (req, res) => {
+  const category = await prisma.expenseCategory.create({
+    data: {
+      name: req.body.name,
+      description: req.body.description || null
+    }
+  });
+
+  res.status(201).json(category);
+});
