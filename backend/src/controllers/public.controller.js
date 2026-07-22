@@ -85,6 +85,16 @@ export const listOnlineOrders = asyncHandler(async (_req, res) => {
   res.json({ items: orders });
 });
 
+export const getPublicOnlineOrder = asyncHandler(async (req, res) => {
+  const order = await prisma.onlineOrder.findUnique({
+    where: { id: req.params.id },
+    include: { items: { include: { menuItem: true } } }
+  });
+
+  if (!order) throw new ApiError(404, 'Order not found');
+  res.json(order);
+});
+
 export const updateOnlineOrderStatus = asyncHandler(async (req, res) => {
   const order = await prisma.onlineOrder.update({
     where: { id: req.params.id },

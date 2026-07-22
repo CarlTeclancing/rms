@@ -7,7 +7,7 @@ const chopasapLogo = '/chopasap-logo.png';
 
 export default function Login() {
   const { login } = useAuth();
-  const [form, setForm] = useState({ email: 'admin@restaurant.test', password: 'Admin123!' });
+  const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
 
   const submit = async (event) => {

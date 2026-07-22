@@ -1,10 +1,10 @@
 export const currency = (value) => {
-  let selectedCurrency = 'USD';
+  let selectedCurrency = 'XAF';
   try {
     const saved = JSON.parse(localStorage.getItem('rms_settings') || '{}');
     selectedCurrency = saved.currency || selectedCurrency;
   } catch {
-    selectedCurrency = 'USD';
+    selectedCurrency = 'XAF';
   }
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: selectedCurrency }).format(Number(value || 0));
 };

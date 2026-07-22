@@ -20,3 +20,17 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request).catch(() => caches.match(event.request).then((response) => response || caches.match('/')))
   );
 });
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'ORDER_STATUS_NOTIFICATION') return;
+
+  const { title, body } = event.data;
+  event.waitUntil(
+    self.registration.showNotification(title || 'Order update', {
+      body: body || 'Your order status changed.',
+      icon: '/chopasap-logo.png',
+      badge: '/chopasap-logo.png',
+      tag: 'chopasap-order-status'
+    })
+  );
+});

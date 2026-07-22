@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import {
   createOnlineOrder,
   createReservation,
+  getPublicOnlineOrder,
   listOnlineOrders,
   listReservations,
   publicMenu,
@@ -15,6 +16,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 const router = Router();
 
 router.get('/public/menu', publicMenu);
+router.get('/public/orders/:id', getPublicOnlineOrder);
 router.post(
   '/public/orders',
   [

@@ -29,7 +29,7 @@ import {
   X
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Loading } from '../components/Loading.jsx';
@@ -94,6 +94,8 @@ const paymentMethods = [
   { id: 'orange', label: 'Orange Money', icon: Wallet, iconClass: 'bg-orange-500 text-white' }
 ];
 
+const activeOrdersStorageKey = 'chopasap_active_orders';
+const statusLabel = (status = 'PENDING') => status.replaceAll('_', ' ').toLowerCase();
 const cartKeyFor = (menuItemId, variationName) => `${menuItemId}:${variationName || 'base'}`;
 const mealVariations = (item) => (Array.isArray(item?.variations) ? item.variations.filter((variation) => variation?.name) : []);
 const mealPrice = (item, variationName) => {
@@ -425,7 +427,13 @@ export default function PublicPortal() {
   const [selectedMeal, setSelectedMeal] = useState(null);
   const [detailQuantity, setDetailQuantity] = useState(1);
   const [selectedVariation, setSelectedVariation] = useState('');
-  const [activeOrders, setActiveOrders] = useState([]);
+  const [activeOrders, setActiveOrders] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(activeOrdersStorageKey) || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [search, setSearch] = useState('');
   const [orderOpen, setOrderOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState('cart');
@@ -443,6 +451,7 @@ export default function PublicPortal() {
   const [notifications, setNotifications] = useState([
     { id: 'welcome', title: 'Welcome', body: 'Fresh meals are ready for delivery.' }
   ]);
+  const activeOrdersRef = useRef(activeOrders);
 
   const items = data?.items || [];
   const categories = [...new Set(items.map((item) => item.category?.name).filter(Boolean))];
@@ -462,6 +471,69 @@ export default function PublicPortal() {
 
   const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
   const toggleFavorite = (id) => setFavorites((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
+  const requestOrderNotificationPermission = async () => {
+    if (!('Notification' in window) || Notification.permission !== 'default') return;
+    try {
+      await Notification.requestPermission();
+    } catch {
+      // Browsers can reject permission prompts outside supported contexts.
+    }
+  };
+  const showOrderStatusNotification = async (order) => {
+    const title = `Order ${order.orderNo} update`;
+    const body = `Your order is now ${statusLabel(order.status)}.`;
+
+    addNotification(title, body);
+
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active?.postMessage({ type: 'ORDER_STATUS_NOTIFICATION', title, body });
+      return;
+    }
+    new Notification(title, { body, icon: chopasapLogo });
+  };
+
+  useEffect(() => {
+    activeOrdersRef.current = activeOrders;
+    localStorage.setItem(activeOrdersStorageKey, JSON.stringify(activeOrders.slice(0, 10)));
+  }, [activeOrders]);
+
+  useEffect(() => {
+    const refreshOrderStatuses = async () => {
+      const trackableOrders = activeOrdersRef.current.filter((order) => order.id && !['DELIVERED', 'CANCELLED'].includes(order.status));
+      if (!trackableOrders.length) return;
+
+      const refreshed = await Promise.all(
+        trackableOrders.map(async (order) => {
+          try {
+            const response = await endpoints.publicOnlineOrder(order.id);
+            return response.data;
+          } catch {
+            return order;
+          }
+        })
+      );
+
+      const nextOrders = activeOrdersRef.current.map((order) => {
+        const latest = refreshed.find((item) => item.id === order.id);
+        if (!latest) return order;
+
+        if (latest.status && latest.status !== order.status) {
+          showOrderStatusNotification({ ...order, ...latest });
+        }
+
+        return { ...order, ...latest };
+      });
+
+      activeOrdersRef.current = nextOrders;
+      setActiveOrders(nextOrders);
+    };
+
+    refreshOrderStatuses();
+    const timer = window.setInterval(refreshOrderStatuses, 20000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
@@ -559,6 +631,7 @@ export default function PublicPortal() {
         deliveryFee,
         items: cart.map(({ menuItemId, quantity, variationName }) => ({ menuItemId, quantity, variationName }))
       });
+      requestOrderNotificationPermission();
       toast.success(`Order ${response.data.orderNo} received`);
       addNotification('Order placed', `${response.data.orderNo} is pending confirmation.`);
       setActiveOrders((current) => [

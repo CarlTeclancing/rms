@@ -44,8 +44,8 @@ export const openApiSpec = {
         type: 'object',
         required: ['email', 'password'],
         properties: {
-          email: { type: 'string', format: 'email', example: 'admin@restaurant.test' },
-          password: { type: 'string', example: 'Admin123!' }
+          email: { type: 'string', format: 'email', example: 'app@chopasap.com' },
+          password: { type: 'string', example: 'Use your admin password' }
         }
       },
       LoginResponse: {
@@ -72,6 +72,18 @@ export const openApiSpec = {
           name: { type: 'string' },
           description: { type: 'string', nullable: true },
           permissions: { type: 'array', items: { type: 'string' } }
+        }
+      },
+      AppSettings: {
+        type: 'object',
+        properties: {
+          restaurantName: { type: 'string', example: 'ChopASAP' },
+          shortName: { type: 'string', example: 'ChopASAP' },
+          currency: { type: 'string', example: 'XAF' },
+          deliveryFee: { type: 'number', example: 1000 },
+          publicOrdering: { type: 'boolean', example: true },
+          reservations: { type: 'boolean', example: true },
+          supportPhone: { type: 'string', example: '+237671286999' }
         }
       },
       MenuCategory: {
@@ -299,11 +311,48 @@ export const openApiSpec = {
         }
       }
     },
+    '/settings': {
+      get: {
+        tags: ['Users'],
+        summary: 'Get admin storefront settings',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Storefront settings', content: { 'application/json': { schema: { $ref: '#/components/schemas/AppSettings' } } } },
+          401: { $ref: '#/components/responses/Unauthorized' }
+        }
+      },
+      put: {
+        tags: ['Users'],
+        summary: 'Update storefront settings',
+        security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/AppSettings' } } } },
+        responses: {
+          200: { description: 'Settings updated', content: { 'application/json': { schema: { $ref: '#/components/schemas/AppSettings' } } } },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' }
+        }
+      }
+    },
     '/public/menu': {
       get: {
         tags: ['Public Portal'],
         summary: 'List menu items available to customers',
         responses: { 200: { description: 'Public menu list' } }
+      }
+    },
+    '/public/settings': {
+      get: {
+        tags: ['Public Portal'],
+        summary: 'Get public storefront settings',
+        responses: { 200: { description: 'Storefront settings', content: { 'application/json': { schema: { $ref: '#/components/schemas/AppSettings' } } } } }
+      }
+    },
+    '/public/orders/{id}': {
+      get: {
+        tags: ['Public Portal'],
+        summary: 'Get a public online order by ID',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Online order', content: { 'application/json': { schema: { $ref: '#/components/schemas/OnlineOrder' } } } }, 404: { description: 'Order not found' } }
       }
     },
     '/public/orders': {

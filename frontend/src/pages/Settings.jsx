@@ -1,17 +1,29 @@
 import { Bell, Cloud, Database, KeyRound, Save, ShieldCheck, Store, Truck } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 
 export default function Settings() {
-  const { settings, updateSettings } = useSettings();
+  const { settings, updateSettings, loading } = useSettings();
   const [form, setForm] = useState(settings);
+  const [saving, setSaving] = useState(false);
 
-  const submit = (event) => {
+  useEffect(() => {
+    setForm(settings);
+  }, [settings]);
+
+  const submit = async (event) => {
     event.preventDefault();
-    updateSettings(form);
-    toast.success('Settings saved');
+    setSaving(true);
+    try {
+      await updateSettings(form);
+      toast.success('Settings saved');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not save settings');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const systemSettings = [
@@ -87,7 +99,7 @@ export default function Settings() {
             </label>
           </div>
 
-          <button className="btn-primary mt-5"><Save size={17} /> Save settings</button>
+          <button className="btn-primary mt-5" disabled={saving || loading}><Save size={17} /> {saving ? 'Saving...' : 'Save settings'}</button>
         </form>
 
         <section className="grid gap-4">

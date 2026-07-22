@@ -267,6 +267,19 @@ model Promotion {
   @@index([startsAt, endsAt])
 }
 
+model AppSettings {
+  id             String   @id @default("default")
+  restaurantName String   @default("ChopASAP")
+  shortName      String   @default("ChopASAP")
+  currency       String   @default("XAF")
+  deliveryFee    Decimal  @default(1000) @db.Decimal(10, 2)
+  publicOrdering Boolean  @default(true)
+  reservations   Boolean  @default(true)
+  supportPhone   String   @default("+237671286999")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 model Payment {
   id        String        @id @default(cuid())
   saleId    String
