@@ -1,4 +1,5 @@
 import { AlertTriangle, Banknote, ReceiptText, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Loading } from '../components/Loading.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { ChartPanel } from '../components/ChartPanel.jsx';
@@ -10,15 +11,40 @@ import { useApi } from '../hooks/useApi.js';
 
 export default function Dashboard() {
   const { data, loading, error, refetch } = useApi(() => endpoints.dashboard(), []);
-  if (loading) return <Loading label="Loading dashboard" />;
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  useEffect(() => {
+    if (data) setLastUpdated(new Date());
+  }, [data]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') refetch();
+    };
+
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [refetch]);
+
+  if (loading && !data) return <Loading label="Loading dashboard" />;
   if (error || !data) return <EmptyState title="Dashboard unavailable" message="The dashboard API did not return data. Make sure the backend and database are running." onRetry={refetch} />;
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Live snapshot of restaurant performance and stock health." />
+      <PageHeader
+        title="Dashboard"
+        description={`Live snapshot of restaurant performance and stock health.${lastUpdated ? ` Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`}
+      />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Today's sales" value={currency(data.dailySales)} icon={Banknote} />
-        <StatCard title="Monthly sales" value={currency(data.monthlySales)} icon={TrendingUp} tone="blue" />
+        <StatCard title="Today's sales" value={currency(data.dailySales)} icon={Banknote} detail={`Online: ${currency(data.dailyOnlineOrdersTotal || 0)}`} />
+        <StatCard title="Monthly sales" value={currency(data.monthlySales)} icon={TrendingUp} tone="blue" detail={`Online: ${currency(data.onlineOrdersTotal || 0)}`} />
         <StatCard title="Monthly expenses" value={currency(data.monthlyExpenses)} icon={ReceiptText} tone="amber" />
         <StatCard title="Low stock alerts" value={data.lowStockCount} icon={AlertTriangle} tone="rose" detail="Items at or below reorder level" />
       </div>
