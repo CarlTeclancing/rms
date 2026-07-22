@@ -12,7 +12,6 @@ import {
   Megaphone,
   ReceiptText,
   Settings,
-  ShoppingBag,
   ShoppingCart,
   Users
 } from 'lucide-react';
@@ -25,7 +24,6 @@ import { useSettings } from '../context/SettingsContext.jsx';
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: Home },
   { to: '/sales', label: 'Sales', icon: ShoppingCart },
-  { to: '/online-orders', label: 'Orders', icon: ShoppingBag },
   { to: '/stock', label: 'Stock', icon: Boxes },
   { to: '/expenses', label: 'Expenses', icon: ReceiptText },
   { to: '/menu', label: 'Menu', icon: ChefHat },

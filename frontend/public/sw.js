@@ -1,4 +1,4 @@
-const CACHE_NAME = 'chopasap-app-v1';
+const CACHE_NAME = 'chopasap-app-v2';
 const APP_SHELL = ['/', '/manifest.webmanifest', '/chopasap-logo.png'];
 
 self.addEventListener('install', (event) => {
@@ -22,6 +22,11 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+
   if (event.data?.type !== 'ORDER_STATUS_NOTIFICATION') return;
 
   const { title, body } = event.data;
