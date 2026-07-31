@@ -85,6 +85,18 @@ model User {
   updatedAt    DateTime   @updatedAt
 }
 
+model Customer {
+  id              String        @id @default(cuid())
+  name            String
+  phone           String        @unique
+  email           String?
+  address         String?
+  profileImageUrl String?
+  onlineOrders    OnlineOrder[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
 model MenuCategory {
   id          String     @id @default(cuid())
   name        String     @unique
@@ -200,6 +212,8 @@ model SaleItem {
 model OnlineOrder {
   id              String            @id @default(cuid())
   orderNo         String            @unique
+  customerId      String?
+  customer        Customer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   customerName    String
   customerPhone   String
   customerEmail   String?
@@ -214,6 +228,9 @@ model OnlineOrder {
   items           OnlineOrderItem[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+
+  @@index([customerId])
+  @@index([customerPhone])
 }
 
 model OnlineOrderItem {

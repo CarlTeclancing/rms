@@ -11,6 +11,7 @@ import { useApi } from '../hooks/useApi.js';
 
 export default function Users() {
   const { data, loading, error, refetch } = useApi(() => endpoints.users({ limit: 100 }), []);
+  const customers = useApi(() => endpoints.customers({ limit: 100 }), []);
   const [roles, setRoles] = useState([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -100,6 +101,34 @@ export default function Users() {
             <span key={role.id} className="rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">{role.name}</span>
           ))}
         </div>
+      </div>
+      <div className="mt-5">
+        <div className="mb-3">
+          <h2 className="text-xl font-black">Customer accounts</h2>
+          <p className="mt-1 text-sm font-semibold text-stone-500">Portal customers identified by name and phone number. These are separate from staff/admin users.</p>
+        </div>
+        <DataTable
+          rows={customers.data?.items || []}
+          empty={customers.loading ? 'Loading customers...' : 'No customer accounts yet.'}
+          columns={[
+            {
+              key: 'name',
+              label: 'Customer',
+              render: (row) => (
+                <div className="flex items-center gap-3">
+                  {row.profileImageUrl ? <img className="h-10 w-10 rounded-xl object-cover" src={row.profileImageUrl} alt={row.name} /> : <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-sm font-black text-brand-500">{row.name?.slice(0, 1) || 'C'}</span>}
+                  <div>
+                    <p className="font-semibold">{row.name}</p>
+                    <p className="text-xs font-semibold text-stone-500">{row.phone}</p>
+                  </div>
+                </div>
+              )
+            },
+            { key: 'address', label: 'Address', render: (row) => row.address || 'Not set' },
+            { key: 'orderCount', label: 'Orders', render: (row) => <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-500">{row.orderCount || 0}</span> },
+            { key: 'createdAt', label: 'Joined', render: (row) => new Date(row.createdAt).toLocaleDateString() }
+          ]}
+        />
       </div>
       <Modal title={editing ? 'Edit user' : 'Add user'} open={open} onClose={() => setOpen(false)}>
         <form className="space-y-4" onSubmit={submit}>

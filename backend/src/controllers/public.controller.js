@@ -5,6 +5,12 @@ import { applyStockDeductions, buildSaleRowsAndDeductions } from '../services/st
 
 const menuInclude = { category: true };
 const orderTransactionOptions = { maxWait: 10000, timeout: 20000 };
+const cleanPhone = (phone = '') => String(phone).replace(/\s+/g, '').trim();
+
+const serializeCustomer = (customer, orderCount = 0) => ({
+  ...customer,
+  orderCount
+});
 
 export const publicMenu = asyncHandler(async (_req, res) => {
   const items = await prisma.menuItem.findMany({
@@ -16,11 +22,26 @@ export const publicMenu = asyncHandler(async (_req, res) => {
 });
 
 export const createOnlineOrder = asyncHandler(async (req, res) => {
-  const { items, deliveryFee = 0, latitude, longitude, ...customer } = req.body;
+  const { items, deliveryFee = 0, latitude, longitude, customerId, ...customer } = req.body;
   if (!items?.length) throw new ApiError(422, 'At least one item is required');
 
   const order = await prisma.$transaction(
     async (tx) => {
+      const phone = cleanPhone(customer.customerPhone);
+      const orderCustomer = await tx.customer.upsert({
+        where: { phone },
+        update: {
+          name: customer.customerName,
+          email: customer.customerEmail || undefined,
+          address: customer.deliveryAddress || undefined
+        },
+        create: {
+          name: customer.customerName,
+          phone,
+          email: customer.customerEmail || null,
+          address: customer.deliveryAddress || null
+        }
+      });
       const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items);
       const subtotal = itemRows.reduce((sum, item) => sum + item.total, 0);
       const total = subtotal + Number(deliveryFee || 0);
@@ -28,8 +49,9 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
       const created = await tx.onlineOrder.create({
         data: {
           orderNo: `WEB-${Date.now()}`,
+          customerId: customerId || orderCustomer.id,
           customerName: customer.customerName,
-          customerPhone: customer.customerPhone,
+          customerPhone: phone,
           customerEmail: customer.customerEmail || null,
           deliveryAddress: customer.deliveryAddress,
           deliveryNote: customer.deliveryNote || null,
@@ -58,6 +80,60 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
   );
 
   res.status(201).json(order);
+});
+
+export const upsertPublicCustomer = asyncHandler(async (req, res) => {
+  const phone = cleanPhone(req.body.phone);
+  if (!phone) throw new ApiError(422, 'Phone number is required');
+
+  const customer = await prisma.customer.upsert({
+    where: { phone },
+    update: {
+      name: req.body.name,
+      email: req.body.email || undefined,
+      address: req.body.address || undefined
+    },
+    create: {
+      name: req.body.name,
+      phone,
+      email: req.body.email || null,
+      address: req.body.address || null
+    }
+  });
+  const orderCount = await prisma.onlineOrder.count({
+    where: { OR: [{ customerId: customer.id }, { customerPhone: customer.phone }] }
+  });
+  res.json(serializeCustomer(customer, orderCount));
+});
+
+export const updatePublicCustomer = asyncHandler(async (req, res) => {
+  const data = {};
+  for (const key of ['name', 'email', 'address', 'profileImageUrl']) {
+    if (req.body[key] !== undefined) data[key] = req.body[key] || null;
+  }
+  if (req.body.phone !== undefined) data.phone = cleanPhone(req.body.phone);
+
+  const customer = await prisma.customer.update({
+    where: { id: req.params.id },
+    data
+  });
+  const orderCount = await prisma.onlineOrder.count({
+    where: { OR: [{ customerId: customer.id }, { customerPhone: customer.phone }] }
+  });
+  res.json(serializeCustomer(customer, orderCount));
+});
+
+export const listPublicCustomerOrders = asyncHandler(async (req, res) => {
+  const customer = await prisma.customer.findUnique({ where: { id: req.params.id } });
+  if (!customer) throw new ApiError(404, 'Customer not found');
+
+  const orders = await prisma.onlineOrder.findMany({
+    where: { OR: [{ customerId: customer.id }, { customerPhone: customer.phone }] },
+    include: { items: { include: { menuItem: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 100
+  });
+  res.json({ items: orders });
 });
 
 export const createReservation = asyncHandler(async (req, res) => {

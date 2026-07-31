@@ -1,6 +1,6 @@
 import {
-  Bell,
   CalendarClock,
+  Camera,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -94,6 +94,7 @@ const emptyPromotionForm = {
 };
 
 const activeOrdersStorageKey = 'chopasap_active_orders';
+const customerStorageKey = 'chopasap_customer_session';
 const statusLabel = (status = 'PENDING') => status.replaceAll('_', ' ').toLowerCase();
 const cartKeyFor = (menuItemId, variationName) => `${menuItemId}:${variationName || 'base'}`;
 const mealVariations = (item) => (Array.isArray(item?.variations) ? item.variations.filter((variation) => variation?.name) : []);
@@ -127,6 +128,13 @@ const buildWhatsappOrderMessage = ({ order, customer, cartItems, total, delivery
   ]
     .filter(Boolean)
     .join('\n');
+};
+const emptyCustomerForm = {
+  name: '',
+  phone: '',
+  email: '',
+  address: '',
+  profileImageUrl: ''
 };
 
 function RedButton({ children, className, ...props }) {
@@ -371,6 +379,98 @@ function FlashSalePopup({ code, open, onClose, onUse }) {
   );
 }
 
+function CustomerGate({ form, saving, onChange, onSubmit }) {
+  return (
+    <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#eef8fa] px-4 py-8">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center">
+        <form className="w-full overflow-hidden rounded-3xl bg-white shadow-2xl" onSubmit={onSubmit}>
+          <div className="bg-[#151923] px-6 py-7 text-white">
+            <img className="h-14 w-14 rounded-2xl object-cover" src={chopasapLogo} alt="ChopASAP" />
+            <p className="mt-5 text-xs font-black uppercase tracking-wide text-white/60">Welcome to ChopASAP</p>
+            <h1 className="mt-1 text-2xl font-black">Start your order</h1>
+            <p className="mt-2 text-sm font-semibold leading-6 text-white/75">Enter your name and phone number so we can keep your orders and profile ready on this device.</p>
+          </div>
+          <div className="grid gap-4 p-6">
+            <label>
+              <span className="label">Your name</span>
+              <input className="input mt-1" placeholder="Example: Amina N." value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} minLength={2} required />
+            </label>
+            <label>
+              <span className="label">Phone number</span>
+              <input className="input mt-1" placeholder="Example: 671286999" type="tel" inputMode="tel" value={form.phone} onChange={(event) => onChange({ ...form, phone: event.target.value })} minLength={6} required />
+            </label>
+            <label>
+              <span className="label">Default address optional</span>
+              <input className="input mt-1" placeholder="Example: Bonanjo, near..." value={form.address} onChange={(event) => onChange({ ...form, address: event.target.value })} />
+            </label>
+            <button className="flex h-12 items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white disabled:opacity-60" disabled={saving}>
+              {saving ? 'Checking account...' : 'Continue'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetailView({ order, onBack }) {
+  if (!order) return null;
+  return (
+    <div className="rounded-3xl bg-white p-5 shadow-md">
+      <button className="mb-4 inline-flex items-center gap-2 text-sm font-black text-[#d71920]" onClick={onBack}>
+        <ChevronLeft size={17} /> Back to orders
+      </button>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase text-stone-500">Order</p>
+          <h2 className="mt-1 text-2xl font-black">{order.orderNo}</h2>
+          <p className="mt-1 text-sm font-semibold text-stone-500">{order.createdAt ? new Date(order.createdAt).toLocaleString() : 'Recent order'}</p>
+        </div>
+        <span className="rounded-full bg-[#e7f8ef] px-3 py-1 text-xs font-black text-[#19b567]">{order.status || 'PENDING'}</span>
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl bg-[#f7fbfc] p-4">
+          <p className="text-xs font-black uppercase text-stone-500">Customer</p>
+          <p className="mt-2 font-black">{order.customerName || 'Customer'}</p>
+          <p className="mt-1 text-sm font-semibold text-stone-600">{order.customerPhone}</p>
+        </div>
+        <div className="rounded-2xl bg-[#f7fbfc] p-4">
+          <p className="text-xs font-black uppercase text-stone-500">Address</p>
+          <p className="mt-2 text-sm font-semibold text-stone-700">{order.deliveryAddress || 'Not provided'}</p>
+        </div>
+      </div>
+      <div className="mt-5">
+        <h3 className="font-black">Items</h3>
+        <div className="mt-3 grid gap-2">
+          {(order.items || []).map((item) => (
+            <div key={item.id || `${item.menuItemId}:${item.variationName || 'base'}`} className="flex items-center justify-between gap-3 rounded-2xl bg-[#fff4d7] p-3">
+              <div className="min-w-0">
+                <p className="font-black">{item.quantity} x {item.menuItem?.name || item.name || 'Menu item'}</p>
+                {item.variationName ? <p className="mt-0.5 text-xs font-semibold text-stone-600">{item.variationName}</p> : null}
+              </div>
+              <p className="shrink-0 font-black text-[#d71920]">{currency(orderItemTotal(item))}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-5 rounded-2xl bg-[#151923] p-4 text-white">
+        <div className="flex items-center justify-between text-sm font-semibold text-white/70">
+          <span>Subtotal</span>
+          <span>{currency(order.subtotal || 0)}</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-sm font-semibold text-white/70">
+          <span>Delivery</span>
+          <span>{currency(order.deliveryFee || 0)}</span>
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-3 text-lg font-black">
+          <span>Total</span>
+          <span>{currency(order.total || 0)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MealDetail({ item, quantity, selectedVariation, onVariationChange, onQuantityChange, onClose, onAdd }) {
   if (!item) return null;
   const variations = mealVariations(item);
@@ -467,6 +567,21 @@ export default function PublicPortal() {
   const flashSale = useApi(() => endpoints.publicFlashSale(), []);
   const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState('home');
+  const [customer, setCustomer] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(customerStorageKey) || 'null');
+    } catch {
+      return null;
+    }
+  });
+  const [customerForm, setCustomerForm] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(customerStorageKey) || 'null');
+      return stored ? { ...emptyCustomerForm, ...stored } : emptyCustomerForm;
+    } catch {
+      return emptyCustomerForm;
+    }
+  });
   const [favorites, setFavorites] = useState([]);
   const [cart, setCart] = useState([]);
   const [selectedMeal, setSelectedMeal] = useState(null);
@@ -492,6 +607,9 @@ export default function PublicPortal() {
   const [promotionImageUploading, setPromotionImageUploading] = useState(false);
   const [promotionUploadProgress, setPromotionUploadProgress] = useState(0);
   const [promotionUploadStatus, setPromotionUploadStatus] = useState('');
+  const [customerSaving, setCustomerSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [flashSaleOpen, setFlashSaleOpen] = useState(false);
@@ -525,6 +643,78 @@ export default function PublicPortal() {
 
   const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
   const toggleFavorite = (id) => setFavorites((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
+
+  const saveCustomerSession = (nextCustomer) => {
+    const saved = { ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
+    localStorage.setItem(customerStorageKey, JSON.stringify(saved));
+    setCustomer(saved);
+    setCustomerForm({ ...emptyCustomerForm, ...saved });
+    setOrderForm((current) => ({
+      ...current,
+      customerName: saved.name || current.customerName,
+      customerPhone: saved.phone || current.customerPhone,
+      customerEmail: saved.email || current.customerEmail,
+      deliveryAddress: saved.address || current.deliveryAddress
+    }));
+  };
+
+  const loadCustomerOrders = async (customerId = customer?.id) => {
+    if (!customerId) return;
+    try {
+      const response = await endpoints.publicCustomerOrders(customerId);
+      setActiveOrders(response.data.items || []);
+    } catch {
+      // Keep local order history if the customer order endpoint is unavailable.
+    }
+  };
+
+  const submitCustomerSession = async (event) => {
+    event.preventDefault();
+    setCustomerSaving(true);
+    try {
+      const response = await endpoints.publicCustomerSession(customerForm);
+      saveCustomerSession(response.data);
+      await loadCustomerOrders(response.data.id);
+      toast.success('Account ready');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not create customer session');
+    } finally {
+      setCustomerSaving(false);
+    }
+  };
+
+  const updateCustomerProfile = async (event) => {
+    event.preventDefault();
+    if (!customer?.id) return;
+    setCustomerSaving(true);
+    try {
+      const response = await endpoints.updatePublicCustomer(customer.id, customerForm);
+      saveCustomerSession(response.data);
+      await loadCustomerOrders(response.data.id);
+      toast.success('Profile updated');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not update profile');
+    } finally {
+      setCustomerSaving(false);
+    }
+  };
+
+  const uploadCustomerAvatar = async (file) => {
+    if (!file || !customer?.id) return;
+    setAvatarUploading(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append('image', file);
+      const uploadResponse = await endpoints.uploadPublicCustomerAvatar(uploadData);
+      const response = await endpoints.updatePublicCustomer(customer.id, { profileImageUrl: uploadResponse.data.url });
+      saveCustomerSession(response.data);
+      toast.success('Profile image updated');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not upload profile image');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   useEffect(() => {
     const code = flashSale.data?.item;
@@ -574,6 +764,11 @@ export default function PublicPortal() {
     activeOrdersRef.current = activeOrders;
     localStorage.setItem(activeOrdersStorageKey, JSON.stringify(activeOrders.slice(0, 10)));
   }, [activeOrders]);
+
+  useEffect(() => {
+    if (!customer?.id) return;
+    loadCustomerOrders(customer.id);
+  }, [customer?.id]);
 
   useEffect(() => () => {
     if (checkoutPromptTimerRef.current) window.clearTimeout(checkoutPromptTimerRef.current);
@@ -733,6 +928,7 @@ export default function PublicPortal() {
       const submittedCustomer = orderForm;
       const response = await endpoints.createOnlineOrder({
         ...orderForm,
+        customerId: customer?.id,
         deliveryFee,
         items: cart.map(({ menuItemId, quantity, variationName }) => ({ menuItemId, quantity, variationName }))
       });
@@ -751,7 +947,17 @@ export default function PublicPortal() {
       ]);
       setCart([]);
       setCheckoutStep('success');
-      setOrderForm(emptyOrderForm);
+      setOrderForm((current) => ({
+        ...emptyOrderForm,
+        customerName: customer?.name || current.customerName,
+        customerPhone: customer?.phone || current.customerPhone,
+        customerEmail: customer?.email || current.customerEmail,
+        deliveryAddress: customer?.address || current.deliveryAddress
+      }));
+      if (customer?.id) {
+        await loadCustomerOrders(customer.id);
+        saveCustomerSession({ ...customer, orderCount: Number(customer.orderCount || 0) + 1 });
+      }
       refetch();
       const adminPhone = whatsappPhone(settings.supportPhone);
       if (adminPhone) {
@@ -867,6 +1073,7 @@ export default function PublicPortal() {
   return (
     <div className="min-h-screen bg-[#eaf5f8] text-stone-950">
       <div className="mx-auto min-h-screen max-w-7xl bg-[#eef8fa]">
+        {!customer ? <CustomerGate form={customerForm} saving={customerSaving} onChange={setCustomerForm} onSubmit={submitCustomerSession} /> : null}
         {showInstallPrompt ? <InstallAppPrompt canInstall={Boolean(installPrompt)} onInstall={installApp} onDismiss={dismissInstallPrompt} /> : null}
         <header className="relative z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
           <div className="flex items-center justify-between gap-3">
@@ -885,14 +1092,8 @@ export default function PublicPortal() {
                 <ShoppingBag size={19} />
                 {cartCount ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{cartCount}</span> : null}
               </button>
-              {activeTab === 'support' ? null : (
-                <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => setActiveTab('orders')} aria-label="Notifications">
-                  <Bell size={19} />
-                  {notifications.length ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{notifications.length}</span> : null}
-                </button>
-              )}
-              <button className="grid h-9 w-9 place-items-center rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('support')} aria-label="Support">
-                <User size={19} />
+              <button className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('profile')} aria-label="Profile">
+                {customer?.profileImageUrl ? <img className="h-full w-full object-cover" src={customer.profileImageUrl} alt={customer.name || 'Profile'} /> : <User size={19} />}
               </button>
             </div>
           </div>
@@ -1005,6 +1206,7 @@ export default function PublicPortal() {
                   </div>
                 </section>
 
+                {false && (
                 <section className="mt-5">
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-xl font-black tracking-normal text-[#151923]">Active Orders</h2>
@@ -1028,6 +1230,7 @@ export default function PublicPortal() {
                     )}
                   </div>
                 </section>
+                )}
               </>
             ) : null}
 
@@ -1057,11 +1260,15 @@ export default function PublicPortal() {
 
             {activeTab === 'orders' ? (
               <section>
+                {selectedOrder ? (
+                  <OrderDetailView order={selectedOrder} onBack={() => setSelectedOrder(null)} />
+                ) : (
+                  <>
                 <h1 className="text-2xl font-black">Orders</h1>
                 <p className="mt-1 text-sm font-semibold text-stone-600">Track orders placed during this session.</p>
                 <div className="mt-5 rounded-xl bg-white px-3 shadow-sm">
                   {activeOrders.length ? activeOrders.map((order) => (
-                    <div key={order.id || order.orderNo} className="flex items-center gap-3 border-b border-[#dbe5e8] py-4 last:border-b-0">
+                    <button key={order.id || order.orderNo} className="flex w-full items-center gap-3 border-b border-[#dbe5e8] py-4 text-left last:border-b-0" onClick={() => setSelectedOrder(order)}>
                       <ClipboardList size={22} className="text-[#d71920]" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-black text-[#151923]">{order.orderNo}</p>
@@ -1077,6 +1284,8 @@ export default function PublicPortal() {
                     </div>
                   )}
                 </div>
+                  </>
+                )}
               </section>
             ) : null}
 
@@ -1093,7 +1302,7 @@ export default function PublicPortal() {
                         <h1 className="mt-1 text-2xl font-black">Support</h1>
                         <p className="mt-2 max-w-xl text-sm font-semibold leading-6 text-white/75">Get help with orders, delivery, reservations, and onsite flash sale codes.</p>
                       </div>
-                    </div>
+                    </button>
                   </div>
                   <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-7">
                     <a
@@ -1144,6 +1353,85 @@ export default function PublicPortal() {
                     ))}
                   </div>
                 </div>
+              </section>
+            ) : null}
+
+            {activeTab === 'profile' ? (
+              <section>
+                <div className="overflow-hidden rounded-3xl bg-white shadow-md">
+                  <div className="bg-[#151923] px-5 py-6 text-white sm:px-7">
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-3xl bg-white/10">
+                        {customer?.profileImageUrl ? (
+                          <img className="h-full w-full object-cover" src={customer.profileImageUrl} alt={customer.name || 'Profile'} />
+                        ) : (
+                          <div className="grid h-full w-full place-items-center text-white"><User size={34} /></div>
+                        )}
+                        <label className="absolute bottom-1 right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-white text-[#d71920] shadow-md">
+                          <Camera size={16} />
+                          <input className="hidden" type="file" accept="image/*" disabled={avatarUploading} onChange={(event) => uploadCustomerAvatar(event.target.files?.[0])} />
+                        </label>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-wide text-white/60">Customer account</p>
+                        <h1 className="mt-1 truncate text-2xl font-black">{customer?.name || 'Guest customer'}</h1>
+                        <p className="mt-1 text-sm font-semibold text-white/70">{customer?.phone}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-7">
+                    <div className="rounded-2xl bg-[#fff4d7] p-4">
+                      <p className="text-xs font-black uppercase text-[#8b5f00]">Total orders</p>
+                      <p className="mt-2 text-3xl font-black text-[#151923]">{activeOrders.length || customer?.orderCount || 0}</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#f7fbfc] p-4 sm:col-span-2">
+                      <p className="text-xs font-black uppercase text-stone-500">Default address</p>
+                      <p className="mt-2 text-sm font-semibold text-stone-700">{customer?.address || 'No default address yet.'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <form className="mt-5 grid gap-4 rounded-3xl bg-white p-5 shadow-md sm:p-7" onSubmit={updateCustomerProfile}>
+                  <div>
+                    <h2 className="text-xl font-black">Account details</h2>
+                    <p className="mt-1 text-sm font-semibold text-stone-500">Update your basic information for faster checkout.</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label>
+                      <span className="label">Name</span>
+                      <input className="input mt-1" value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} required />
+                    </label>
+                    <label>
+                      <span className="label">Phone</span>
+                      <input className="input mt-1" type="tel" inputMode="tel" value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} required />
+                    </label>
+                    <label>
+                      <span className="label">Email optional</span>
+                      <input className="input mt-1" type="email" value={customerForm.email || ''} onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })} />
+                    </label>
+                    <label>
+                      <span className="label">Default address</span>
+                      <input className="input mt-1" value={customerForm.address || ''} onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })} />
+                    </label>
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button className="flex h-11 items-center justify-center rounded-xl bg-[#d71920] px-4 text-sm font-black text-white disabled:opacity-60" disabled={customerSaving || avatarUploading}>
+                      {customerSaving ? 'Saving...' : avatarUploading ? 'Uploading...' : 'Save profile'}
+                    </button>
+                    <button
+                      type="button"
+                      className="flex h-11 items-center justify-center rounded-xl bg-stone-100 px-4 text-sm font-black text-stone-700"
+                      onClick={() => {
+                        localStorage.removeItem(customerStorageKey);
+                        setCustomer(null);
+                        setCustomerForm(emptyCustomerForm);
+                        setActiveOrders([]);
+                      }}
+                    >
+                      Change customer
+                    </button>
+                  </div>
+                </form>
               </section>
             ) : null}
           </main>

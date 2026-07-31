@@ -14,6 +14,26 @@ export const listUsers = asyncHandler(async (req, res) => {
   res.json(paginatedResponse(items, total, page, limit));
 });
 
+export const listCustomers = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPagination(req.query);
+  const [customers, total] = await Promise.all([
+    prisma.customer.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
+    prisma.customer.count()
+  ]);
+
+  const orderCounts = await Promise.all(
+    customers.map(async (customer) => ({
+      id: customer.id,
+      count: await prisma.onlineOrder.count({
+        where: { OR: [{ customerId: customer.id }, { customerPhone: customer.phone }] }
+      })
+    }))
+  );
+  const countByCustomerId = Object.fromEntries(orderCounts.map((entry) => [entry.id, entry.count]));
+
+  res.json(paginatedResponse(customers.map((customer) => ({ ...customer, orderCount: countByCustomerId[customer.id] || 0 })), total, page, limit));
+});
+
 export const createUser = asyncHandler(async (req, res) => {
   const { password, ...data } = req.body;
   const user = await prisma.user.create({

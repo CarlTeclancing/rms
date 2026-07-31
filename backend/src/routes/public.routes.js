@@ -4,9 +4,12 @@ import {
   createOnlineOrder,
   createReservation,
   getPublicOnlineOrder,
+  listPublicCustomerOrders,
   listOnlineOrders,
   listReservations,
   publicMenu,
+  updatePublicCustomer,
+  upsertPublicCustomer,
   updateOnlineOrderStatus,
   updateReservationStatus
 } from '../controllers/public.controller.js';
@@ -16,6 +19,9 @@ import { authenticate, authorize } from '../middleware/auth.js';
 const router = Router();
 
 router.get('/public/menu', publicMenu);
+router.post('/public/customers/session', [body('name').notEmpty(), body('phone').notEmpty(), validate], upsertPublicCustomer);
+router.put('/public/customers/:id', updatePublicCustomer);
+router.get('/public/customers/:id/orders', listPublicCustomerOrders);
 router.get('/public/orders/:id', getPublicOnlineOrder);
 router.post(
   '/public/orders',
