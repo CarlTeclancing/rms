@@ -9,7 +9,14 @@ const serializePromotion = (promotion) => ({
   approvedAt: promotion.approvedAt?.toISOString?.() || promotion.approvedAt
 });
 
+const serializeFlashSaleCode = (code) => ({
+  ...code,
+  startsAt: code.startsAt?.toISOString?.() || code.startsAt,
+  endsAt: code.endsAt?.toISOString?.() || code.endsAt
+});
+
 const dateOrNull = (value) => (value ? new Date(value) : null);
+const cleanCode = (value = '') => value.trim().toUpperCase().replace(/\s+/g, '');
 
 export const listPublicPromotions = asyncHandler(async (_req, res) => {
   const now = new Date();
@@ -100,5 +107,69 @@ export const updatePromotion = asyncHandler(async (req, res) => {
 
 export const deletePromotion = asyncHandler(async (req, res) => {
   await prisma.promotion.delete({ where: { id: req.params.id } });
+  res.status(204).send();
+});
+
+export const getPublicFlashSaleCode = asyncHandler(async (_req, res) => {
+  const now = new Date();
+  const codes = await prisma.flashSaleCode.findMany({
+    where: {
+      isActive: true,
+      OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+      AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }]
+    },
+    orderBy: [{ startsAt: 'desc' }, { createdAt: 'desc' }],
+    take: 10
+  });
+  const code = codes.find((item) => item.maxRedemptions === null || item.redeemedCount < item.maxRedemptions);
+
+  res.json({ item: code ? serializeFlashSaleCode(code) : null });
+});
+
+export const listFlashSaleCodes = asyncHandler(async (req, res) => {
+  const { page, limit, skip } = getPagination(req.query);
+  const where = {
+    ...(req.query.search ? { code: { contains: req.query.search, mode: 'insensitive' } } : {}),
+    ...(req.query.active === 'true' ? { isActive: true } : {}),
+    ...(req.query.active === 'false' ? { isActive: false } : {})
+  };
+  const [items, total] = await Promise.all([
+    prisma.flashSaleCode.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+    prisma.flashSaleCode.count({ where })
+  ]);
+  res.json(paginatedResponse(items.map(serializeFlashSaleCode), total, page, limit));
+});
+
+export const createFlashSaleCode = asyncHandler(async (req, res) => {
+  const code = await prisma.flashSaleCode.create({
+    data: {
+      code: cleanCode(req.body.code),
+      title: req.body.title,
+      description: req.body.description || null,
+      discountPercent: Number(req.body.discountPercent || 10),
+      isActive: req.body.isActive ?? true,
+      startsAt: dateOrNull(req.body.startsAt),
+      endsAt: dateOrNull(req.body.endsAt),
+      maxRedemptions: req.body.maxRedemptions === '' || req.body.maxRedemptions === undefined ? null : Number(req.body.maxRedemptions)
+    }
+  });
+  res.status(201).json(serializeFlashSaleCode(code));
+});
+
+export const updateFlashSaleCode = asyncHandler(async (req, res) => {
+  const data = {
+    ...req.body,
+    ...(req.body.code !== undefined ? { code: cleanCode(req.body.code) } : {}),
+    ...(req.body.discountPercent !== undefined ? { discountPercent: Number(req.body.discountPercent || 10) } : {}),
+    ...(req.body.startsAt !== undefined ? { startsAt: dateOrNull(req.body.startsAt) } : {}),
+    ...(req.body.endsAt !== undefined ? { endsAt: dateOrNull(req.body.endsAt) } : {}),
+    ...(req.body.maxRedemptions !== undefined ? { maxRedemptions: req.body.maxRedemptions === '' ? null : Number(req.body.maxRedemptions) } : {})
+  };
+  const code = await prisma.flashSaleCode.update({ where: { id: req.params.id }, data });
+  res.json(serializeFlashSaleCode(code));
+});
+
+export const deleteFlashSaleCode = asyncHandler(async (req, res) => {
+  await prisma.flashSaleCode.delete({ where: { id: req.params.id } });
   res.status(204).send();
 });

@@ -1,4 +1,4 @@
-import { Check, Megaphone, Pause, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, Edit2, Megaphone, Pause, Percent, Plus, Search, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { DataTable } from '../components/DataTable.jsx';
@@ -27,6 +27,17 @@ const emptyForm = {
   adminNote: ''
 };
 
+const emptyCodeForm = {
+  code: '',
+  title: '10% onsite discount',
+  description: 'Show this code when you visit the restaurant to redeem your flash sale discount.',
+  discountPercent: 10,
+  isActive: true,
+  startsAt: '',
+  endsAt: '',
+  maxRedemptions: ''
+};
+
 function StatusBadge({ status }) {
   const tone = {
     APPROVED: 'bg-green-50 text-green-700',
@@ -47,7 +58,12 @@ export default function Promotions() {
   const [uploadStatus, setUploadStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [busyAction, setBusyAction] = useState('');
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [editingCode, setEditingCode] = useState(null);
+  const [codeForm, setCodeForm] = useState(emptyCodeForm);
+  const [savingCode, setSavingCode] = useState(false);
   const { data, loading, error, refetch } = useApi(() => endpoints.promotions(params), [params]);
+  const flashCodes = useApi(() => endpoints.flashSaleCodes({ limit: 50 }), []);
 
   const uploadImage = async (file) => {
     if (!file) return;
@@ -122,6 +138,69 @@ export default function Promotions() {
     }
   };
 
+  const openCodeEditor = (code = null) => {
+    setEditingCode(code);
+    setCodeForm(
+      code
+        ? {
+            code: code.code,
+            title: code.title,
+            description: code.description || '',
+            discountPercent: code.discountPercent || 10,
+            isActive: code.isActive,
+            startsAt: code.startsAt ? code.startsAt.slice(0, 10) : '',
+            endsAt: code.endsAt ? code.endsAt.slice(0, 10) : '',
+            maxRedemptions: code.maxRedemptions || ''
+          }
+        : emptyCodeForm
+    );
+    setCodeOpen(true);
+  };
+
+  const saveCode = async (event) => {
+    event.preventDefault();
+    setSavingCode(true);
+    try {
+      if (editingCode) await endpoints.updateFlashSaleCode(editingCode.id, codeForm);
+      else await endpoints.createFlashSaleCode(codeForm);
+      toast.success(editingCode ? 'Flash sale code updated' : 'Flash sale code created');
+      setCodeOpen(false);
+      setEditingCode(null);
+      setCodeForm(emptyCodeForm);
+      flashCodes.refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not save flash sale code');
+    } finally {
+      setSavingCode(false);
+    }
+  };
+
+  const toggleCode = async (code) => {
+    setBusyAction(`${code.id}:toggle`);
+    try {
+      await endpoints.updateFlashSaleCode(code.id, { isActive: !code.isActive });
+      toast.success(code.isActive ? 'Flash sale paused' : 'Flash sale activated');
+      flashCodes.refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not update flash sale code');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const removeCode = async (code) => {
+    setBusyAction(`${code.id}:delete-code`);
+    try {
+      await endpoints.deleteFlashSaleCode(code.id);
+      toast.success('Flash sale code deleted');
+      flashCodes.refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not delete flash sale code');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
   const columns = useMemo(
     () => [
       { key: 'businessName', label: 'Business' },
@@ -170,6 +249,44 @@ export default function Promotions() {
 
       <DataTable columns={columns} rows={data.items || []} empty="No promotion requests yet." />
 
+      <section className="mt-6">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black">Flash sale codes</h2>
+            <p className="mt-1 text-sm font-semibold text-stone-500">Create short-lived discount codes customers can redeem onsite.</p>
+          </div>
+          <button className="btn-primary" onClick={() => openCodeEditor()}><Percent size={17} /> Create code</button>
+        </div>
+        <DataTable
+          rows={flashCodes.data?.items || []}
+          empty={flashCodes.loading ? 'Loading flash sale codes...' : 'No flash sale codes yet.'}
+          columns={[
+            { key: 'code', label: 'Code', render: (row) => <span className="rounded-lg bg-brand-50 px-3 py-1 font-black text-brand-500">{row.code}</span> },
+            { key: 'title', label: 'Offer' },
+            { key: 'discountPercent', label: 'Discount', render: (row) => `${row.discountPercent}%` },
+            {
+              key: 'isActive',
+              label: 'Status',
+              render: (row) => row.isActive
+                ? <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-black text-green-700">Active</span>
+                : <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-black text-stone-600">Paused</span>
+            },
+            { key: 'endsAt', label: 'Ends', render: (row) => row.endsAt ? compactDate(row.endsAt) : 'No end date' },
+            {
+              key: 'actions',
+              label: 'Actions',
+              render: (row) => (
+                <div className="flex gap-2">
+                  <button className="btn-secondary h-8 px-2" disabled={Boolean(busyAction)} onClick={() => toggleCode(row)} title={row.isActive ? 'Pause' : 'Activate'}>{busyAction === `${row.id}:toggle` ? '...' : row.isActive ? <Pause size={15} /> : <Check size={15} />}</button>
+                  <button className="btn-secondary h-8 px-2" disabled={Boolean(busyAction)} onClick={() => openCodeEditor(row)} title="Edit"><Edit2 size={15} /></button>
+                  <button className="btn-secondary h-8 px-2 text-rose-600" disabled={Boolean(busyAction)} onClick={() => removeCode(row)} title="Delete">{busyAction === `${row.id}:delete-code` ? '...' : <Trash2 size={15} />}</button>
+                </div>
+              )
+            }
+          ]}
+        />
+      </section>
+
       <Modal title="Create promotion" open={open} onClose={() => setOpen(false)}>
         <form className="grid gap-3" onSubmit={save}>
           <input className="input" placeholder="Business name" value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} required />
@@ -207,6 +324,41 @@ export default function Promotions() {
             <input className="input" type="date" value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} />
           </div>
           <button className="btn-primary" disabled={saving || uploading}><Megaphone size={17} /> {saving ? 'Saving...' : 'Save promotion'}</button>
+        </form>
+      </Modal>
+
+      <Modal title={editingCode ? 'Edit flash sale code' : 'Create flash sale code'} open={codeOpen} onClose={() => setCodeOpen(false)}>
+        <form className="grid gap-3" onSubmit={saveCode}>
+          <div className="rounded-xl bg-brand-50 p-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-brand-500">
+                <Percent size={22} />
+              </div>
+              <div>
+                <p className="font-black">Onsite redeem code</p>
+                <p className="text-xs font-semibold text-stone-500">Customers will see this in the flash sale popup.</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input className="input uppercase" placeholder="Code e.g. ASAP10" value={codeForm.code} onChange={(e) => setCodeForm({ ...codeForm, code: e.target.value.toUpperCase() })} required />
+            <input className="input" type="number" min="1" max="100" value={codeForm.discountPercent} onChange={(e) => setCodeForm({ ...codeForm, discountPercent: e.target.value })} required />
+          </div>
+          <input className="input" placeholder="Offer title" value={codeForm.title} onChange={(e) => setCodeForm({ ...codeForm, title: e.target.value })} required />
+          <textarea className="input h-24 py-3" placeholder="Offer description" value={codeForm.description} onChange={(e) => setCodeForm({ ...codeForm, description: e.target.value })} />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <input className="input" type="date" value={codeForm.startsAt} onChange={(e) => setCodeForm({ ...codeForm, startsAt: e.target.value })} />
+            <input className="input" type="date" value={codeForm.endsAt} onChange={(e) => setCodeForm({ ...codeForm, endsAt: e.target.value })} />
+            <input className="input" type="number" min="1" placeholder="Max redemptions" value={codeForm.maxRedemptions} onChange={(e) => setCodeForm({ ...codeForm, maxRedemptions: e.target.value })} />
+          </div>
+          <label className="flex items-center justify-between rounded-xl bg-brand-50 p-3">
+            <span>
+              <span className="block text-sm font-black text-stone-900">Active</span>
+              <span className="text-xs font-semibold text-stone-500">Show this code to customers when valid.</span>
+            </span>
+            <input className="h-5 w-5 accent-brand-500" type="checkbox" checked={codeForm.isActive} onChange={(e) => setCodeForm({ ...codeForm, isActive: e.target.checked })} />
+          </label>
+          <button className="btn-primary" disabled={savingCode}><Percent size={17} /> {savingCode ? 'Saving...' : 'Save code'}</button>
         </form>
       </Modal>
     </>

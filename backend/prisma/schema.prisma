@@ -267,6 +267,23 @@ model Promotion {
   @@index([startsAt, endsAt])
 }
 
+model FlashSaleCode {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  title          String
+  description    String?
+  discountPercent Int     @default(10)
+  isActive       Boolean  @default(true)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  maxRedemptions Int?
+  redeemedCount  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+}
+
 model AppSettings {
   id             String   @id @default("default")
   restaurantName String   @default("ChopASAP")

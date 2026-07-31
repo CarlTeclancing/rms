@@ -5,16 +5,17 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Copy,
   CreditCard,
   Heart,
   Home,
-  IceCreamBowl,
   Info,
   LocateFixed,
   MapPin,
   Minus,
   MoreHorizontal,
   Package,
+  Percent,
   Plus,
   Search,
   ShoppingBag,
@@ -49,11 +50,10 @@ const tabs = [
   { id: 'orders', label: 'Orders', icon: ClipboardList }
 ];
 const categoryTiles = [
-  { label: 'African', icon: Soup },
-  { label: 'Grocery', icon: Package, badge: 'Promo' },
+  { label: 'African', icon: Soup, filter: 'African' },
+  { label: 'Western', icon: Package, filter: 'Western' },
   { label: 'Sweet Drinks', icon: Wine },
   { label: 'Alcohol', icon: Wine },
-  { label: 'Ice Cream', icon: IceCreamBowl },
   { label: 'More', icon: MoreHorizontal }
 ];
 
@@ -274,7 +274,7 @@ function PriceRows({ subtotal, deliveryFee, serviceFee = 0, total, showService =
 function MealCard({ item, favorite, onFavorite, onOpen }) {
   return (
     <article
-      className="cursor-pointer overflow-hidden rounded-xl border border-[#f5c45d] bg-white text-left shadow-[0_14px_30px_rgba(75,45,10,0.10)] transition hover:-translate-y-0.5 hover:border-[#d71920]"
+      className="cursor-pointer overflow-hidden rounded-xl border border-[#f5c45d] bg-white text-left shadow-[0_10px_22px_rgba(75,45,10,0.10)] transition hover:-translate-y-0.5 hover:border-[#d71920]"
       onClick={() => onOpen(item)}
       role="button"
       tabIndex={0}
@@ -283,9 +283,9 @@ function MealCard({ item, favorite, onFavorite, onOpen }) {
       }}
     >
       <div className="relative">
-        <img className="h-36 w-full object-cover sm:h-40" src={item.imageUrl || fallbackImage} alt={item.name} />
+        <img className="h-28 w-full object-cover sm:h-40" src={item.imageUrl || fallbackImage} alt={item.name} />
         <button
-          className={clsx('absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white shadow-md', favorite ? 'text-[#d71920]' : 'text-stone-500')}
+          className={clsx('absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white shadow-md sm:right-3 sm:top-3 sm:h-9 sm:w-9', favorite ? 'text-[#d71920]' : 'text-stone-500')}
           onClick={(event) => {
             event.stopPropagation();
             onFavorite(item.id);
@@ -295,23 +295,23 @@ function MealCard({ item, favorite, onFavorite, onOpen }) {
           <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
         </button>
       </div>
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="p-3 sm:p-4">
+        <div className="grid gap-2 sm:flex sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0">
-            <h3 className="truncate font-black text-stone-950">{item.name}</h3>
+            <h3 className="line-clamp-2 min-h-[40px] text-sm font-black leading-5 text-stone-950 sm:min-h-0 sm:truncate sm:text-base">{item.name}</h3>
             <p className="mt-1 text-xs font-bold text-stone-500">{item.category?.name || 'Kitchen'}</p>
           </div>
-          <p className="shrink-0 font-black text-[#d71920]">{currency(item.price)}</p>
+          <p className="shrink-0 text-sm font-black text-[#d71920] sm:text-base">{currency(item.price)}</p>
         </div>
-        <div className="mt-3 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-stone-600">
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1 text-[11px] font-bold text-stone-600 sm:gap-2 sm:text-xs">
             <Star size={14} className="text-amber-500" fill="currentColor" />
             4.8
             <span className="h-1 w-1 rounded-full bg-stone-300" />
             25 min
           </div>
           <button
-            className="grid h-10 w-10 place-items-center rounded-full text-white shadow-md"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white shadow-md sm:h-10 sm:w-10"
             style={{ backgroundColor: brandRed, boxShadow: '0 10px 18px rgba(215, 25, 32, 0.18)' }}
             onClick={(event) => {
               event.stopPropagation();
@@ -330,27 +330,57 @@ function MealCard({ item, favorite, onFavorite, onOpen }) {
 function CategoryTile({ tile, onClick }) {
   const Icon = tile.icon;
   return (
-    <button className="relative min-h-20 rounded-lg bg-[#eef5f6] p-3 text-left shadow-sm" onClick={onClick}>
-      {tile.badge ? <span className="absolute right-2 top-[-10px] rounded-full bg-[#19b567] px-3 py-1 text-[11px] font-black text-white">{tile.badge}</span> : null}
-      <div className="flex h-full flex-col justify-between">
-        <Icon className="ml-auto text-[#d71920]" size={30} />
-        <span className="text-xs font-black text-[#292f3d]">{tile.label}</span>
+    <button className="relative flex min-h-14 min-w-[112px] items-center gap-2 rounded-lg bg-white px-3 py-2 text-left shadow-sm ring-1 ring-[#edf0f2]" onClick={onClick}>
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#fff1ca] text-[#d71920]">
+        <Icon size={18} />
       </div>
+      <span className="text-xs font-black leading-4 text-[#292f3d]">{tile.label}</span>
     </button>
   );
 }
 
-function MobileMealRow({ item, onAdd }) {
+function FlashSalePopup({ code, open, onClose, onUse }) {
+  if (!open || !code) return null;
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code.code);
+      toast.success('Code copied');
+    } catch {
+      toast.success(`Use code ${code.code}`);
+    }
+  };
+
   return (
-    <button className="flex w-full items-center gap-3 border-b border-[#dbe5e8] bg-white py-3 text-left" onClick={() => onAdd(item)}>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-black text-[#151923]">{item.name}</p>
-        <p className="mt-1 line-clamp-2 text-xs font-semibold leading-4 text-[#8a8f98]">{item.description || 'Hot meal available with fresh ingredients and fast preparation.'}</p>
-        <p className="mt-1 text-xs font-black text-[#151923]">From {currency(item.price)}</p>
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/45 px-4">
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="relative bg-[#d71920] px-5 pb-6 pt-5 text-white">
+          <button className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/15" onClick={onClose} aria-label="Close flash sale">
+            <X size={17} />
+          </button>
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-[#d71920]">
+            <Percent size={30} />
+          </div>
+          <p className="mt-4 text-xs font-black uppercase tracking-wide text-white/80">Flash sale</p>
+          <h2 className="mt-1 text-2xl font-black leading-7">{code.title}</h2>
+          <p className="mt-2 text-sm font-semibold text-white/85">{code.description || `Get ${code.discountPercent}% off when you redeem onsite.`}</p>
+        </div>
+        <div className="p-5">
+          <div className="rounded-xl border border-dashed border-[#d71920] bg-[#fff4d7] px-4 py-3 text-center">
+            <p className="text-xs font-black uppercase text-[#8b5f00]">Redeem code</p>
+            <p className="mt-1 text-2xl font-black tracking-[0.18em] text-[#151923]">{code.code}</p>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <button className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#fff1ca] text-sm font-black text-[#d71920]" onClick={copyCode}>
+              <Copy size={16} /> Copy
+            </button>
+            <button className="flex h-11 items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white" onClick={onUse}>
+              Order now
+            </button>
+          </div>
+          <p className="mt-3 text-center text-xs font-semibold text-stone-500">Show this code at the restaurant when you visit onsite.</p>
+        </div>
       </div>
-      <img className="h-16 w-20 rounded-lg object-cover" src={item.imageUrl || fallbackImage} alt={item.name} />
-      <ChevronRight className="shrink-0 text-[#29384d]" size={18} />
-    </button>
+    </div>
   );
 }
 
@@ -447,6 +477,7 @@ function BottomNav({ activeTab, setActiveTab }) {
 export default function PublicPortal() {
   const { data, loading, error, refetch } = useApi(() => endpoints.publicMenu(), []);
   const promotions = useApi(() => endpoints.publicPromotions(), []);
+  const flashSale = useApi(() => endpoints.publicFlashSale(), []);
   const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState('home');
   const [favorites, setFavorites] = useState([]);
@@ -477,10 +508,12 @@ export default function PublicPortal() {
   const [promotionUploadStatus, setPromotionUploadStatus] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [flashSaleOpen, setFlashSaleOpen] = useState(false);
   const [notifications, setNotifications] = useState([
     { id: 'welcome', title: 'Welcome', body: 'Fresh meals are ready for delivery.' }
   ]);
   const activeOrdersRef = useRef(activeOrders);
+  const checkoutPromptTimerRef = useRef(null);
 
   const items = data?.items || [];
   const categories = [...new Set(items.map((item) => item.category?.name).filter(Boolean))];
@@ -498,11 +531,7 @@ export default function PublicPortal() {
   ];
   const [promotionIndex, setPromotionIndex] = useState(0);
   const featuredPromotion = promotionSlides[promotionIndex] || promotionSlides[0];
-  const visibleCategoryTiles = categoryTiles.map((tile, index) => ({
-    ...tile,
-    label: categories[index] || tile.label,
-    filter: categories[index] || tile.label
-  }));
+  const visibleCategoryTiles = categoryTiles.map((tile) => ({ ...tile, filter: tile.filter || tile.label }));
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
   const deliveryFee = fulfillment === 'delivery' ? Number(settings.deliveryFee || 0) : 0;
   const serviceFee = 0;
@@ -511,6 +540,15 @@ export default function PublicPortal() {
 
   const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
   const toggleFavorite = (id) => setFavorites((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
+
+  useEffect(() => {
+    const code = flashSale.data?.item;
+    if (!code) return;
+    const dismissedCode = localStorage.getItem('chopasap_flash_sale_dismissed');
+    if (dismissedCode === code.id) return;
+    const timer = window.setTimeout(() => setFlashSaleOpen(true), 900);
+    return () => window.clearTimeout(timer);
+  }, [flashSale.data?.item]);
 
   useEffect(() => {
     if (promotionIndex < promotionSlides.length) return;
@@ -551,6 +589,10 @@ export default function PublicPortal() {
     activeOrdersRef.current = activeOrders;
     localStorage.setItem(activeOrdersStorageKey, JSON.stringify(activeOrders.slice(0, 10)));
   }, [activeOrders]);
+
+  useEffect(() => () => {
+    if (checkoutPromptTimerRef.current) window.clearTimeout(checkoutPromptTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const refreshOrderStatuses = async () => {
@@ -641,6 +683,26 @@ export default function PublicPortal() {
       return [...current, { cartItemId, menuItemId: item.id, variationName, name: item.name, price, quantity, imageUrl: item.imageUrl }];
     });
     toast.success(`${item.name} added`);
+    if (checkoutPromptTimerRef.current) window.clearTimeout(checkoutPromptTimerRef.current);
+    checkoutPromptTimerRef.current = window.setTimeout(() => {
+      toast.custom(
+        (toastItem) => (
+          <div className="w-[min(92vw,360px)] rounded-2xl bg-white p-4 shadow-[0_18px_45px_rgba(17,24,39,0.18)] ring-1 ring-black/5">
+            <p className="text-sm font-black text-[#151923]">Ready to checkout?</p>
+            <p className="mt-1 text-xs font-semibold text-[#6d6f76]">Your cart has {cartCount + quantity} item{cartCount + quantity === 1 ? '' : 's'} waiting.</p>
+            <div className="mt-3 flex gap-2">
+              <button className="flex-1 rounded-xl bg-[#d71920] px-3 py-2 text-xs font-black text-white" onClick={() => { toast.dismiss(toastItem.id); openCheckout('cart'); }}>
+                Checkout cart
+              </button>
+              <button className="rounded-xl bg-stone-100 px-3 py-2 text-xs font-black text-stone-700" onClick={() => toast.dismiss(toastItem.id)}>
+                Later
+              </button>
+            </div>
+          </div>
+        ),
+        { duration: 7000 }
+      );
+    }, 2500);
     closeMealDetail();
   };
 
@@ -811,7 +873,7 @@ export default function PublicPortal() {
   if (error || !data) return <EmptyState title="Menu unavailable" message="The ordering portal could not load the menu." onRetry={refetch} />;
 
   const renderMeals = (list) => (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
       {list.map((item) => (
         <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onFavorite={toggleFavorite} onOpen={openMealDetail} />
       ))}
@@ -882,37 +944,25 @@ export default function PublicPortal() {
           <main className="min-w-0">
             {activeTab === 'home' ? (
               <>
-                <div className="flex justify-center gap-2">
-                  {['Food', 'Restaurants', 'Rides'].map((pill, index) => (
-                    <button
-                      key={pill}
-                      className={clsx(
-                        'rounded-full px-3 py-1.5 text-xs font-black shadow-sm',
-                        index === 0 ? 'bg-[#ffd071] text-white' : 'bg-[#e5e3da] text-[#7f7767]'
-                      )}
-                    >
-                      {pill}
-                    </button>
-                  ))}
-                </div>
-
-                <section className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {visibleCategoryTiles.map((tile) => (
-                    <CategoryTile key={tile.label} tile={tile} onClick={() => setSearch(tile.icon === MoreHorizontal ? '' : tile.filter)} />
-                  ))}
+                <section className="overflow-x-auto pb-1">
+                  <div className="flex min-w-max gap-2">
+                    {visibleCategoryTiles.map((tile) => (
+                      <CategoryTile key={tile.label} tile={tile} onClick={() => setSearch(tile.icon === MoreHorizontal ? '' : tile.filter)} />
+                    ))}
+                  </div>
                 </section>
 
-                <section className="mt-5 overflow-hidden rounded-xl bg-white shadow-sm" aria-label="Promotions">
-                  <div className="relative min-h-[142px] bg-[#ffd071]">
-                    <div className="grid min-h-[142px] grid-cols-[1.25fr_0.75fr]">
-                      <div className="p-4">
+                <section className="mt-3 overflow-hidden rounded-xl bg-white shadow-sm" aria-label="Promotions">
+                  <div className="relative min-h-[112px] bg-[#ffd071]">
+                    <div className="grid min-h-[112px] grid-cols-[1.35fr_0.65fr]">
+                      <div className="p-3 sm:p-4">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8b5f00]">
                           {featuredPromotion?.requestSlide ? 'Advertise on ChopASAP' : featuredPromotion?.businessName || 'Featured'}
                         </p>
-                        <p className="mt-1 text-base font-bold leading-5 text-[#151923]">{featuredPromotion?.title}</p>
-                        <p className="mt-1 line-clamp-2 text-xs font-medium leading-4 text-[#6c6250]">{featuredPromotion?.description}</p>
+                        <p className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-[#151923] sm:text-base">{featuredPromotion?.title}</p>
+                        <p className="mt-1 line-clamp-1 text-xs font-medium leading-4 text-[#6c6250]">{featuredPromotion?.description}</p>
                         <button
-                          className="mt-3 inline-flex h-8 items-center gap-1 rounded-full bg-white px-3 text-xs font-semibold text-[#6c6250] shadow-sm"
+                          className="mt-2 inline-flex h-7 items-center gap-1 rounded-full bg-white px-3 text-xs font-semibold text-[#6c6250] shadow-sm"
                           onClick={() => handlePromotionCta(featuredPromotion)}
                         >
                           {featuredPromotion?.ctaLabel || 'Contact our Team'} <ChevronRight size={14} />
@@ -920,10 +970,10 @@ export default function PublicPortal() {
                       </div>
                       <div className="flex items-center justify-center bg-[#ffe6a3] p-3">
                         {featuredPromotion?.imageUrl ? (
-                          <img className="h-full max-h-28 w-full rounded-lg object-cover" src={featuredPromotion.imageUrl} alt={featuredPromotion.title} />
+                          <img className="h-full max-h-24 w-full rounded-lg object-cover" src={featuredPromotion.imageUrl} alt={featuredPromotion.title} />
                         ) : (
-                          <div className="grid h-20 w-20 place-items-center rounded-2xl bg-white/70 text-[#d71920]">
-                            <ShoppingBag size={44} />
+                          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/70 text-[#d71920]">
+                            <ShoppingBag size={34} />
                           </div>
                         )}
                       </div>
@@ -972,18 +1022,7 @@ export default function PublicPortal() {
                     <h2 className="text-xl font-black tracking-normal text-[#151923]">Today's Menu</h2>
                     <ChevronRight size={22} className="text-[#29384d]" />
                   </div>
-                  <div className="rounded-xl bg-white px-3 shadow-sm md:hidden">
-                    {filteredItems.length ? (
-                      filteredItems.slice(0, 8).map((item) => (
-                        <MobileMealRow key={item.id} item={item} onAdd={openMealDetail} />
-                      ))
-                    ) : items.length ? (
-                      <p className="py-4 text-sm font-semibold text-[#8a8f98]">No meals match your search.</p>
-                    ) : (
-                      <p className="py-4 text-sm font-semibold text-[#8a8f98]">No meals are available yet.</p>
-                    )}
-                  </div>
-                  <div className="hidden md:block">
+                  <div className="max-h-[620px] overflow-y-auto pr-1">
                     {filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">{items.length ? 'No meals match your search.' : 'No meals are available yet.'}</div>}
                   </div>
                 </section>
@@ -1058,10 +1097,7 @@ export default function PublicPortal() {
               <section>
                 <h1 className="text-2xl font-black">Find meals</h1>
                 <p className="mt-1 text-sm font-semibold text-stone-600">Search and add meals to your basket.</p>
-                <div className="mt-5 rounded-xl bg-white px-3 shadow-sm md:hidden">
-                  {filteredItems.length ? filteredItems.map((item) => <MobileMealRow key={item.id} item={item} onAdd={openMealDetail} />) : <p className="py-4 text-sm font-semibold text-[#8a8f98]">No meals found.</p>}
-                </div>
-                <div className="mt-5 hidden md:block">{filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">No meals found.</div>}</div>
+                <div className="mt-5 max-h-[720px] overflow-y-auto pr-1">{filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">No meals found.</div>}</div>
               </section>
             ) : null}
 
@@ -1146,6 +1182,21 @@ export default function PublicPortal() {
 
         <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
+
+      <FlashSalePopup
+        code={flashSale.data?.item}
+        open={flashSaleOpen}
+        onClose={() => {
+          if (flashSale.data?.item?.id) localStorage.setItem('chopasap_flash_sale_dismissed', flashSale.data.item.id);
+          setFlashSaleOpen(false);
+        }}
+        onUse={() => {
+          if (flashSale.data?.item?.id) localStorage.setItem('chopasap_flash_sale_dismissed', flashSale.data.item.id);
+          setFlashSaleOpen(false);
+          setActiveTab('home');
+          if (cart.length) openCheckout('cart');
+        }}
+      />
 
       {selectedMeal ? (
         <MealDetail
