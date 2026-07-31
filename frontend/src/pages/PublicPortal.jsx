@@ -10,20 +10,17 @@ import {
   Home,
   Info,
   MapPin,
+  MessageCircle,
   Minus,
-  MoreHorizontal,
-  Package,
   Percent,
   Phone,
   Plus,
   Search,
   ShoppingBag,
-  Soup,
   Star,
   Smartphone,
   Trash2,
   User,
-  Wine,
   X
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -46,12 +43,23 @@ const tabs = [
   { id: 'favorites', label: 'Favourites', icon: Heart },
   { id: 'orders', label: 'Orders', icon: ClipboardList }
 ];
-const categoryTiles = [
-  { label: 'African', icon: Soup, filter: 'African' },
-  { label: 'Western', icon: Package, filter: 'Western' },
-  { label: 'Sweet Drinks', icon: Wine },
-  { label: 'Alcohol', icon: Wine },
-  { label: 'More', icon: MoreHorizontal }
+const supportFaqs = [
+  {
+    question: 'How does ChopASAP ordering work?',
+    answer: 'Choose your meals, confirm your order details, then send the prepared WhatsApp message to the restaurant so the team can process it quickly.'
+  },
+  {
+    question: 'Do I pay inside the app?',
+    answer: 'No. ChopASAP sends your order to the restaurant first. The restaurant confirms payment or pickup details with you directly.'
+  },
+  {
+    question: 'Can I reserve a meal or table?',
+    answer: 'Yes. Use the reservation action on this page and the restaurant team will confirm your request.'
+  },
+  {
+    question: 'How do flash sale codes work?',
+    answer: 'Copy the code shown in the app and present it at the restaurant when you visit onsite, subject to the offer terms.'
+  }
 ];
 
 const emptyOrderForm = {
@@ -198,7 +206,7 @@ function CheckoutShell({ title, onBack, children }) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#eef8fa] text-[#07142a] sm:grid sm:place-items-center sm:bg-black/45 sm:p-4">
       <div className="min-h-screen w-full bg-[#eef8fa] sm:min-h-0 sm:max-h-[92vh] sm:max-w-[390px] sm:overflow-y-auto sm:rounded-[1.7rem]">
-        <header className="sticky top-0 z-10 flex h-28 items-center justify-center bg-[#eef8fa] px-6">
+        <header className="relative z-10 flex h-28 items-center justify-center bg-[#eef8fa] px-6">
           <button className="absolute left-6 grid h-10 w-10 place-items-center text-[#07142a]" onClick={onBack} aria-label="Go back">
             <ChevronLeft size={24} />
           </button>
@@ -315,18 +323,6 @@ function MealCard({ item, favorite, onFavorite, onOpen }) {
         </div>
       </div>
     </article>
-  );
-}
-
-function CategoryTile({ tile, onClick }) {
-  const Icon = tile.icon;
-  return (
-    <button className="relative flex min-h-14 min-w-[112px] items-center gap-2 rounded-lg bg-white px-3 py-2 text-left shadow-sm ring-1 ring-[#edf0f2]" onClick={onClick}>
-      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#fff1ca] text-[#d71920]">
-        <Icon size={18} />
-      </div>
-      <span className="text-xs font-black leading-4 text-[#292f3d]">{tile.label}</span>
-    </button>
   );
 }
 
@@ -521,7 +517,6 @@ export default function PublicPortal() {
   ];
   const [promotionIndex, setPromotionIndex] = useState(0);
   const featuredPromotion = promotionSlides[promotionIndex] || promotionSlides[0];
-  const visibleCategoryTiles = categoryTiles.map((tile) => ({ ...tile, filter: tile.filter || tile.label }));
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
   const deliveryFee = fulfillment === 'delivery' ? Number(settings.deliveryFee || 0) : 0;
   const serviceFee = 0;
@@ -873,7 +868,7 @@ export default function PublicPortal() {
     <div className="min-h-screen bg-[#eaf5f8] text-stone-950">
       <div className="mx-auto min-h-screen max-w-7xl bg-[#eef8fa]">
         {showInstallPrompt ? <InstallAppPrompt canInstall={Boolean(installPrompt)} onInstall={installApp} onDismiss={dismissInstallPrompt} /> : null}
-        <header className="sticky top-0 z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
+        <header className="relative z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <img className="h-8 w-8 rounded-lg object-cover md:h-12 md:w-12" src={chopasapLogo} alt="ChopASAP" />
@@ -890,10 +885,12 @@ export default function PublicPortal() {
                 <ShoppingBag size={19} />
                 {cartCount ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{cartCount}</span> : null}
               </button>
-              <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => setActiveTab('orders')} aria-label="Notifications">
-                <Bell size={19} />
-                {notifications.length ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{notifications.length}</span> : null}
-              </button>
+              {activeTab === 'support' ? null : (
+                <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => setActiveTab('orders')} aria-label="Notifications">
+                  <Bell size={19} />
+                  {notifications.length ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{notifications.length}</span> : null}
+                </button>
+              )}
               <button className="grid h-9 w-9 place-items-center rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('support')} aria-label="Support">
                 <User size={19} />
               </button>
@@ -911,7 +908,7 @@ export default function PublicPortal() {
         </header>
 
         <div className="grid gap-5 px-4 pb-24 pt-3 md:grid-cols-[220px_1fr] md:px-6 lg:grid-cols-[220px_1fr_330px] lg:pb-8">
-          <aside className="hidden self-start rounded-3xl bg-white p-3 shadow-md md:sticky md:top-24 md:block">
+          <aside className="hidden self-start rounded-3xl bg-white p-3 shadow-md md:block">
             <div className="mb-3 flex items-center gap-3 rounded-2xl bg-[#fff3cf] p-3">
               <img className="h-10 w-10 rounded-xl object-cover" src={chopasapLogo} alt="ChopASAP" />
               <div>
@@ -927,21 +924,13 @@ export default function PublicPortal() {
             <button className="mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-[#fff1ca] text-sm font-black text-[#d71920] disabled:opacity-50" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
               <CalendarClock size={17} /> Reserve
             </button>
-            <a className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl bg-stone-50 text-sm font-black text-stone-700" href="/login">Login</a>
+            {activeTab === 'support' ? null : <a className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl bg-stone-50 text-sm font-black text-stone-700" href="/login">Login</a>}
           </aside>
 
           <main className="min-w-0">
             {activeTab === 'home' ? (
               <>
-                <section className="overflow-x-auto pb-1">
-                  <div className="flex min-w-max gap-2">
-                    {visibleCategoryTiles.map((tile) => (
-                      <CategoryTile key={tile.label} tile={tile} onClick={() => setSearch(tile.icon === MoreHorizontal ? '' : tile.filter)} />
-                    ))}
-                  </div>
-                </section>
-
-                <section className="mt-3 overflow-hidden rounded-xl bg-white shadow-sm" aria-label="Promotions">
+                <section className="overflow-hidden rounded-xl bg-white shadow-sm" aria-label="Promotions">
                   <div className="relative min-h-[112px] bg-[#ffd071]">
                     <div className="grid min-h-[112px] grid-cols-[1.35fr_0.65fr]">
                       <div className="p-3 sm:p-4">
@@ -1011,7 +1000,7 @@ export default function PublicPortal() {
                     <h2 className="text-xl font-black tracking-normal text-[#151923]">Today's Menu</h2>
                     <ChevronRight size={22} className="text-[#29384d]" />
                   </div>
-                  <div className="max-h-[620px] overflow-y-auto pr-1">
+                  <div>
                     {filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">{items.length ? 'No meals match your search.' : 'No meals are available yet.'}</div>}
                   </div>
                 </section>
@@ -1062,14 +1051,7 @@ export default function PublicPortal() {
               <section>
                 <h1 className="text-2xl font-black">Meals</h1>
                 <p className="mt-1 text-sm font-semibold text-stone-600">Browse meals and add your choices to the cart.</p>
-                <div className="mt-4 overflow-x-auto pb-1">
-                  <div className="flex min-w-max gap-2">
-                    {visibleCategoryTiles.map((tile) => (
-                      <CategoryTile key={tile.label} tile={tile} onClick={() => setSearch(tile.icon === MoreHorizontal ? '' : tile.filter)} />
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-5 max-h-[720px] overflow-y-auto pr-1">{filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">No meals found.</div>}</div>
+                <div className="mt-5">{filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">No meals found.</div>}</div>
               </section>
             ) : null}
 
@@ -1099,29 +1081,65 @@ export default function PublicPortal() {
             ) : null}
 
             {activeTab === 'support' ? (
-              <section className="grid gap-5 xl:grid-cols-2">
-                <div className="rounded-3xl bg-white p-5 shadow-md">
-                  <div className="flex items-center gap-4">
-                    <div className="grid h-16 w-16 place-items-center rounded-3xl bg-[#fff1ca] text-[#d71920]"><Phone size={28} /></div>
-                    <div>
-                      <h1 className="font-black">Support</h1>
-                      <p className="text-sm font-semibold text-stone-600">Contact the restaurant or reserve a meal.</p>
+              <section>
+                <div className="overflow-hidden rounded-3xl bg-white shadow-md">
+                  <div className="bg-[#151923] px-5 py-6 text-white sm:px-7">
+                    <div className="flex items-start gap-4">
+                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white text-[#d71920]">
+                        <MessageCircle size={27} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-wide text-white/65">ChopASAP Care</p>
+                        <h1 className="mt-1 text-2xl font-black">Support</h1>
+                        <p className="mt-2 max-w-xl text-sm font-semibold leading-6 text-white/75">Get help with orders, delivery, reservations, and onsite flash sale codes.</p>
+                      </div>
                     </div>
                   </div>
-                  <a className="mt-5 flex h-11 items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white" href={`tel:${settings.supportPhone}`}>
-                    <Phone size={17} /> Call {settings.supportPhone}
-                  </a>
-                  <RedButton className="mt-5 w-full" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}><CalendarClock size={17} /> Reserve a meal</RedButton>
-                  <a className="mt-3 flex h-11 items-center justify-center rounded-xl bg-[#fff1ca] text-sm font-black text-[#d71920]" href="/login">Login</a>
+                  <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-7">
+                    <a
+                      className="rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 transition hover:border-[#d71920] hover:bg-white"
+                      href={`https://wa.me/${whatsappPhone(settings.supportPhone)}?text=${encodeURIComponent('Hello ChopASAP, I need support with my order.')}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#e7f8ef] text-[#0b8f4f]">
+                        <MessageCircle size={22} />
+                      </span>
+                      <h2 className="mt-4 font-black">WhatsApp support</h2>
+                      <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">Chat directly with the restaurant team.</p>
+                    </a>
+                    <a className="rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 transition hover:border-[#d71920] hover:bg-white" href={`tel:${settings.supportPhone}`}>
+                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#fff1ca] text-[#d71920]">
+                        <Phone size={22} />
+                      </span>
+                      <h2 className="mt-4 font-black">Call support</h2>
+                      <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">{settings.supportPhone}</p>
+                    </a>
+                    <button className="rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 text-left transition hover:border-[#d71920] hover:bg-white disabled:opacity-60" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
+                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#eef8fa] text-[#29384d]">
+                        <CalendarClock size={22} />
+                      </span>
+                      <h2 className="mt-4 font-black">Reserve onsite</h2>
+                      <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">Request a meal or table before you arrive.</p>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="rounded-3xl bg-white p-5 shadow-md">
-                  <h2 className="font-black">Notifications</h2>
-                  <div className="mt-3 space-y-3">
-                    {notifications.map((notification) => (
-                      <div key={notification.id} className="rounded-2xl bg-[#fff4d7] p-3">
-                        <p className="text-sm font-black">{notification.title}</p>
-                        <p className="mt-1 text-xs font-semibold text-stone-700">{notification.body}</p>
+                <div className="mt-5 rounded-3xl bg-white p-5 shadow-md sm:p-7">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Help center</p>
+                      <h2 className="mt-1 text-xl font-black">Frequently asked questions</h2>
+                    </div>
+                    <div className="hidden h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920] sm:grid">
+                      <Info size={23} />
+                    </div>
+                  </div>
+                  <div className="mt-5 grid gap-3">
+                    {supportFaqs.map((faq) => (
+                      <div key={faq.question} className="rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4">
+                        <h3 className="font-black text-[#151923]">{faq.question}</h3>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-stone-600">{faq.answer}</p>
                       </div>
                     ))}
                   </div>
@@ -1130,7 +1148,7 @@ export default function PublicPortal() {
             ) : null}
           </main>
 
-          <aside className="sticky top-24 hidden self-start rounded-3xl bg-white p-4 shadow-md lg:block">
+          <aside className="hidden self-start rounded-3xl bg-white p-4 shadow-md lg:block">
             <div className="flex items-center justify-between">
               <h2 className="font-black">Basket</h2>
               <span className="rounded-full bg-[#fff1ca] px-3 py-1 text-xs font-black text-[#d71920]">{cartCount} items</span>
