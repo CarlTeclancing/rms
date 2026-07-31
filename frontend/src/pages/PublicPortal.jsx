@@ -6,26 +6,23 @@ import {
   ChevronRight,
   ClipboardList,
   Copy,
-  CreditCard,
   Heart,
   Home,
   Info,
-  LocateFixed,
   MapPin,
   Minus,
   MoreHorizontal,
   Package,
   Percent,
+  Phone,
   Plus,
   Search,
   ShoppingBag,
   Soup,
   Star,
-  Store,
   Smartphone,
   Trash2,
   User,
-  Wallet,
   Wine,
   X
 } from 'lucide-react';
@@ -44,9 +41,9 @@ const chopasapLogo = '/chopasap-logo.png';
 const brandRed = '#d71920';
 const tabs = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'shops', label: 'Restaurants', icon: ShoppingBag },
-  { id: 'find', label: 'Find', icon: Search },
-  { id: 'favorites', label: 'Favorite', icon: Heart },
+  { id: 'meals', label: 'Meals', icon: ShoppingBag },
+  { id: 'support', label: 'Support', icon: Phone },
+  { id: 'favorites', label: 'Favourites', icon: Heart },
   { id: 'orders', label: 'Orders', icon: ClipboardList }
 ];
 const categoryTiles = [
@@ -87,12 +84,6 @@ const emptyPromotionForm = {
   imageUrl: '',
   ctaUrl: ''
 };
-
-const paymentMethods = [
-  { id: 'wallet', label: 'My Wallet Balance', icon: CreditCard, iconClass: 'bg-white text-[#ef4444]' },
-  { id: 'mtn', label: 'Mobile Money', icon: Smartphone, iconClass: 'bg-[#ffd600] text-black' },
-  { id: 'orange', label: 'Orange Money', icon: Wallet, iconClass: 'bg-orange-500 text-white' }
-];
 
 const activeOrdersStorageKey = 'chopasap_active_orders';
 const statusLabel = (status = 'PENDING') => status.replaceAll('_', ' ').toLowerCase();
@@ -496,7 +487,6 @@ export default function PublicPortal() {
   const [orderOpen, setOrderOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState('cart');
   const [fulfillment, setFulfillment] = useState('delivery');
-  const [paymentMethod, setPaymentMethod] = useState('mtn');
   const [reservationOpen, setReservationOpen] = useState(false);
   const [promotionOpen, setPromotionOpen] = useState(false);
   const [orderForm, setOrderForm] = useState(emptyOrderForm);
@@ -739,6 +729,9 @@ export default function PublicPortal() {
     event?.preventDefault();
     if (!settings.publicOrdering) return toast.error('Online ordering is currently unavailable');
     if (!cart.length) return toast.error('Add at least one meal');
+    if (!orderForm.customerName.trim()) return toast.error('Enter your name');
+    if (!orderForm.customerPhone.trim()) return toast.error('Enter your phone number');
+    if (!orderForm.deliveryAddress.trim()) return toast.error(fulfillment === 'delivery' ? 'Enter your delivery address' : 'Enter your pickup note or location');
     setSubmitting(true);
     try {
       const submittedCart = cart;
@@ -787,10 +780,6 @@ export default function PublicPortal() {
     if (checkoutStep === 'success') {
       closeCheckout();
       setActiveTab('home');
-      return;
-    }
-    if (checkoutStep === 'payment') {
-      setCheckoutStep('details');
       return;
     }
     if (checkoutStep === 'details') {
@@ -905,7 +894,7 @@ export default function PublicPortal() {
                 <Bell size={19} />
                 {notifications.length ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{notifications.length}</span> : null}
               </button>
-              <button className="grid h-9 w-9 place-items-center rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('profile')} aria-label="Profile">
+              <button className="grid h-9 w-9 place-items-center rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('support')} aria-label="Support">
                 <User size={19} />
               </button>
             </div>
@@ -1055,7 +1044,7 @@ export default function PublicPortal() {
 
             {activeTab === 'favorites' ? (
               <section>
-                <h1 className="text-2xl font-black">Favorites</h1>
+                <h1 className="text-2xl font-black">Favourites</h1>
                 <p className="mt-1 text-sm font-semibold text-stone-600">Meals you saved for quick ordering.</p>
                 <div className="mt-5">
                   {favoriteItems.length ? renderMeals(favoriteItems) : (
@@ -1069,34 +1058,17 @@ export default function PublicPortal() {
               </section>
             ) : null}
 
-            {activeTab === 'shops' ? (
+            {activeTab === 'meals' ? (
               <section>
-                <h1 className="text-2xl font-black">Shops available</h1>
-                <p className="mt-1 text-sm font-semibold text-stone-600">Browse available kitchens and categories.</p>
-                <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {(categories.length ? categories : ['Main Kitchen']).map((category) => {
-                    const count = items.filter((item) => item.category?.name === category).length || items.length;
-                    return (
-                      <button key={category} className="flex items-center justify-between rounded-3xl bg-white p-4 text-left shadow-md" onClick={() => { setSearch(category); setActiveTab('home'); }}>
-                        <div className="flex items-center gap-3">
-                        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]"><Store size={24} /></div>
-                          <div>
-                            <p className="font-black">{category}</p>
-                            <p className="text-sm font-semibold text-stone-600">{count} meals available</p>
-                            <p className="text-xs font-black text-green-600">Open now</p>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                <h1 className="text-2xl font-black">Meals</h1>
+                <p className="mt-1 text-sm font-semibold text-stone-600">Browse meals and add your choices to the cart.</p>
+                <div className="mt-4 overflow-x-auto pb-1">
+                  <div className="flex min-w-max gap-2">
+                    {visibleCategoryTiles.map((tile) => (
+                      <CategoryTile key={tile.label} tile={tile} onClick={() => setSearch(tile.icon === MoreHorizontal ? '' : tile.filter)} />
+                    ))}
+                  </div>
                 </div>
-              </section>
-            ) : null}
-
-            {activeTab === 'find' ? (
-              <section>
-                <h1 className="text-2xl font-black">Find meals</h1>
-                <p className="mt-1 text-sm font-semibold text-stone-600">Search and add meals to your basket.</p>
                 <div className="mt-5 max-h-[720px] overflow-y-auto pr-1">{filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">No meals found.</div>}</div>
               </section>
             ) : null}
@@ -1126,16 +1098,19 @@ export default function PublicPortal() {
               </section>
             ) : null}
 
-            {activeTab === 'profile' ? (
+            {activeTab === 'support' ? (
               <section className="grid gap-5 xl:grid-cols-2">
                 <div className="rounded-3xl bg-white p-5 shadow-md">
                   <div className="flex items-center gap-4">
-                    <div className="grid h-16 w-16 place-items-center rounded-3xl bg-[#fff1ca] text-[#d71920]"><User size={28} /></div>
+                    <div className="grid h-16 w-16 place-items-center rounded-3xl bg-[#fff1ca] text-[#d71920]"><Phone size={28} /></div>
                     <div>
-                      <h1 className="font-black">{orderForm.customerName || reservation.customerName || 'Guest customer'}</h1>
-                      <p className="text-sm font-semibold text-stone-600">Anonymous checkout enabled</p>
+                      <h1 className="font-black">Support</h1>
+                      <p className="text-sm font-semibold text-stone-600">Contact the restaurant or reserve a meal.</p>
                     </div>
                   </div>
+                  <a className="mt-5 flex h-11 items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white" href={`tel:${settings.supportPhone}`}>
+                    <Phone size={17} /> Call {settings.supportPhone}
+                  </a>
                   <RedButton className="mt-5 w-full" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}><CalendarClock size={17} /> Reserve a meal</RedButton>
                   <a className="mt-3 flex h-11 items-center justify-center rounded-xl bg-[#fff1ca] text-sm font-black text-[#d71920]" href="/login">Login</a>
                 </div>
@@ -1212,7 +1187,7 @@ export default function PublicPortal() {
 
       {orderOpen ? (
         <CheckoutShell
-          title={checkoutStep === 'details' ? 'Delivery Details' : checkoutStep === 'payment' ? 'Payment Details' : checkoutStep === 'success' ? '' : cart.length ? 'Carts Details' : 'Carts'}
+          title={checkoutStep === 'details' ? 'Order Details' : checkoutStep === 'success' ? '' : cart.length ? 'Cart Details' : 'Cart'}
           onBack={goBackCheckout}
         >
           {checkoutStep === 'cart' ? (
@@ -1258,7 +1233,7 @@ export default function PublicPortal() {
           ) : null}
 
           {checkoutStep === 'details' ? (
-            <form className="pb-8" onSubmit={(event) => { event.preventDefault(); setCheckoutStep('payment'); }}>
+            <form className="pb-8" onSubmit={submitOrder}>
               <div className="px-5">
                 <div className="grid h-[52px] grid-cols-2 rounded-full bg-[#e9e9e9] p-1">
                   {['delivery', 'pickup'].map((option) => (
@@ -1273,33 +1248,58 @@ export default function PublicPortal() {
                   ))}
                 </div>
               </div>
-              <div className="mt-3 bg-white">
-                <div className="flex w-full items-center gap-4 border-b border-[#edf0f2] px-6 py-4 text-left">
-                  <MapPin className="shrink-0 text-black" size={29} fill="currentColor" />
+              <div className="mt-4 bg-white">
+                <label className="flex w-full items-start gap-4 border-b border-[#edf0f2] px-6 py-4 text-left">
+                  <MapPin className="mt-1 shrink-0 text-black" size={27} fill="currentColor" />
                   <span className="min-w-0 flex-1">
+                    <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">
+                      {fulfillment === 'delivery' ? 'Delivery address' : 'Pickup name or location'}
+                    </span>
                     <input
-                      className="w-full bg-transparent text-[16px] font-medium outline-none"
-                      placeholder={fulfillment === 'delivery' ? 'Delivery address' : 'Pickup location'}
+                      className="w-full bg-transparent text-[16px] font-medium outline-none placeholder:text-[#9aa4ad]"
+                      placeholder={fulfillment === 'delivery' ? 'Example: Bonanjo, street, landmark' : 'Example: I will pick up onsite'}
                       value={orderForm.deliveryAddress}
                       onChange={(e) => setOrderForm({ ...orderForm, deliveryAddress: e.target.value })}
+                      minLength={3}
                       required
                     />
-                    <span className="block text-sm text-[#6d6f76]">{fulfillment === 'delivery' ? 'CA' : 'Pickup'}</span>
+                    <span className="mt-1 block text-sm text-[#6d6f76]">{fulfillment === 'delivery' ? 'Tell us where to deliver your order.' : 'Tell us how to identify your pickup order.'}</span>
                   </span>
                   <button type="button" className="grid h-9 w-9 place-items-center" onClick={useLocation} aria-label="Use current location">
                     <ChevronRight className="text-[#07142a]" size={22} />
                   </button>
-                </div>
-                <label className="flex w-full items-center gap-4 px-6 py-4">
-                  <User className="shrink-0 text-black" size={25} fill="currentColor" />
-                  <input
-                    className="min-w-0 flex-1 bg-transparent text-[16px] font-medium outline-none"
-                    placeholder="Your name"
-                    value={orderForm.customerName}
-                    onChange={(e) => setOrderForm({ ...orderForm, customerName: e.target.value })}
-                    required
-                  />
-                  <ChevronRight className="text-[#07142a]" size={22} />
+                </label>
+                <label className="flex w-full items-start gap-4 border-b border-[#edf0f2] px-6 py-4">
+                  <User className="mt-1 shrink-0 text-black" size={24} fill="currentColor" />
+                  <span className="min-w-0 flex-1">
+                    <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">Your name</span>
+                    <input
+                      className="min-w-0 flex-1 bg-transparent text-[16px] font-medium outline-none placeholder:text-[#9aa4ad]"
+                      placeholder="Example: Amina N."
+                      value={orderForm.customerName}
+                      onChange={(e) => setOrderForm({ ...orderForm, customerName: e.target.value })}
+                      minLength={2}
+                      required
+                    />
+                    <span className="mt-1 block text-sm text-[#6d6f76]">The restaurant will use this name for your order.</span>
+                  </span>
+                </label>
+                <label className="flex w-full items-start gap-4 px-6 py-4">
+                  <Phone className="mt-1 shrink-0 text-black" size={24} />
+                  <span className="min-w-0 flex-1">
+                    <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">Phone number</span>
+                    <input
+                      className="min-w-0 flex-1 bg-transparent text-[16px] font-medium outline-none placeholder:text-[#9aa4ad]"
+                      placeholder="Example: 671286999"
+                      type="tel"
+                      inputMode="tel"
+                      value={orderForm.customerPhone}
+                      onChange={(e) => setOrderForm({ ...orderForm, customerPhone: e.target.value })}
+                      minLength={6}
+                      required
+                    />
+                    <span className="mt-1 block text-sm text-[#6d6f76]">We need this to confirm your order if necessary.</span>
+                  </span>
                 </label>
               </div>
               <div className="flex items-center justify-between px-4 py-4 text-[16px]">
@@ -1307,10 +1307,10 @@ export default function PublicPortal() {
                 <span>15-30 min(s)</span>
               </div>
               <div className="px-6">
-                <label className="text-[16px] leading-5 text-[#07142a]">Leave message for the restaurant (option)</label>
+                <label className="text-[16px] leading-5 text-[#07142a]">Leave a message for the restaurant (optional)</label>
                 <textarea
                   className="mt-2 h-28 w-full rounded-md border border-[#aeb6bd] bg-transparent px-3 py-2 text-sm outline-none"
-                  placeholder="add notes to your order"
+                  placeholder="Example: less pepper, call before delivery, no onions"
                   value={orderForm.deliveryNote}
                   onChange={(e) => setOrderForm({ ...orderForm, deliveryNote: e.target.value })}
                 />
@@ -1331,47 +1331,9 @@ export default function PublicPortal() {
               </div>
               <PriceRows subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} total={grandTotal} showService />
               <div className="mt-7 px-6">
-                <input
-                  className="mb-3 h-11 w-full rounded-md border border-[#aeb6bd] bg-transparent px-3 text-sm outline-none"
-                  placeholder="Phone number"
-                  value={orderForm.customerPhone}
-                  onChange={(e) => setOrderForm({ ...orderForm, customerPhone: e.target.value })}
-                  required
-                />
-                <input
-                  className="mb-3 h-11 w-full rounded-md border border-[#aeb6bd] bg-transparent px-3 text-sm outline-none"
-                  placeholder="Email optional"
-                  type="email"
-                  value={orderForm.customerEmail}
-                  onChange={(e) => setOrderForm({ ...orderForm, customerEmail: e.target.value })}
-                />
-                <RedButton className="w-full rounded-md">Proceed to Check out</RedButton>
-              </div>
-            </form>
-          ) : null}
-
-          {checkoutStep === 'payment' ? (
-            <form className="pb-8" onSubmit={submitOrder}>
-              <PriceRows subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} total={grandTotal} showService />
-              <div className="mt-14 space-y-4 px-6">
-                {paymentMethods.map((method) => {
-                  const Icon = method.icon;
-                  return (
-                    <button
-                      key={method.id}
-                      type="button"
-                      className={clsx('flex h-[68px] w-full items-center gap-4 rounded-xl border px-4 text-left', paymentMethod === method.id ? 'border-[#07142a]' : 'border-[#b9c0c8]')}
-                      onClick={() => setPaymentMethod(method.id)}
-                    >
-                      <span className={clsx('grid h-9 w-11 place-items-center rounded-md text-xs font-black', method.iconClass)}>
-                        <Icon size={20} />
-                      </span>
-                      <span className="min-w-0 flex-1 text-[16px]">{method.label}</span>
-                      <ChevronRight className="rotate-90 text-[#07142a]" size={19} />
-                    </button>
-                  );
-                })}
-                <RedButton className="w-full rounded-md" disabled={submitting || !settings.publicOrdering || !cart.length}>{submitting ? 'Processing...' : 'Pay Now'}</RedButton>
+                <RedButton className="w-full rounded-md" disabled={submitting || !settings.publicOrdering || !cart.length}>
+                  {submitting ? 'Placing order...' : 'Confirm order'}
+                </RedButton>
               </div>
             </form>
           ) : null}
@@ -1382,7 +1344,7 @@ export default function PublicPortal() {
                 <div className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-[#33c85a] text-white">
                   <Check size={52} />
                 </div>
-                <h2 className="mt-8 text-lg font-black text-[#33c85a]">Payment Was Successful!</h2>
+                <h2 className="mt-8 text-lg font-black text-[#33c85a]">Order was placed!</h2>
                 <div className="mt-6">
                   <p className="text-sm font-semibold text-[#5f646b]">Rate your order</p>
                   <div className="mt-3 flex justify-center gap-2">
