@@ -1,8 +1,9 @@
 import { ApiError } from '../utils/apiError.js';
 
-export const buildSaleRowsAndDeductions = async (tx, items) => {
+export const buildSaleRowsAndDeductions = async (tx, items, options = {}) => {
+  const { requireAvailable = true } = options;
   const menuItems = await tx.menuItem.findMany({
-    where: { id: { in: items.map((item) => item.menuItemId) }, isAvailable: true },
+    where: { id: { in: items.map((item) => item.menuItemId) }, ...(requireAvailable ? { isAvailable: true } : {}) },
     include: { recipeIngredients: { include: { ingredient: { include: { stockItem: true } } } } }
   });
 

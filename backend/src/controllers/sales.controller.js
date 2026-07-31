@@ -26,7 +26,7 @@ export const createSale = asyncHandler(async (req, res) => {
 
   const sale = await prisma.$transaction(
     async (tx) => {
-      const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items);
+      const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items, { requireAvailable: false });
 
       const subtotal = itemRows.reduce((sum, item) => sum + item.total, 0);
       const total = subtotal + Number(tax) - Number(discount);

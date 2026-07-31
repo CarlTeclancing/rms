@@ -102,6 +102,33 @@ const mealPrice = (item, variationName) => {
   const variation = mealVariations(item).find((entry) => entry.name === variationName);
   return Number(variation?.price || item?.price || 0);
 };
+const whatsappPhone = (phone = '') => {
+  const digits = String(phone).replace(/\D/g, '');
+  return digits.startsWith('00') ? digits.slice(2) : digits;
+};
+const orderItemName = (item) => item.menuItem?.name || item.name || 'Menu item';
+const orderItemTotal = (item) => Number(item.total ?? Number(item.price || item.unitPrice || 0) * Number(item.quantity || 0));
+const buildWhatsappOrderMessage = ({ order, customer, cartItems, total, deliveryFee }) => {
+  const items = (order.items?.length ? order.items : cartItems).map(
+    (item) => `- ${item.quantity} x ${orderItemName(item)}${item.variationName ? ` (${item.variationName})` : ''}: ${currency(orderItemTotal(item))}`
+  );
+
+  return [
+    `New order ${order.orderNo}`,
+    `Customer: ${customer.customerName}`,
+    `Phone: ${customer.customerPhone}`,
+    `Address: ${customer.deliveryAddress}`,
+    customer.deliveryNote ? `Note: ${customer.deliveryNote}` : '',
+    '',
+    'Items:',
+    ...items,
+    '',
+    `Delivery fee: ${currency(deliveryFee)}`,
+    `Total: ${currency(order.total || total)}`
+  ]
+    .filter(Boolean)
+    .join('\n');
+};
 
 function RedButton({ children, className, ...props }) {
   return (
@@ -652,6 +679,8 @@ export default function PublicPortal() {
     if (!cart.length) return toast.error('Add at least one meal');
     setSubmitting(true);
     try {
+      const submittedCart = cart;
+      const submittedCustomer = orderForm;
       const response = await endpoints.createOnlineOrder({
         ...orderForm,
         deliveryFee,
@@ -674,6 +703,17 @@ export default function PublicPortal() {
       setCheckoutStep('success');
       setOrderForm(emptyOrderForm);
       refetch();
+      const adminPhone = whatsappPhone(settings.supportPhone);
+      if (adminPhone) {
+        const message = buildWhatsappOrderMessage({
+          order: response.data,
+          customer: submittedCustomer,
+          cartItems: submittedCart,
+          total: grandTotal,
+          deliveryFee
+        });
+        window.location.assign(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`);
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not place order');
     } finally {

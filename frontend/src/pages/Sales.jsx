@@ -118,8 +118,7 @@ export default function Sales() {
   const [updatingReservationId, setUpdatingReservationId] = useState('');
 
   const menuItems = menu.data?.items || [];
-  const availableItems = menuItems.filter((item) => item.isAvailable);
-  const filteredItems = availableItems.filter((item) =>
+  const filteredItems = menuItems.filter((item) =>
     `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(menuSearch.toLowerCase())
   );
   const onlineRows = onlineOrders.data?.items || [];
@@ -233,7 +232,7 @@ export default function Sales() {
                 />
               </label>
               <div className="rounded-lg bg-brand-50 px-4 py-2 text-sm font-black text-brand-500">
-                {filteredItems.length} available item{filteredItems.length === 1 ? '' : 's'}
+                {filteredItems.length} sales item{filteredItems.length === 1 ? '' : 's'}
               </div>
             </div>
 
@@ -250,7 +249,9 @@ export default function Sales() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-bold">{item.name}</p>
-                        <p className="mt-1 text-sm text-stone-500">{item.category?.name || 'Menu item'}</p>
+                        <p className="mt-1 text-sm text-stone-500">
+                          {item.category?.name || 'Menu item'}{item.isAvailable ? '' : ' - hidden from portal'}
+                        </p>
                       </div>
                       <span className="shrink-0 rounded-full bg-brand-100 px-3 py-1 text-sm font-black text-brand-500">{currency(item.price)}</span>
                     </div>
@@ -258,7 +259,7 @@ export default function Sales() {
                 ))}
               </div>
             ) : (
-              <EmptyState title="No matching meals" message="Clear the search or add available menu items." />
+              <EmptyState title="No matching meals" message="Clear the search or add menu items." />
             )}
 
             <div className="mt-6">
