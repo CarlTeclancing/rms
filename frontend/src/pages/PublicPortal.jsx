@@ -50,7 +50,7 @@ const supportFaqs = [
   },
   {
     question: 'Do I pay inside the app?',
-    answer: 'No. ChopASAP sends your order to the restaurant first. The restaurant confirms payment or pickup details with you directly.'
+    answer: 'No. ChopASAP sends your order to the restaurant first. The restaurant confirms payment or reserve details with you directly.'
   },
   {
     question: 'Can I reserve a meal or table?',
@@ -95,6 +95,7 @@ const emptyPromotionForm = {
 
 const activeOrdersStorageKey = 'chopasap_active_orders';
 const customerStorageKey = 'chopasap_customer_session';
+const favoritesStorageKey = 'chopasap_favorite_meals';
 const statusLabel = (status = 'PENDING') => status.replaceAll('_', ' ').toLowerCase();
 const cartKeyFor = (menuItemId, variationName) => `${menuItemId}:${variationName || 'base'}`;
 const mealVariations = (item) => (Array.isArray(item?.variations) ? item.variations.filter((variation) => variation?.name) : []);
@@ -501,7 +502,7 @@ function MealDetail({ item, quantity, selectedVariation, onVariationChange, onQu
             <p className="shrink-0 pt-5 text-base font-black text-[#777]">{currency(price)}</p>
           </div>
           <p className="mt-4 text-[13px] font-medium leading-5 text-[#5f646b]">
-            {item.description || 'Freshly prepared ChopASAP meal made with quality ingredients and served hot for pickup or delivery.'}
+            {item.description || 'Freshly prepared ChopASAP meal made with quality ingredients and served hot for reserve or delivery.'}
           </p>
 
           {variations.length ? (
@@ -582,7 +583,13 @@ export default function PublicPortal() {
       return emptyCustomerForm;
     }
   });
-  const [favorites, setFavorites] = useState([]);
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(favoritesStorageKey) || '[]');
+    } catch {
+      return [];
+    }
+  });
   const [cart, setCart] = useState([]);
   const [selectedMeal, setSelectedMeal] = useState(null);
   const [detailQuantity, setDetailQuantity] = useState(1);
@@ -640,9 +647,15 @@ export default function PublicPortal() {
   const serviceFee = 0;
   const grandTotal = subtotal + deliveryFee + serviceFee;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const focusedPageTitle = activeTab === 'profile' ? 'Profile' : activeTab === 'orders' && selectedOrder ? 'Order details' : '';
+  const isFocusedPage = Boolean(focusedPageTitle);
 
   const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
   const toggleFavorite = (id) => setFavorites((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
+
+  useEffect(() => {
+    localStorage.setItem(favoritesStorageKey, JSON.stringify(favorites));
+  }, [favorites]);
 
   const saveCustomerSession = (nextCustomer) => {
     const saved = { ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
@@ -919,15 +932,22 @@ export default function PublicPortal() {
     event?.preventDefault();
     if (!settings.publicOrdering) return toast.error('Online ordering is currently unavailable');
     if (!cart.length) return toast.error('Add at least one meal');
-    if (!orderForm.customerName.trim()) return toast.error('Enter your name');
-    if (!orderForm.customerPhone.trim()) return toast.error('Enter your phone number');
-    if (!orderForm.deliveryAddress.trim()) return toast.error(fulfillment === 'delivery' ? 'Enter your delivery address' : 'Enter your pickup note or location');
+    if (fulfillment === 'delivery' && !orderForm.deliveryAddress.trim()) return toast.error('Enter your delivery address');
+    const customerName = customer?.name || orderForm.customerName;
+    const customerPhone = customer?.phone || orderForm.customerPhone;
+    if (!customerName?.trim()) return toast.error('Enter your name');
+    if (!customerPhone?.trim()) return toast.error('Enter your phone number');
     setSubmitting(true);
     try {
       const submittedCart = cart;
-      const submittedCustomer = orderForm;
-      const response = await endpoints.createOnlineOrder({
+      const submittedCustomer = {
         ...orderForm,
+        customerName,
+        customerPhone,
+        deliveryAddress: fulfillment === 'delivery' ? orderForm.deliveryAddress : 'Reserve onsite'
+      };
+      const response = await endpoints.createOnlineOrder({
+        ...submittedCustomer,
         customerId: customer?.id,
         deliveryFee,
         items: cart.map(({ menuItemId, quantity, variationName }) => ({ menuItemId, quantity, variationName }))
@@ -1076,40 +1096,62 @@ export default function PublicPortal() {
         {!customer ? <CustomerGate form={customerForm} saving={customerSaving} onChange={setCustomerForm} onSubmit={submitCustomerSession} /> : null}
         {showInstallPrompt ? <InstallAppPrompt canInstall={Boolean(installPrompt)} onInstall={installApp} onDismiss={dismissInstallPrompt} /> : null}
         <header className="relative z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <img className="h-8 w-8 rounded-lg object-cover md:h-12 md:w-12" src={chopasapLogo} alt="ChopASAP" />
-              <div className="min-w-0">
-                <p className="text-xl font-black uppercase tracking-normal text-[#d71920]">CHOP ASAP</p>
-                <p className="hidden items-center gap-1 truncate text-sm font-black text-stone-950 md:flex">
-                  <MapPin size={15} className="text-[#d71920]" />
-                  {orderForm.deliveryAddress || 'Choose delivery location'}
-                </p>
+          {isFocusedPage ? (
+            <div className="grid h-12 grid-cols-[44px_1fr_44px] items-center">
+              <button
+                className="grid h-10 w-10 place-items-center rounded-full bg-white text-[#29384d] shadow-sm"
+                onClick={() => {
+                  if (selectedOrder) {
+                    setSelectedOrder(null);
+                    return;
+                  }
+                  setActiveTab('home');
+                }}
+                aria-label="Go back"
+              >
+                <ChevronLeft size={22} />
+              </button>
+              <h1 className="text-center text-xl font-black text-[#151923]">{focusedPageTitle}</h1>
+              <span />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <img className="h-8 w-8 rounded-lg object-cover md:h-12 md:w-12" src={chopasapLogo} alt="ChopASAP" />
+                  <div className="min-w-0">
+                    <p className="text-xl font-black uppercase tracking-normal text-[#d71920]">CHOP ASAP</p>
+                    <p className="hidden items-center gap-1 truncate text-sm font-black text-stone-950 md:flex">
+                      <MapPin size={15} className="text-[#d71920]" />
+                      {orderForm.deliveryAddress || 'Choose delivery location'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => openCheckout('cart')} aria-label="Basket">
+                    <ShoppingBag size={19} />
+                    {cartCount ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{cartCount}</span> : null}
+                  </button>
+                  <button className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('profile')} aria-label="Profile">
+                    {customer?.profileImageUrl ? <img className="h-full w-full object-cover" src={customer.profileImageUrl} alt={customer.name || 'Profile'} /> : <User size={19} />}
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => openCheckout('cart')} aria-label="Basket">
-                <ShoppingBag size={19} />
-                {cartCount ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{cartCount}</span> : null}
-              </button>
-              <button className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('profile')} aria-label="Profile">
-                {customer?.profileImageUrl ? <img className="h-full w-full object-cover" src={customer.profileImageUrl} alt={customer.name || 'Profile'} /> : <User size={19} />}
-              </button>
-            </div>
-          </div>
-          <div className="mt-4 flex h-10 items-center gap-2 rounded-xl border border-[#f15b66] bg-white px-3">
-            <input
-              className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#29384d] outline-none placeholder:text-[#9aa4ad]"
-              placeholder="Search ...."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <Search size={21} className="text-[#f15b66]" />
-          </div>
+              <div className="mt-4 flex h-10 items-center gap-2 rounded-xl border border-[#f15b66] bg-white px-3">
+                <input
+                  className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#29384d] outline-none placeholder:text-[#9aa4ad]"
+                  placeholder="Search ...."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+                <Search size={21} className="text-[#f15b66]" />
+              </div>
+            </>
+          )}
         </header>
 
-        <div className="grid gap-5 px-4 pb-24 pt-3 md:grid-cols-[220px_1fr] md:px-6 lg:grid-cols-[220px_1fr_330px] lg:pb-8">
-          <aside className="hidden self-start rounded-3xl bg-white p-3 shadow-md md:block">
+        <div className={clsx('grid gap-5 px-4 pt-3 md:px-6', isFocusedPage ? 'pb-8 lg:grid-cols-1' : 'pb-24 md:grid-cols-[220px_1fr] lg:grid-cols-[220px_1fr_330px] lg:pb-8')}>
+          {!isFocusedPage ? <aside className="hidden self-start rounded-3xl bg-white p-3 shadow-md md:block">
             <div className="mb-3 flex items-center gap-3 rounded-2xl bg-[#fff3cf] p-3">
               <img className="h-10 w-10 rounded-xl object-cover" src={chopasapLogo} alt="ChopASAP" />
               <div>
@@ -1126,7 +1168,7 @@ export default function PublicPortal() {
               <CalendarClock size={17} /> Reserve
             </button>
             {activeTab === 'support' ? null : <a className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl bg-stone-50 text-sm font-black text-stone-700" href="/login">Login</a>}
-          </aside>
+          </aside> : null}
 
           <main className="min-w-0">
             {activeTab === 'home' ? (
@@ -1436,7 +1478,7 @@ export default function PublicPortal() {
             ) : null}
           </main>
 
-          <aside className="hidden self-start rounded-3xl bg-white p-4 shadow-md lg:block">
+          {!isFocusedPage ? <aside className="hidden self-start rounded-3xl bg-white p-4 shadow-md lg:block">
             <div className="flex items-center justify-between">
               <h2 className="font-black">Basket</h2>
               <span className="rounded-full bg-[#fff1ca] px-3 py-1 text-xs font-black text-[#d71920]">{cartCount} items</span>
@@ -1458,10 +1500,10 @@ export default function PublicPortal() {
               <span className="text-[#d71920]">{currency(grandTotal)}</span>
             </div>
             <RedButton className="mt-4 w-full" disabled={!settings.publicOrdering} onClick={() => openCheckout('cart')}>Checkout</RedButton>
-          </aside>
+          </aside> : null}
         </div>
 
-        <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+        {!isFocusedPage ? <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} /> : null}
       </div>
 
       <FlashSalePopup
@@ -1542,7 +1584,7 @@ export default function PublicPortal() {
             <form className="pb-8" onSubmit={submitOrder}>
               <div className="px-5">
                 <div className="grid h-[52px] grid-cols-2 rounded-full bg-[#e9e9e9] p-1">
-                  {['delivery', 'pickup'].map((option) => (
+                  {['delivery', 'reserve'].map((option) => (
                     <button
                       key={option}
                       type="button"
@@ -1559,23 +1601,27 @@ export default function PublicPortal() {
                   <MapPin className="mt-1 shrink-0 text-black" size={27} fill="currentColor" />
                   <span className="min-w-0 flex-1">
                     <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">
-                      {fulfillment === 'delivery' ? 'Delivery address' : 'Pickup name or location'}
+                      {fulfillment === 'delivery' ? 'Delivery address' : 'Reserve onsite'}
                     </span>
-                    <input
-                      className="w-full bg-transparent text-[16px] font-medium outline-none placeholder:text-[#9aa4ad]"
-                      placeholder={fulfillment === 'delivery' ? 'Example: Bonanjo, street, landmark' : 'Example: I will pick up onsite'}
-                      value={orderForm.deliveryAddress}
-                      onChange={(e) => setOrderForm({ ...orderForm, deliveryAddress: e.target.value })}
-                      minLength={3}
-                      required
-                    />
-                    <span className="mt-1 block text-sm text-[#6d6f76]">{fulfillment === 'delivery' ? 'Tell us where to deliver your order.' : 'Tell us how to identify your pickup order.'}</span>
+                    {fulfillment === 'delivery' ? (
+                      <input
+                        className="w-full bg-transparent text-[16px] font-medium outline-none placeholder:text-[#9aa4ad]"
+                        placeholder="Example: Bonanjo, street, landmark"
+                        value={orderForm.deliveryAddress}
+                        onChange={(e) => setOrderForm({ ...orderForm, deliveryAddress: e.target.value })}
+                        minLength={3}
+                        required
+                      />
+                    ) : (
+                      <span className="block text-[16px] font-medium text-[#07142a]">You will come onsite to pick up the meal.</span>
+                    )}
+                    <span className="mt-1 block text-sm text-[#6d6f76]">{fulfillment === 'delivery' ? 'Tell us where to deliver your order.' : 'No delivery details are needed for reserve orders.'}</span>
                   </span>
-                  <button type="button" className="grid h-9 w-9 place-items-center" onClick={useLocation} aria-label="Use current location">
+                  {fulfillment === 'delivery' ? <button type="button" className="grid h-9 w-9 place-items-center" onClick={useLocation} aria-label="Use current location">
                     <ChevronRight className="text-[#07142a]" size={22} />
-                  </button>
+                  </button> : null}
                 </label>
-                <label className="flex w-full items-start gap-4 border-b border-[#edf0f2] px-6 py-4">
+                {fulfillment === 'delivery' ? <label className="flex w-full items-start gap-4 border-b border-[#edf0f2] px-6 py-4">
                   <User className="mt-1 shrink-0 text-black" size={24} fill="currentColor" />
                   <span className="min-w-0 flex-1">
                     <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">Your name</span>
@@ -1589,8 +1635,8 @@ export default function PublicPortal() {
                     />
                     <span className="mt-1 block text-sm text-[#6d6f76]">The restaurant will use this name for your order.</span>
                   </span>
-                </label>
-                <label className="flex w-full items-start gap-4 px-6 py-4">
+                </label> : null}
+                {fulfillment === 'delivery' ? <label className="flex w-full items-start gap-4 px-6 py-4">
                   <Phone className="mt-1 shrink-0 text-black" size={24} />
                   <span className="min-w-0 flex-1">
                     <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">Phone number</span>
@@ -1606,11 +1652,11 @@ export default function PublicPortal() {
                     />
                     <span className="mt-1 block text-sm text-[#6d6f76]">We need this to confirm your order if necessary.</span>
                   </span>
-                </label>
+                </label> : null}
               </div>
               <div className="flex items-center justify-between px-4 py-4 text-[16px]">
-                <span>Delivery time</span>
-                <span>15-30 min(s)</span>
+                <span>{fulfillment === 'delivery' ? 'Delivery time' : 'Reserve time'}</span>
+                <span>{fulfillment === 'delivery' ? '15-30 min(s)' : 'Restaurant confirmation'}</span>
               </div>
               <div className="px-6">
                 <label className="text-[16px] leading-5 text-[#07142a]">Leave a message for the restaurant (optional)</label>
