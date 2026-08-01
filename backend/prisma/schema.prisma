@@ -92,9 +92,16 @@ model Customer {
   email           String?
   address         String?
   profileImageUrl String?
+  points          Int           @default(0)
+  referralCode    String        @unique
+  referredById    String?
+  referredBy      Customer?     @relation("CustomerReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals       Customer[]    @relation("CustomerReferrals")
   onlineOrders    OnlineOrder[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  @@index([referredById])
 }
 
 model MenuCategory {
@@ -219,6 +226,10 @@ model OnlineOrder {
   customerEmail   String?
   deliveryAddress String
   deliveryNote    String?
+  isGift          Boolean           @default(false)
+  recipientName   String?
+  recipientPhone  String?
+  recipientAddress String?
   latitude        Decimal?          @db.Decimal(10, 7)
   longitude       Decimal?          @db.Decimal(10, 7)
   status          OnlineOrderStatus @default(PENDING)

@@ -17,7 +17,12 @@ export const listUsers = asyncHandler(async (req, res) => {
 export const listCustomers = asyncHandler(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query);
   const [customers, total] = await Promise.all([
-    prisma.customer.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
+    prisma.customer.findMany({
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { referrals: true } } }
+    }),
     prisma.customer.count()
   ]);
 
@@ -31,7 +36,7 @@ export const listCustomers = asyncHandler(async (req, res) => {
   );
   const countByCustomerId = Object.fromEntries(orderCounts.map((entry) => [entry.id, entry.count]));
 
-  res.json(paginatedResponse(customers.map((customer) => ({ ...customer, orderCount: countByCustomerId[customer.id] || 0 })), total, page, limit));
+  res.json(paginatedResponse(customers.map((customer) => ({ ...customer, orderCount: countByCustomerId[customer.id] || 0, referralCount: customer._count.referrals })), total, page, limit));
 });
 
 export const createUser = asyncHandler(async (req, res) => {

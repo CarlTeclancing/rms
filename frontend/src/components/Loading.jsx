@@ -1,6 +1,6 @@
 export function Loading({ label = 'Loading' }) {
   return (
-    <div className="grid min-h-72 place-items-center px-4 py-8" role="status" aria-live="polite" aria-label={label}>
+    <div className="fixed inset-0 z-[100] grid min-h-screen w-screen place-items-center bg-[#eaf5f8] px-4 py-8" role="status" aria-live="polite" aria-label={label}>
       <div className="chop-loader relative w-full max-w-sm overflow-hidden rounded-3xl border border-[#ffd8dc] bg-white p-6 text-center shadow-[0_22px_60px_rgba(17,24,39,0.12)]">
         <div className="pointer-events-none absolute inset-x-6 top-5 h-24 rounded-full bg-[#fff4d7] blur-2xl" />
         <div className="relative mx-auto h-40 w-60">

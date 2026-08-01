@@ -126,6 +126,8 @@ export default function Users() {
             },
             { key: 'address', label: 'Address', render: (row) => row.address || 'Not set' },
             { key: 'orderCount', label: 'Orders', render: (row) => <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-black text-brand-500">{row.orderCount || 0}</span> },
+            { key: 'points', label: 'Points', render: (row) => <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">{row.points || 0}</span> },
+            { key: 'referralCode', label: 'Referral', render: (row) => <span className="font-mono text-xs font-black text-stone-600">{row.referralCode || 'N/A'}</span> },
             { key: 'createdAt', label: 'Joined', render: (row) => new Date(row.createdAt).toLocaleDateString() }
           ]}
         />

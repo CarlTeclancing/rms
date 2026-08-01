@@ -15,7 +15,14 @@ const serializeFlashSaleCode = (code) => ({
   endsAt: code.endsAt?.toISOString?.() || code.endsAt
 });
 
-const dateOrNull = (value) => (value ? new Date(value) : null);
+const dateOrNull = (value, options = {}) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (options.endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    date.setHours(23, 59, 59, 999);
+  }
+  return date;
+};
 const cleanCode = (value = '') => value.trim().toUpperCase().replace(/\s+/g, '');
 
 export const listPublicPromotions = asyncHandler(async (_req, res) => {
@@ -86,7 +93,7 @@ export const createPromotion = asyncHandler(async (req, res) => {
       placement: req.body.placement || 'PORTAL_HOME',
       status: req.body.status || 'APPROVED',
       startsAt: dateOrNull(req.body.startsAt),
-      endsAt: dateOrNull(req.body.endsAt),
+      endsAt: dateOrNull(req.body.endsAt, { endOfDay: true }),
       approvedAt: (req.body.status || 'APPROVED') === 'APPROVED' ? new Date() : null,
       adminNote: req.body.adminNote || null
     }
@@ -98,7 +105,7 @@ export const updatePromotion = asyncHandler(async (req, res) => {
   const data = {
     ...req.body,
     ...(req.body.startsAt !== undefined ? { startsAt: dateOrNull(req.body.startsAt) } : {}),
-    ...(req.body.endsAt !== undefined ? { endsAt: dateOrNull(req.body.endsAt) } : {})
+    ...(req.body.endsAt !== undefined ? { endsAt: dateOrNull(req.body.endsAt, { endOfDay: true }) } : {})
   };
   if (req.body.status === 'APPROVED') data.approvedAt = new Date();
   const promotion = await prisma.promotion.update({ where: { id: req.params.id }, data });
@@ -149,7 +156,7 @@ export const createFlashSaleCode = asyncHandler(async (req, res) => {
       discountPercent: Number(req.body.discountPercent || 10),
       isActive: req.body.isActive ?? true,
       startsAt: dateOrNull(req.body.startsAt),
-      endsAt: dateOrNull(req.body.endsAt),
+      endsAt: dateOrNull(req.body.endsAt, { endOfDay: true }),
       maxRedemptions: req.body.maxRedemptions === '' || req.body.maxRedemptions === undefined ? null : Number(req.body.maxRedemptions)
     }
   });
@@ -162,7 +169,7 @@ export const updateFlashSaleCode = asyncHandler(async (req, res) => {
     ...(req.body.code !== undefined ? { code: cleanCode(req.body.code) } : {}),
     ...(req.body.discountPercent !== undefined ? { discountPercent: Number(req.body.discountPercent || 10) } : {}),
     ...(req.body.startsAt !== undefined ? { startsAt: dateOrNull(req.body.startsAt) } : {}),
-    ...(req.body.endsAt !== undefined ? { endsAt: dateOrNull(req.body.endsAt) } : {}),
+    ...(req.body.endsAt !== undefined ? { endsAt: dateOrNull(req.body.endsAt, { endOfDay: true }) } : {}),
     ...(req.body.maxRedemptions !== undefined ? { maxRedemptions: req.body.maxRedemptions === '' ? null : Number(req.body.maxRedemptions) } : {})
   };
   const code = await prisma.flashSaleCode.update({ where: { id: req.params.id }, data });

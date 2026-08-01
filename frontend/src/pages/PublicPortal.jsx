@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ClipboardList,
   Copy,
+  Gift,
   Heart,
   Home,
   Info,
@@ -17,12 +18,14 @@ import {
   Phone,
   Plus,
   Search,
+  Share2,
   ShieldCheck,
   ShoppingBag,
   Sparkles,
   Star,
   Smartphone,
   Trash2,
+  Trophy,
   User,
   Volume2,
   X
@@ -72,6 +75,10 @@ const emptyOrderForm = {
   customerEmail: '',
   deliveryAddress: '',
   deliveryNote: '',
+  isGift: false,
+  recipientName: '',
+  recipientPhone: '',
+  recipientAddress: '',
   latitude: '',
   longitude: ''
 };
@@ -123,6 +130,8 @@ const buildWhatsappOrderMessage = ({ order, customer, cartItems, total, delivery
     `Customer: ${customer.customerName}`,
     `Phone: ${customer.customerPhone}`,
     `Address: ${customer.deliveryAddress}`,
+    customer.isGift ? `For: ${customer.recipientName} (${customer.recipientPhone})` : '',
+    customer.isGift && customer.recipientAddress ? `Recipient address: ${customer.recipientAddress}` : '',
     customer.deliveryNote ? `Note: ${customer.deliveryNote}` : '',
     '',
     'Items:',
@@ -139,7 +148,15 @@ const emptyCustomerForm = {
   phone: '',
   email: '',
   address: '',
-  profileImageUrl: ''
+  profileImageUrl: '',
+  referralCode: ''
+};
+
+const rewardRank = (points = 0) => {
+  const value = Number(points || 0);
+  if (value >= 150) return { title: 'ChopASAP Royalty', next: 'Top customer tier unlocked' };
+  if (value >= 50) return { title: 'Taste Champion', next: `${150 - value} points to ChopASAP Royalty` };
+  return { title: 'Food Explorer', next: `${50 - value} points to Taste Champion` };
 };
 
 function RedButton({ children, className, ...props }) {
@@ -283,7 +300,7 @@ function PriceRows({ subtotal, deliveryFee, serviceFee = 0, total, showService =
   );
 }
 
-function MealCard({ item, favorite, onFavorite, onOpen }) {
+function MealCard({ item, favorite, onFavorite, onOpen, onShare }) {
   return (
     <article
       className="cursor-pointer overflow-hidden rounded-xl border border-[#f5c45d] bg-white text-left shadow-[0_10px_22px_rgba(75,45,10,0.10)] transition hover:-translate-y-0.5 hover:border-[#d71920]"
@@ -305,6 +322,16 @@ function MealCard({ item, favorite, onFavorite, onOpen }) {
           aria-label="Save favorite"
         >
           <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
+        </button>
+        <button
+          className="absolute left-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white text-[#29384d] shadow-md sm:left-3 sm:top-3 sm:h-9 sm:w-9"
+          onClick={(event) => {
+            event.stopPropagation();
+            onShare(item);
+          }}
+          aria-label="Share meal"
+        >
+          <Share2 size={17} />
         </button>
       </div>
       <div className="p-3 sm:p-4">
@@ -446,6 +473,11 @@ function CustomerGate({ form, saving, onChange, onSubmit }) {
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
                 <span className="block h-full rounded-full bg-[#d71920] transition-all" style={{ width: complete ? '100%' : form.name || form.phone ? '55%' : '18%' }} />
               </div>
+              {form.referralCode ? (
+                <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-bold text-[#8b5f00]">
+                  Referral bonus active. Continue to collect 10 welcome points.
+                </p>
+              ) : null}
             </div>
             <button className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white shadow-[0_14px_28px_rgba(215,25,32,0.22)] disabled:opacity-60" disabled={saving}>
               {saving ? 'Checking account...' : 'Continue to ChopASAP'}
@@ -529,6 +561,14 @@ function OrderDetailView({ order, onBack }) {
           <p className="text-xs font-black uppercase text-stone-500">Address</p>
           <p className="mt-2 text-sm font-semibold text-stone-700">{order.deliveryAddress || 'Not provided'}</p>
         </div>
+        {order.isGift ? (
+          <div className="rounded-2xl bg-[#fff4d7] p-4 sm:col-span-2">
+            <p className="text-xs font-black uppercase text-[#8b5f00]">Meal for a loved one</p>
+            <p className="mt-2 font-black">{order.recipientName || 'Recipient'}</p>
+            <p className="mt-1 text-sm font-semibold text-stone-600">{order.recipientPhone || 'No phone provided'}</p>
+            {order.recipientAddress ? <p className="mt-1 text-sm font-semibold text-stone-600">{order.recipientAddress}</p> : null}
+          </div>
+        ) : null}
       </div>
       <div className="mt-5">
         <h3 className="font-black">Items</h3>
@@ -668,7 +708,8 @@ export default function PublicPortal() {
   const [customerForm, setCustomerForm] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(customerStorageKey) || 'null');
-      return stored ? { ...emptyCustomerForm, ...stored } : emptyCustomerForm;
+      const referralCode = new URLSearchParams(window.location.search).get('ref') || '';
+      return stored ? { ...emptyCustomerForm, ...stored } : { ...emptyCustomerForm, referralCode };
     } catch {
       return emptyCustomerForm;
     }
@@ -742,6 +783,8 @@ export default function PublicPortal() {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const focusedPageTitle = activeTab === 'profile' ? 'Profile' : activeTab === 'orders' && selectedOrder ? 'Order details' : '';
   const isFocusedPage = Boolean(focusedPageTitle);
+  const customerRank = rewardRank(customer?.points);
+  const referralLink = customer?.referralCode ? `${window.location.origin}${window.location.pathname}?ref=${customer.referralCode}` : '';
 
   const playNotificationSound = () => {
     if (!soundEnabled || !window.AudioContext) return;
@@ -907,6 +950,14 @@ export default function PublicPortal() {
     }, 6500);
     return () => window.clearInterval(timer);
   }, [promotionSlides.length]);
+
+  useEffect(() => {
+    const mealId = new URLSearchParams(window.location.search).get('meal');
+    if (!mealId || !items.length || selectedMeal) return;
+    const sharedMeal = items.find((item) => item.id === mealId);
+    if (sharedMeal) openMealDetail(sharedMeal);
+  }, [items.length, selectedMeal?.id]);
+
   const requestOrderNotificationPermission = async () => {
     if (!('Notification' in window) || Notification.permission !== 'default') return;
     try {
@@ -1026,6 +1077,35 @@ export default function PublicPortal() {
     setSelectedVariation(variations[0]?.name || '');
   };
 
+  const shareMeal = async (item) => {
+    const url = `${window.location.origin}${window.location.pathname}?meal=${item.id}`;
+    const text = `Order ${item.name} on ChopASAP`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: item.name, text, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success('Meal link copied');
+      }
+    } catch {
+      // Sharing can be cancelled by the user.
+    }
+  };
+
+  const shareReferral = async () => {
+    if (!referralLink) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Join ChopASAP', text: 'Use my ChopASAP referral link and collect welcome points.', url: referralLink });
+      } else {
+        await navigator.clipboard.writeText(referralLink);
+        toast.success('Referral link copied');
+      }
+    } catch {
+      // Sharing can be cancelled by the user.
+    }
+  };
+
   const closeMealDetail = () => {
     setSelectedMeal(null);
     setDetailQuantity(1);
@@ -1098,6 +1178,9 @@ export default function PublicPortal() {
     if (!settings.publicOrdering) return toast.error('Online ordering is currently unavailable');
     if (!cart.length) return toast.error('Add at least one meal');
     if (fulfillment === 'delivery' && !orderForm.deliveryAddress.trim()) return toast.error('Enter your delivery address');
+    if (orderForm.isGift && !orderForm.recipientName.trim()) return toast.error('Enter who the meal is for');
+    if (orderForm.isGift && !orderForm.recipientPhone.trim()) return toast.error('Enter their phone number');
+    if (orderForm.isGift && fulfillment === 'delivery' && !orderForm.recipientAddress.trim()) return toast.error('Enter their delivery address');
     const customerName = customer?.name || orderForm.customerName;
     const customerPhone = customer?.phone || orderForm.customerPhone;
     if (!customerName?.trim()) return toast.error('Enter your name');
@@ -1126,6 +1209,10 @@ export default function PublicPortal() {
           orderNo: response.data.orderNo,
           total: response.data.total,
           status: response.data.status,
+          isGift: response.data.isGift,
+          recipientName: response.data.recipientName,
+          recipientPhone: response.data.recipientPhone,
+          recipientAddress: response.data.recipientAddress,
           items: response.data.items || cart
         },
         ...current
@@ -1141,7 +1228,11 @@ export default function PublicPortal() {
       }));
       if (customer?.id) {
         await loadCustomerOrders(customer.id);
-        saveCustomerSession({ ...customer, orderCount: Number(customer.orderCount || 0) + 1 });
+        saveCustomerSession({
+          ...customer,
+          orderCount: Number(customer.orderCount || 0) + 1,
+          points: Number(customer.points || 0) + Number(response.data.pointsEarned || 0)
+        });
       }
       refetch();
       const adminPhone = whatsappPhone(settings.supportPhone);
@@ -1250,7 +1341,7 @@ export default function PublicPortal() {
   const renderMeals = (list) => (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
       {list.map((item) => (
-        <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onFavorite={toggleFavorite} onOpen={openMealDetail} />
+        <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onFavorite={toggleFavorite} onOpen={openMealDetail} onShare={shareMeal} />
       ))}
     </div>
   );
@@ -1595,10 +1686,50 @@ export default function PublicPortal() {
                       <p className="text-xs font-black uppercase text-[#8b5f00]">Total orders</p>
                       <p className="mt-2 text-3xl font-black text-[#151923]">{activeOrders.length || customer?.orderCount || 0}</p>
                     </div>
-                    <div className="rounded-2xl bg-[#f7fbfc] p-4 sm:col-span-2">
+                    <div className="rounded-2xl bg-[#f7fbfc] p-4">
+                      <p className="text-xs font-black uppercase text-stone-500">Reward points</p>
+                      <p className="mt-2 text-3xl font-black text-[#151923]">{Number(customer?.points || 0)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#e7f8ef] p-4">
+                      <div className="flex items-center gap-2 text-[#0b8f4f]">
+                        <Trophy size={18} />
+                        <p className="text-xs font-black uppercase">Ranking</p>
+                      </div>
+                      <p className="mt-2 font-black text-[#151923]">{customerRank.title}</p>
+                      <p className="mt-1 text-xs font-bold text-stone-600">{customerRank.next}</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#f7fbfc] p-4 sm:col-span-3">
                       <p className="text-xs font-black uppercase text-stone-500">Default address</p>
                       <p className="mt-2 text-sm font-semibold text-stone-700">{customer?.address || 'No default address yet.'}</p>
                     </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 rounded-3xl bg-white p-5 shadow-md sm:p-7">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Referral rewards</p>
+                      <h2 className="mt-1 text-xl font-black">Invite friends and earn points</h2>
+                      <p className="mt-1 text-sm font-semibold text-stone-500">They get 10 welcome points after joining with your link. You also earn 10 points.</p>
+                    </div>
+                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]">
+                      <Gift size={23} />
+                    </span>
+                  </div>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <div className="min-w-0 rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4">
+                      <p className="text-xs font-black uppercase text-stone-500">Your referral link</p>
+                      <p className="mt-2 truncate text-sm font-black text-[#151923]">{referralLink || 'Referral code will appear after your account is ready.'}</p>
+                      <p className="mt-1 text-xs font-bold text-stone-500">{customer?.referralCount || 0} successful referral{Number(customer?.referralCount || 0) === 1 ? '' : 's'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="flex h-12 items-center justify-center gap-2 rounded-xl bg-[#d71920] px-5 text-sm font-black text-white disabled:opacity-60"
+                      onClick={shareReferral}
+                      disabled={!referralLink}
+                    >
+                      <Share2 size={17} /> Share
+                    </button>
                   </div>
                 </div>
 
@@ -1832,6 +1963,63 @@ export default function PublicPortal() {
                     <span className="mt-1 block text-sm text-[#6d6f76]">We need this to confirm your order if necessary.</span>
                   </span>
                 </label> : null}
+              </div>
+              <div className="mt-4 bg-white px-6 py-5">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4">
+                  <input
+                    className="mt-1 h-4 w-4 accent-[#d71920]"
+                    type="checkbox"
+                    checked={orderForm.isGift}
+                    onChange={(event) => setOrderForm({ ...orderForm, isGift: event.target.checked })}
+                  />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2 text-sm font-black text-[#151923]">
+                      <Gift size={17} className="text-[#d71920]" /> Order this meal for someone else
+                    </span>
+                    <span className="mt-1 block text-sm font-semibold text-[#6d6f76]">Add their name and phone so the restaurant knows who should receive or collect the meal.</span>
+                  </span>
+                </label>
+                {orderForm.isGift ? (
+                  <div className="mt-4 grid gap-3">
+                    <label className="block">
+                      <span className="text-xs font-black uppercase text-[#d71920]">Loved one's name</span>
+                      <input
+                        className="input mt-1"
+                        placeholder="Example: Nelly"
+                        value={orderForm.recipientName}
+                        onChange={(event) => setOrderForm({ ...orderForm, recipientName: event.target.value })}
+                        minLength={2}
+                        required
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-black uppercase text-[#d71920]">Loved one's phone</span>
+                      <input
+                        className="input mt-1"
+                        type="tel"
+                        inputMode="tel"
+                        placeholder="Example: 671286999"
+                        value={orderForm.recipientPhone}
+                        onChange={(event) => setOrderForm({ ...orderForm, recipientPhone: event.target.value })}
+                        minLength={6}
+                        required
+                      />
+                    </label>
+                    {fulfillment === 'delivery' ? (
+                      <label className="block">
+                        <span className="text-xs font-black uppercase text-[#d71920]">Loved one's delivery address</span>
+                        <input
+                          className="input mt-1"
+                          placeholder="Where should we deliver their meal?"
+                          value={orderForm.recipientAddress}
+                          onChange={(event) => setOrderForm({ ...orderForm, recipientAddress: event.target.value })}
+                          minLength={3}
+                          required
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="flex items-center justify-between px-4 py-4 text-[16px]">
                 <span>{fulfillment === 'delivery' ? 'Delivery time' : 'Reserve time'}</span>

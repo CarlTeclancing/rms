@@ -6,11 +6,29 @@ import { applyStockDeductions, buildSaleRowsAndDeductions } from '../services/st
 const menuInclude = { category: true };
 const orderTransactionOptions = { maxWait: 10000, timeout: 20000 };
 const cleanPhone = (phone = '') => String(phone).replace(/\s+/g, '').trim();
+const cleanReferralCode = (code = '') => String(code).replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 24);
 
 const serializeCustomer = (customer, orderCount = 0) => ({
   ...customer,
-  orderCount
+  orderCount,
+  referralCount: customer._count?.referrals || customer.referralCount || 0
 });
+
+const baseReferralCode = (name = '', phone = '') => {
+  const base = `${name}${phone}`.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 8);
+  return base || 'CHOPASAP';
+};
+
+const createReferralCode = async (tx, name, phone) => {
+  const base = baseReferralCode(name, phone);
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const code = cleanReferralCode(`${base}${suffix}`);
+    const existing = await tx.customer.findUnique({ where: { referralCode: code } });
+    if (!existing) return code;
+  }
+  return cleanReferralCode(`${base}${Date.now().toString(36).toUpperCase()}`);
+};
 
 export const publicMenu = asyncHandler(async (_req, res) => {
   const items = await prisma.menuItem.findMany({
@@ -24,10 +42,12 @@ export const publicMenu = asyncHandler(async (_req, res) => {
 export const createOnlineOrder = asyncHandler(async (req, res) => {
   const { items, deliveryFee = 0, latitude, longitude, customerId, ...customer } = req.body;
   if (!items?.length) throw new ApiError(422, 'At least one item is required');
+  let pointsEarned = 0;
 
   const order = await prisma.$transaction(
     async (tx) => {
       const phone = cleanPhone(customer.customerPhone);
+      const referralCode = await createReferralCode(tx, customer.customerName, phone);
       const orderCustomer = await tx.customer.upsert({
         where: { phone },
         update: {
@@ -39,12 +59,14 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
           name: customer.customerName,
           phone,
           email: customer.customerEmail || null,
-          address: customer.deliveryAddress || null
+          address: customer.deliveryAddress || null,
+          referralCode
         }
       });
       const { itemRows, deductions } = await buildSaleRowsAndDeductions(tx, items);
       const subtotal = itemRows.reduce((sum, item) => sum + item.total, 0);
       const total = subtotal + Number(deliveryFee || 0);
+      pointsEarned = itemRows.reduce((sum, item) => sum + Number(item.quantity || 0), 0) * 2;
 
       const created = await tx.onlineOrder.create({
         data: {
@@ -55,6 +77,10 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
           customerEmail: customer.customerEmail || null,
           deliveryAddress: customer.deliveryAddress,
           deliveryNote: customer.deliveryNote || null,
+          isGift: Boolean(customer.isGift),
+          recipientName: customer.isGift ? customer.recipientName || null : null,
+          recipientPhone: customer.isGift ? cleanPhone(customer.recipientPhone) || null : null,
+          recipientAddress: customer.isGift ? customer.recipientAddress || null : null,
           latitude: latitude === undefined || latitude === '' ? null : Number(latitude),
           longitude: longitude === undefined || longitude === '' ? null : Number(longitude),
           subtotal,
@@ -74,31 +100,64 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
       });
 
       await applyStockDeductions(tx, deductions, `Online order ${created.orderNo}`);
+      if (pointsEarned > 0) {
+        await tx.customer.update({
+          where: { id: customerId || orderCustomer.id },
+          data: { points: { increment: pointsEarned } }
+        });
+      }
       return created;
     },
     orderTransactionOptions
   );
 
-  res.status(201).json(order);
+  res.status(201).json({ ...order, pointsEarned });
 });
 
 export const upsertPublicCustomer = asyncHandler(async (req, res) => {
   const phone = cleanPhone(req.body.phone);
   if (!phone) throw new ApiError(422, 'Phone number is required');
+  const referralCode = cleanReferralCode(req.body.referralCode || req.body.ref);
 
-  const customer = await prisma.customer.upsert({
-    where: { phone },
-    update: {
-      name: req.body.name,
-      email: req.body.email || undefined,
-      address: req.body.address || undefined
-    },
-    create: {
-      name: req.body.name,
-      phone,
-      email: req.body.email || null,
-      address: req.body.address || null
+  const customer = await prisma.$transaction(async (tx) => {
+    const existing = await tx.customer.findUnique({ where: { phone } });
+    if (existing) {
+      return tx.customer.update({
+        where: { id: existing.id },
+        data: {
+          name: req.body.name,
+          email: req.body.email || undefined,
+          address: req.body.address || undefined
+        },
+        include: { _count: { select: { referrals: true } } }
+      });
     }
+
+    const referrer = referralCode
+      ? await tx.customer.findUnique({ where: { referralCode } })
+      : null;
+    const ownReferralCode = await createReferralCode(tx, req.body.name, phone);
+    const created = await tx.customer.create({
+      data: {
+        name: req.body.name,
+        phone,
+        email: req.body.email || null,
+        address: req.body.address || null,
+        referralCode: ownReferralCode,
+        referredById: referrer && referrer.phone !== phone ? referrer.id : null,
+        points: referrer && referrer.phone !== phone ? 10 : 0
+      },
+      include: { _count: { select: { referrals: true } } }
+    });
+
+    if (referrer && referrer.phone !== phone) {
+      await tx.customer.update({
+        where: { id: referrer.id },
+        data: { points: { increment: 10 } }
+      });
+    }
+
+    return created;
   });
   const orderCount = await prisma.onlineOrder.count({
     where: { OR: [{ customerId: customer.id }, { customerPhone: customer.phone }] }
@@ -115,7 +174,8 @@ export const updatePublicCustomer = asyncHandler(async (req, res) => {
 
   const customer = await prisma.customer.update({
     where: { id: req.params.id },
-    data
+    data,
+    include: { _count: { select: { referrals: true } } }
   });
   const orderCount = await prisma.onlineOrder.count({
     where: { OR: [{ customerId: customer.id }, { customerPhone: customer.phone }] }
