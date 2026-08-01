@@ -11,6 +11,7 @@ import {
   Heart,
   Home,
   Info,
+  Languages,
   MapPin,
   MessageCircle,
   Minus,
@@ -44,12 +45,96 @@ const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc
 const chopasapLogo = '/chopasap-logo.png';
 const brandRed = '#d71920';
 const tabs = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'meals', label: 'Meals', icon: ShoppingBag },
-  { id: 'support', label: 'Support', icon: Phone },
-  { id: 'favorites', label: 'Favourites', icon: Heart },
-  { id: 'orders', label: 'Orders', icon: ClipboardList }
+  { id: 'home', label: { en: 'Home', fr: 'Accueil' }, icon: Home },
+  { id: 'meals', label: { en: 'Meals', fr: 'Repas' }, icon: ShoppingBag },
+  { id: 'support', label: { en: 'Support', fr: 'Aide' }, icon: Phone },
+  { id: 'favorites', label: { en: 'Favourites', fr: 'Favoris' }, icon: Heart },
+  { id: 'orders', label: { en: 'Orders', fr: 'Commandes' }, icon: ClipboardList }
 ];
+const translations = {
+  en: {
+    chooseLanguage: 'Choose your language',
+    chooseLanguageHint: 'You can change this later in your profile.',
+    english: 'English',
+    french: 'French',
+    continue: 'Continue',
+    welcome: 'Welcome to ChopASAP',
+    enterDetails: 'Enter your details to continue.',
+    name: 'Name',
+    phone: 'Phone',
+    addressOptional: 'Address optional',
+    referralActive: 'Referral bonus active',
+    checking: 'Checking...',
+    enterNamePhone: 'Enter name and phone',
+    profile: 'Profile',
+    orderDetails: 'Order details',
+    totalOrders: 'Orders',
+    points: 'Points',
+    referrals: 'Referrals',
+    currentRank: 'Current rank',
+    shareReferralLink: 'Share referral link',
+    accountDetails: 'Account details',
+    referralRewards: 'Referral rewards',
+    inviteFriends: 'Invite friends and earn points',
+    referralHelp: 'They get 10 welcome points after joining with your link. You also earn 10 points.',
+    yourReferralLink: 'Your referral link',
+    referralPending: 'Referral code will appear after your account is ready.',
+    successfulReferral: 'successful referral',
+    successfulReferrals: 'successful referrals',
+    share: 'Share',
+    language: 'Language',
+    updateInfo: 'Update your basic information for faster checkout.',
+    emailOptional: 'Email optional',
+    defaultAddress: 'Default address',
+    saveProfile: 'Save profile',
+    saving: 'Saving...',
+    uploading: 'Uploading...',
+    changeCustomer: 'Change customer',
+    search: 'Search ....'
+  },
+  fr: {
+    chooseLanguage: 'Choisissez votre langue',
+    chooseLanguageHint: 'Vous pourrez la modifier plus tard dans votre profil.',
+    english: 'Anglais',
+    french: 'Français',
+    continue: 'Continuer',
+    welcome: 'Bienvenue sur ChopASAP',
+    enterDetails: 'Entrez vos informations pour continuer.',
+    name: 'Nom',
+    phone: 'Téléphone',
+    addressOptional: 'Adresse facultative',
+    referralActive: 'Bonus de parrainage actif',
+    checking: 'Vérification...',
+    enterNamePhone: 'Entrez nom et téléphone',
+    profile: 'Profil',
+    orderDetails: 'Détails de commande',
+    totalOrders: 'Commandes',
+    points: 'Points',
+    referrals: 'Parrainages',
+    currentRank: 'Rang actuel',
+    shareReferralLink: 'Partager le lien',
+    accountDetails: 'Compte',
+    referralRewards: 'Récompenses de parrainage',
+    inviteFriends: 'Invitez vos proches et gagnez des points',
+    referralHelp: 'Ils reçoivent 10 points de bienvenue après leur inscription. Vous gagnez aussi 10 points.',
+    yourReferralLink: 'Votre lien de parrainage',
+    referralPending: 'Le code apparaîtra quand votre compte sera prêt.',
+    successfulReferral: 'parrainage réussi',
+    successfulReferrals: 'parrainages réussis',
+    share: 'Partager',
+    language: 'Langue',
+    updateInfo: 'Mettez à jour vos informations pour commander plus vite.',
+    emailOptional: 'Email facultatif',
+    defaultAddress: 'Adresse par défaut',
+    saveProfile: 'Enregistrer',
+    saving: 'Enregistrement...',
+    uploading: 'Téléversement...',
+    changeCustomer: 'Changer de client',
+    search: 'Rechercher ....'
+  }
+};
+const textFor = (value, language) => (typeof value === 'object' ? value[language] || value.en : value);
+const tr = (language, key) => translations[language]?.[key] || translations.en[key] || key;
 const supportFaqs = [
   {
     question: 'How does ChopASAP ordering work?',
@@ -107,6 +192,7 @@ const emptyPromotionForm = {
 const activeOrdersStorageKey = 'chopasap_active_orders';
 const customerStorageKey = 'chopasap_customer_session';
 const favoritesStorageKey = 'chopasap_favorite_meals';
+const languageStorageKey = 'chopasap_language';
 const statusLabel = (status = 'PENDING') => status.replaceAll('_', ' ').toLowerCase();
 const cartKeyFor = (menuItemId, variationName) => `${menuItemId}:${variationName || 'base'}`;
 const mealVariations = (item) => (Array.isArray(item?.variations) ? item.variations.filter((variation) => variation?.name) : []);
@@ -174,7 +260,7 @@ function RedButton({ children, className, ...props }) {
   );
 }
 
-function TabButton({ tab, active, onClick, desktop = false }) {
+function TabButton({ tab, active, onClick, desktop = false, language = 'en' }) {
   const Icon = tab.icon;
   return (
     <button
@@ -188,8 +274,38 @@ function TabButton({ tab, active, onClick, desktop = false }) {
       onClick={onClick}
     >
       <Icon size={desktop ? 20 : 21} fill={tab.id === 'favorites' && active ? 'currentColor' : 'none'} />
-      {tab.label}
+      {textFor(tab.label, language)}
     </button>
+  );
+}
+
+function LanguagePrompt({ open, language, onChoose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[95] grid place-items-center bg-[#151923]/65 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white p-5 text-center shadow-2xl">
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]">
+          <Languages size={28} />
+        </span>
+        <h2 className="mt-4 text-2xl font-black text-[#151923]">{tr(language, 'chooseLanguage')}</h2>
+        <p className="mt-2 text-sm font-semibold text-stone-500">{tr(language, 'chooseLanguageHint')}</p>
+        <div className="mt-6 grid gap-3">
+          {[
+            { id: 'en', label: 'English' },
+            { id: 'fr', label: 'Français' }
+          ].map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={clsx('flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition', language === option.id ? 'border-[#d71920] bg-[#d71920] text-white' : 'border-[#dbe5e8] bg-[#f7fbfc] text-[#151923]')}
+              onClick={() => onChoose(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -411,7 +527,7 @@ function FlashSalePopup({ code, open, onClose, onUse }) {
   );
 }
 
-function CustomerGate({ form, saving, onChange, onSubmit }) {
+function CustomerGate({ form, saving, onChange, onSubmit, language }) {
   const complete = form.name.trim().length >= 2 && form.phone.trim().length >= 6;
   return (
     <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#eaf5f8] px-4 py-8">
@@ -419,27 +535,27 @@ function CustomerGate({ form, saving, onChange, onSubmit }) {
         <div className="w-full overflow-hidden rounded-[1.75rem] bg-white shadow-2xl">
           <div className="bg-[#151923] px-6 pb-7 pt-6 text-center text-white">
             <img className="mx-auto h-16 w-16 rounded-2xl object-cover shadow-lg" src={chopasapLogo} alt="ChopASAP" />
-            <h1 className="mt-4 text-2xl font-black leading-8">Welcome to ChopASAP</h1>
-            <p className="mt-2 text-sm font-semibold text-white/70">Enter your details to continue.</p>
+            <h1 className="mt-4 text-2xl font-black leading-8">{tr(language, 'welcome')}</h1>
+            <p className="mt-2 text-sm font-semibold text-white/70">{tr(language, 'enterDetails')}</p>
           </div>
           <form className="p-6 sm:p-8" onSubmit={onSubmit}>
             <div className="grid gap-4">
               <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
-                <span className="text-xs font-black uppercase text-[#d71920]">Name</span>
+                <span className="text-xs font-black uppercase text-[#d71920]">{tr(language, 'name')}</span>
                 <input className="mt-2 w-full bg-transparent text-lg font-black text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: Amina N." value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} minLength={2} required />
               </label>
               <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
-                <span className="text-xs font-black uppercase text-[#d71920]">Phone</span>
+                <span className="text-xs font-black uppercase text-[#d71920]">{tr(language, 'phone')}</span>
                 <input className="mt-2 w-full bg-transparent text-lg font-black text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: 671286999" type="tel" inputMode="tel" value={form.phone} onChange={(event) => onChange({ ...form, phone: event.target.value })} minLength={6} required />
               </label>
               <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
-                <span className="text-xs font-black uppercase text-stone-500">Address optional</span>
+                <span className="text-xs font-black uppercase text-stone-500">{tr(language, 'addressOptional')}</span>
                 <input className="mt-2 w-full bg-transparent text-base font-semibold text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: Bonanjo, near..." value={form.address} onChange={(event) => onChange({ ...form, address: event.target.value })} />
               </label>
             </div>
-            {form.referralCode ? <p className="mt-4 rounded-2xl bg-[#fff4d7] px-4 py-3 text-center text-xs font-black text-[#8b5f00]">Referral bonus active</p> : null}
+            {form.referralCode ? <p className="mt-4 rounded-2xl bg-[#fff4d7] px-4 py-3 text-center text-xs font-black text-[#8b5f00]">{tr(language, 'referralActive')}</p> : null}
             <button className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white shadow-[0_14px_28px_rgba(215,25,32,0.22)] disabled:opacity-60" disabled={saving}>
-              {saving ? 'Checking...' : complete ? 'Continue' : 'Enter name and phone'}
+              {saving ? tr(language, 'checking') : complete ? tr(language, 'continue') : tr(language, 'enterNamePhone')}
             </button>
           </form>
         </div>
@@ -644,11 +760,11 @@ function MealDetail({ item, quantity, selectedVariation, onVariationChange, onQu
   );
 }
 
-function BottomNav({ activeTab, setActiveTab }) {
+function BottomNav({ activeTab, setActiveTab, language = 'en' }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 grid h-[72px] grid-cols-5 border-t border-[#dde7ea] bg-white px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_25px_rgba(40,50,60,0.08)] md:hidden">
       {tabs.map((tab) => (
-        <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} />
+        <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} language={language} />
       ))}
     </nav>
   );
@@ -659,6 +775,8 @@ export default function PublicPortal() {
   const promotions = useApi(() => endpoints.publicPromotions(), []);
   const flashSale = useApi(() => endpoints.publicFlashSale(), []);
   const { settings } = useSettings();
+  const [language, setLanguage] = useState(() => localStorage.getItem(languageStorageKey) || 'en');
+  const [languagePromptOpen, setLanguagePromptOpen] = useState(() => !localStorage.getItem(languageStorageKey));
   const [activeTab, setActiveTab] = useState('home');
   const [customer, setCustomer] = useState(() => {
     try {
@@ -744,7 +862,7 @@ export default function PublicPortal() {
   const serviceFee = 0;
   const grandTotal = subtotal + deliveryFee + serviceFee;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const focusedPageTitle = activeTab === 'profile' ? 'Profile' : activeTab === 'orders' && selectedOrder ? 'Order details' : '';
+  const focusedPageTitle = activeTab === 'profile' ? tr(language, 'profile') : activeTab === 'orders' && selectedOrder ? tr(language, 'orderDetails') : '';
   const isFocusedPage = Boolean(focusedPageTitle);
   const customerRank = rewardRank(customer?.points);
   const referralLink = customer?.referralCode ? `${window.location.origin}${window.location.pathname}?ref=${customer.referralCode}` : '';
@@ -771,6 +889,12 @@ export default function PublicPortal() {
     } catch {
       // Audio can be blocked until the user interacts with the page.
     }
+  };
+
+  const chooseLanguage = (nextLanguage) => {
+    localStorage.setItem(languageStorageKey, nextLanguage);
+    setLanguage(nextLanguage);
+    setLanguagePromptOpen(false);
   };
 
   const sendBrowserNotification = async (title, body, tag = 'chopasap-alert') => {
@@ -1312,7 +1436,8 @@ export default function PublicPortal() {
   return (
     <div className="min-h-screen bg-[#eaf5f8] text-stone-950">
       <div className="mx-auto min-h-screen max-w-7xl bg-[#eef8fa]">
-        {!customer ? <CustomerGate form={customerForm} saving={customerSaving} onChange={setCustomerForm} onSubmit={submitCustomerSession} /> : null}
+        <LanguagePrompt open={languagePromptOpen} language={language} onChoose={chooseLanguage} />
+        {!customer ? <CustomerGate form={customerForm} saving={customerSaving} onChange={setCustomerForm} onSubmit={submitCustomerSession} language={language} /> : null}
         {showInstallPrompt ? <InstallAppPrompt canInstall={Boolean(installPrompt)} onInstall={installApp} onDismiss={dismissInstallPrompt} /> : null}
         <header className="relative z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
           {isFocusedPage ? (
@@ -1363,7 +1488,7 @@ export default function PublicPortal() {
               <div className="mt-4 flex h-10 items-center gap-2 rounded-xl border border-[#f15b66] bg-white px-3">
                 <input
                   className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#29384d] outline-none placeholder:text-[#9aa4ad]"
-                  placeholder="Search ...."
+                  placeholder={tr(language, 'search')}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
@@ -1384,7 +1509,7 @@ export default function PublicPortal() {
             </div>
             <nav className="grid gap-2">
               {tabs.map((tab) => (
-                <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} desktop />
+                <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} desktop language={language} />
               ))}
             </nav>
             <button className="mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-[#fff1ca] text-sm font-black text-[#d71920] disabled:opacity-50" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
@@ -1646,9 +1771,9 @@ export default function PublicPortal() {
                   </div>
                   <div className="grid grid-cols-3 gap-2 p-4 sm:gap-4 sm:p-7">
                     {[
-                      { label: 'Orders', value: activeOrders.length || customer?.orderCount || 0, icon: ClipboardList, tone: 'bg-[#fff4d7] text-[#8b5f00]' },
-                      { label: 'Points', value: Number(customer?.points || 0), icon: Trophy, tone: 'bg-[#e7f8ef] text-[#0b8f4f]' },
-                      { label: 'Referrals', value: Number(customer?.referralCount || 0), icon: Gift, tone: 'bg-[#eef8fa] text-[#29384d]' }
+                      { label: tr(language, 'totalOrders'), value: activeOrders.length || customer?.orderCount || 0, icon: ClipboardList, tone: 'bg-[#fff4d7] text-[#8b5f00]' },
+                      { label: tr(language, 'points'), value: Number(customer?.points || 0), icon: Trophy, tone: 'bg-[#e7f8ef] text-[#0b8f4f]' },
+                      { label: tr(language, 'referrals'), value: Number(customer?.referralCount || 0), icon: Gift, tone: 'bg-[#eef8fa] text-[#29384d]' }
                     ].map((stat) => {
                       const Icon = stat.icon;
                       return (
@@ -1666,7 +1791,7 @@ export default function PublicPortal() {
                     <div className="rounded-2xl bg-[#151923] p-4 text-white">
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <p className="text-xs font-black uppercase text-white/55">Current rank</p>
+                          <p className="text-xs font-black uppercase text-white/55">{tr(language, 'currentRank')}</p>
                           <p className="mt-1 font-black">{customerRank.title}</p>
                         </div>
                         <p className="text-right text-xs font-bold text-white/65">{customerRank.next}</p>
@@ -1678,8 +1803,8 @@ export default function PublicPortal() {
                 <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-md">
                   <div className="grid grid-cols-2 gap-2 border-b border-[#edf0f2] bg-[#f7fbfc] p-2">
                     {[
-                      { id: 'referral', label: 'Share referral link', icon: Share2 },
-                      { id: 'details', label: 'Account details', icon: User }
+                      { id: 'referral', label: tr(language, 'shareReferralLink'), icon: Share2 },
+                      { id: 'details', label: tr(language, 'accountDetails'), icon: User }
                     ].map((tab) => {
                       const Icon = tab.icon;
                       return (
@@ -1699,9 +1824,9 @@ export default function PublicPortal() {
                     <div className="p-5 sm:p-7">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Referral rewards</p>
-                          <h2 className="mt-1 text-xl font-black">Invite friends and earn points</h2>
-                          <p className="mt-1 text-sm font-semibold text-stone-500">They get 10 welcome points after joining with your link. You also earn 10 points.</p>
+                          <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">{tr(language, 'referralRewards')}</p>
+                          <h2 className="mt-1 text-xl font-black">{tr(language, 'inviteFriends')}</h2>
+                          <p className="mt-1 text-sm font-semibold text-stone-500">{tr(language, 'referralHelp')}</p>
                         </div>
                         <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]">
                           <Gift size={23} />
@@ -1709,9 +1834,9 @@ export default function PublicPortal() {
                       </div>
                       <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
                         <div className="min-w-0 rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4">
-                          <p className="text-xs font-black uppercase text-stone-500">Your referral link</p>
-                          <p className="mt-2 truncate text-sm font-black text-[#151923]">{referralLink || 'Referral code will appear after your account is ready.'}</p>
-                          <p className="mt-1 text-xs font-bold text-stone-500">{customer?.referralCount || 0} successful referral{Number(customer?.referralCount || 0) === 1 ? '' : 's'}</p>
+                          <p className="text-xs font-black uppercase text-stone-500">{tr(language, 'yourReferralLink')}</p>
+                          <p className="mt-2 truncate text-sm font-black text-[#151923]">{referralLink || tr(language, 'referralPending')}</p>
+                          <p className="mt-1 text-xs font-bold text-stone-500">{customer?.referralCount || 0} {Number(customer?.referralCount || 0) === 1 ? tr(language, 'successfulReferral') : tr(language, 'successfulReferrals')}</p>
                         </div>
                         <button
                           type="button"
@@ -1719,8 +1844,31 @@ export default function PublicPortal() {
                           onClick={shareReferral}
                           disabled={!referralLink}
                         >
-                          <Share2 size={17} /> Share
+                          <Share2 size={17} /> {tr(language, 'share')}
                         </button>
+                      </div>
+                      <div className="mt-5 rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-xs font-black uppercase text-stone-500">{tr(language, 'language')}</p>
+                            <p className="mt-1 text-sm font-bold text-[#151923]">{language === 'fr' ? 'Français' : 'English'}</p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {[
+                              { id: 'en', label: 'English' },
+                              { id: 'fr', label: 'Français' }
+                            ].map((option) => (
+                              <button
+                                key={option.id}
+                                type="button"
+                                className={clsx('h-10 rounded-xl px-4 text-xs font-black', language === option.id ? 'bg-[#d71920] text-white' : 'bg-white text-stone-600')}
+                                onClick={() => chooseLanguage(option.id)}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : null}
@@ -1728,30 +1876,30 @@ export default function PublicPortal() {
                   {profileTab === 'details' ? (
                     <form className="grid gap-4 p-5 sm:p-7" onSubmit={updateCustomerProfile}>
                       <div>
-                        <h2 className="text-xl font-black">Account details</h2>
-                        <p className="mt-1 text-sm font-semibold text-stone-500">Update your basic information for faster checkout.</p>
+                        <h2 className="text-xl font-black">{tr(language, 'accountDetails')}</h2>
+                        <p className="mt-1 text-sm font-semibold text-stone-500">{tr(language, 'updateInfo')}</p>
                       </div>
                       <div className="grid gap-4 sm:grid-cols-2">
                         <label>
-                          <span className="label">Name</span>
+                          <span className="label">{tr(language, 'name')}</span>
                           <input className="input mt-1" value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} required />
                         </label>
                         <label>
-                          <span className="label">Phone</span>
+                          <span className="label">{tr(language, 'phone')}</span>
                           <input className="input mt-1" type="tel" inputMode="tel" value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} required />
                         </label>
                         <label>
-                          <span className="label">Email optional</span>
+                          <span className="label">{tr(language, 'emailOptional')}</span>
                           <input className="input mt-1" type="email" value={customerForm.email || ''} onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })} />
                         </label>
                         <label>
-                          <span className="label">Default address</span>
+                          <span className="label">{tr(language, 'defaultAddress')}</span>
                           <input className="input mt-1" value={customerForm.address || ''} onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })} />
                         </label>
                       </div>
                       <div className="flex flex-col gap-3 sm:flex-row">
                         <button className="flex h-11 items-center justify-center rounded-xl bg-[#d71920] px-4 text-sm font-black text-white disabled:opacity-60" disabled={customerSaving || avatarUploading}>
-                          {customerSaving ? 'Saving...' : avatarUploading ? 'Uploading...' : 'Save profile'}
+                          {customerSaving ? tr(language, 'saving') : avatarUploading ? tr(language, 'uploading') : tr(language, 'saveProfile')}
                         </button>
                         <button
                           type="button"
@@ -1763,7 +1911,7 @@ export default function PublicPortal() {
                             setActiveOrders([]);
                           }}
                         >
-                          Change customer
+                          {tr(language, 'changeCustomer')}
                         </button>
                       </div>
                     </form>
@@ -1798,7 +1946,7 @@ export default function PublicPortal() {
           </aside> : null}
         </div>
 
-        {!isFocusedPage ? <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} /> : null}
+        {!isFocusedPage ? <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} language={language} /> : null}
       </div>
 
       <FlashSalePopup
