@@ -27,15 +27,15 @@ self.addEventListener('message', (event) => {
     return;
   }
 
-  if (event.data?.type !== 'ORDER_STATUS_NOTIFICATION') return;
+  if (!['ORDER_STATUS_NOTIFICATION', 'CHOPASAP_NOTIFICATION'].includes(event.data?.type)) return;
 
-  const { title, body } = event.data;
+  const { title, body, tag } = event.data;
   event.waitUntil(
-    self.registration.showNotification(title || 'Order update', {
-      body: body || 'Your order status changed.',
+    self.registration.showNotification(title || 'ChopASAP update', {
+      body: body || 'You have a new update.',
       icon: '/chopasap-logo.png',
       badge: '/chopasap-logo.png',
-      tag: 'chopasap-order-status'
+      tag: tag || 'chopasap-update'
     })
   );
 });

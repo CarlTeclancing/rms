@@ -1,4 +1,5 @@
 import {
+  Bell,
   CalendarClock,
   Camera,
   Check,
@@ -16,11 +17,14 @@ import {
   Phone,
   Plus,
   Search,
+  ShieldCheck,
   ShoppingBag,
+  Sparkles,
   Star,
   Smartphone,
   Trash2,
   User,
+  Volume2,
   X
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -381,34 +385,120 @@ function FlashSalePopup({ code, open, onClose, onUse }) {
 }
 
 function CustomerGate({ form, saving, onChange, onSubmit }) {
+  const complete = form.name.trim().length >= 2 && form.phone.trim().length >= 6;
   return (
-    <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#eef8fa] px-4 py-8">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center">
-        <form className="w-full overflow-hidden rounded-3xl bg-white shadow-2xl" onSubmit={onSubmit}>
-          <div className="bg-[#151923] px-6 py-7 text-white">
-            <img className="h-14 w-14 rounded-2xl object-cover" src={chopasapLogo} alt="ChopASAP" />
-            <p className="mt-5 text-xs font-black uppercase tracking-wide text-white/60">Welcome to ChopASAP</p>
-            <h1 className="mt-1 text-2xl font-black">Start your order</h1>
-            <p className="mt-2 text-sm font-semibold leading-6 text-white/75">Enter your name and phone number so we can keep your orders and profile ready on this device.</p>
+    <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#eaf5f8] px-4 py-8">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl items-center">
+        <div className="grid w-full overflow-hidden rounded-[2rem] bg-white shadow-2xl lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="relative bg-[#151923] p-6 text-white sm:p-8">
+            <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#d71920]/35 to-transparent" />
+            <div className="relative">
+              <img className="h-14 w-14 rounded-2xl object-cover shadow-lg" src={chopasapLogo} alt="ChopASAP" />
+              <p className="mt-8 text-xs font-black uppercase tracking-wide text-white/60">ChopASAP account</p>
+              <h1 className="mt-2 text-3xl font-black leading-9">A faster way to order your next meal.</h1>
+              <p className="mt-3 text-sm font-semibold leading-6 text-white/75">We only need your name and phone number to keep your orders, favourites, and profile ready on this device.</p>
+              <div className="mt-8 grid gap-3">
+                {[
+                  ['No password', 'Your session stays on this device.'],
+                  ['Order history', 'Track every order from the Orders tab.'],
+                  ['Smart alerts', 'Get notified when orders or offers change.']
+                ].map(([title, detail]) => (
+                  <div key={title} className="flex items-center gap-3 rounded-2xl bg-white/10 p-3">
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-[#d71920]"><ShieldCheck size={18} /></span>
+                    <span>
+                      <span className="block text-sm font-black">{title}</span>
+                      <span className="text-xs font-semibold text-white/65">{detail}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="grid gap-4 p-6">
-            <label>
-              <span className="label">Your name</span>
-              <input className="input mt-1" placeholder="Example: Amina N." value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} minLength={2} required />
-            </label>
-            <label>
-              <span className="label">Phone number</span>
-              <input className="input mt-1" placeholder="Example: 671286999" type="tel" inputMode="tel" value={form.phone} onChange={(event) => onChange({ ...form, phone: event.target.value })} minLength={6} required />
-            </label>
-            <label>
-              <span className="label">Default address optional</span>
-              <input className="input mt-1" placeholder="Example: Bonanjo, near..." value={form.address} onChange={(event) => onChange({ ...form, address: event.target.value })} />
-            </label>
-            <button className="flex h-12 items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white disabled:opacity-60" disabled={saving}>
-              {saving ? 'Checking account...' : 'Continue'}
+          <form className="p-6 sm:p-8" onSubmit={onSubmit}>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Quick setup</p>
+                <h2 className="mt-1 text-2xl font-black text-[#151923]">Tell us who is ordering</h2>
+              </div>
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]"><Sparkles size={23} /></span>
+            </div>
+            <div className="mt-7 grid gap-4">
+              <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
+                <span className="text-xs font-black uppercase text-[#d71920]">Full name</span>
+                <input className="mt-2 w-full bg-transparent text-lg font-black text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: Amina N." value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} minLength={2} required />
+                <span className="mt-1 block text-xs font-semibold text-stone-500">This name appears on your order for the restaurant.</span>
+              </label>
+              <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
+                <span className="text-xs font-black uppercase text-[#d71920]">Phone number</span>
+                <input className="mt-2 w-full bg-transparent text-lg font-black text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: 671286999" type="tel" inputMode="tel" value={form.phone} onChange={(event) => onChange({ ...form, phone: event.target.value })} minLength={6} required />
+                <span className="mt-1 block text-xs font-semibold text-stone-500">We use this to find your account next time.</span>
+              </label>
+              <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
+                <span className="text-xs font-black uppercase text-stone-500">Default address optional</span>
+                <input className="mt-2 w-full bg-transparent text-base font-semibold text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: Bonanjo, near..." value={form.address} onChange={(event) => onChange({ ...form, address: event.target.value })} />
+              </label>
+            </div>
+            <div className="mt-7 rounded-2xl bg-[#fff4d7] p-4">
+              <div className="flex items-center justify-between text-xs font-black uppercase text-[#8b5f00]">
+                <span>Setup progress</span>
+                <span>{complete ? 'Ready' : 'Name and phone required'}</span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                <span className="block h-full rounded-full bg-[#d71920] transition-all" style={{ width: complete ? '100%' : form.name || form.phone ? '55%' : '18%' }} />
+              </div>
+            </div>
+            <button className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white shadow-[0_14px_28px_rgba(215,25,32,0.22)] disabled:opacity-60" disabled={saving}>
+              {saving ? 'Checking account...' : 'Continue to ChopASAP'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotificationPanel({ open, notifications, soundEnabled, permission, onClose, onEnable, onToggleSound }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[75] bg-black/35 px-4 py-5 sm:grid sm:place-items-start sm:justify-items-end sm:p-6">
+      <div className="ml-auto w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="bg-[#151923] p-5 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-white/60">ChopASAP alerts</p>
+              <h2 className="mt-1 text-xl font-black">Notifications</h2>
+            </div>
+            <button className="grid h-9 w-9 place-items-center rounded-full bg-white/10" onClick={onClose} aria-label="Close notifications">
+              <X size={17} />
             </button>
           </div>
-        </form>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <button className="flex h-10 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-[#151923]" onClick={onEnable}>
+              <Bell size={15} /> {permission === 'granted' ? 'Enabled' : 'Enable'}
+            </button>
+            <button className="flex h-10 items-center justify-center gap-2 rounded-xl bg-white/10 text-xs font-black text-white" onClick={onToggleSound}>
+              <Volume2 size={15} /> {soundEnabled ? 'Sound on' : 'Sound off'}
+            </button>
+          </div>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto p-3">
+          {notifications.length ? notifications.map((item) => (
+            <div key={item.id} className="mb-2 rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4 last:mb-0">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff1ca] text-[#d71920]">
+                  <Bell size={17} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-black text-[#151923]">{item.title}</p>
+                  <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">{item.body}</p>
+                  <p className="mt-2 text-xs font-semibold text-stone-400">{item.time || 'Just now'}</p>
+                </div>
+              </div>
+            </div>
+          )) : (
+            <p className="rounded-2xl bg-[#f7fbfc] p-5 text-center text-sm font-semibold text-stone-500">No notifications yet.</p>
+          )}
+          </div>
       </div>
     </div>
   );
@@ -620,8 +710,11 @@ export default function PublicPortal() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [flashSaleOpen, setFlashSaleOpen] = useState(false);
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('chopasap_sound_enabled') !== 'false');
+  const [notificationPermission, setNotificationPermission] = useState(() => ('Notification' in window ? Notification.permission : 'unavailable'));
   const [notifications, setNotifications] = useState([
-    { id: 'welcome', title: 'Welcome', body: 'Fresh meals are ready for delivery.' }
+    { id: 'welcome', title: 'Welcome', body: 'Fresh meals are ready for delivery.', time: 'Now' }
   ]);
   const activeOrdersRef = useRef(activeOrders);
   const checkoutPromptTimerRef = useRef(null);
@@ -650,12 +743,61 @@ export default function PublicPortal() {
   const focusedPageTitle = activeTab === 'profile' ? 'Profile' : activeTab === 'orders' && selectedOrder ? 'Order details' : '';
   const isFocusedPage = Boolean(focusedPageTitle);
 
-  const addNotification = (title, body) => setNotifications((current) => [{ id: `${Date.now()}`, title, body }, ...current].slice(0, 5));
+  const playNotificationSound = () => {
+    if (!soundEnabled || !window.AudioContext) return;
+    try {
+      const context = new AudioContext();
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.14, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.42);
+      gain.connect(context.destination);
+
+      [660, 880].forEach((frequency, index) => {
+        const oscillator = context.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, context.currentTime + index * 0.12);
+        oscillator.connect(gain);
+        oscillator.start(context.currentTime + index * 0.12);
+        oscillator.stop(context.currentTime + index * 0.12 + 0.22);
+      });
+      window.setTimeout(() => context.close(), 700);
+    } catch {
+      // Audio can be blocked until the user interacts with the page.
+    }
+  };
+
+  const sendBrowserNotification = async (title, body, tag = 'chopasap-alert') => {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if ('serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active?.postMessage({ type: 'CHOPASAP_NOTIFICATION', title, body, tag });
+      return;
+    }
+    new Notification(title, { body, icon: chopasapLogo, tag });
+  };
+
+  const addNotification = (title, body, options = {}) => {
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title,
+      body,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      type: options.type || 'app'
+    };
+    setNotifications((current) => [entry, ...current].slice(0, 12));
+    if (options.sound !== false) playNotificationSound();
+    if (options.browser !== false) sendBrowserNotification(title, body, options.tag);
+  };
   const toggleFavorite = (id) => setFavorites((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
 
   useEffect(() => {
     localStorage.setItem(favoritesStorageKey, JSON.stringify(favorites));
   }, [favorites]);
+
+  useEffect(() => {
+    localStorage.setItem('chopasap_sound_enabled', String(soundEnabled));
+  }, [soundEnabled]);
 
   const saveCustomerSession = (nextCustomer) => {
     const saved = { ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
@@ -734,9 +876,24 @@ export default function PublicPortal() {
     if (!code) return;
     const dismissedCode = localStorage.getItem('chopasap_flash_sale_dismissed');
     if (dismissedCode === code.id) return;
-    const timer = window.setTimeout(() => setFlashSaleOpen(true), 900);
+    const timer = window.setTimeout(() => {
+      setFlashSaleOpen(true);
+      addNotification('Flash sale is live', `${code.discountPercent}% discount with code ${code.code}.`, { type: 'flash-sale', tag: 'chopasap-flash-sale' });
+    }, 900);
     return () => window.clearTimeout(timer);
   }, [flashSale.data?.item]);
+
+  useEffect(() => {
+    const promotion = featuredPromotion;
+    if (!promotion || promotion.requestSlide) return;
+    const key = `chopasap_promotion_notified_${promotion.id}`;
+    if (localStorage.getItem(key) === 'true') return;
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(key, 'true');
+      addNotification('New promotion', promotion.title, { type: 'promotion', tag: 'chopasap-promotion' });
+    }, 1600);
+    return () => window.clearTimeout(timer);
+  }, [featuredPromotion?.id]);
 
   useEffect(() => {
     if (promotionIndex < promotionSlides.length) return;
@@ -753,24 +910,32 @@ export default function PublicPortal() {
   const requestOrderNotificationPermission = async () => {
     if (!('Notification' in window) || Notification.permission !== 'default') return;
     try {
-      await Notification.requestPermission();
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
     } catch {
       // Browsers can reject permission prompts outside supported contexts.
+    }
+  };
+  const enableNotifications = async () => {
+    if (!('Notification' in window)) {
+      toast.error('Browser notifications are not available here');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        addNotification('Notifications enabled', 'You will hear alerts for order updates and new offers.', { browser: false });
+      }
+    } catch {
+      toast.error('Could not enable notifications');
     }
   };
   const showOrderStatusNotification = async (order) => {
     const title = `Order ${order.orderNo} update`;
     const body = `Your order is now ${statusLabel(order.status)}.`;
 
-    addNotification(title, body);
-
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    if ('serviceWorker' in navigator) {
-      const registration = await navigator.serviceWorker.ready;
-      registration.active?.postMessage({ type: 'ORDER_STATUS_NOTIFICATION', title, body });
-      return;
-    }
-    new Notification(title, { body, icon: chopasapLogo });
+    addNotification(title, body, { type: 'order', tag: 'chopasap-order-status' });
   };
 
   useEffect(() => {
@@ -1131,6 +1296,10 @@ export default function PublicPortal() {
                   <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => openCheckout('cart')} aria-label="Basket">
                     <ShoppingBag size={19} />
                     {cartCount ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{cartCount}</span> : null}
+                  </button>
+                  <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => setNotificationPanelOpen(true)} aria-label="Notifications">
+                    <Bell size={19} />
+                    {notifications.length ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{Math.min(notifications.length, 9)}</span> : null}
                   </button>
                   <button className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('profile')} aria-label="Profile">
                     {customer?.profileImageUrl ? <img className="h-full w-full object-cover" src={customer.profileImageUrl} alt={customer.name || 'Profile'} /> : <User size={19} />}
@@ -1519,6 +1688,16 @@ export default function PublicPortal() {
           setActiveTab('home');
           if (cart.length) openCheckout('cart');
         }}
+      />
+
+      <NotificationPanel
+        open={notificationPanelOpen}
+        notifications={notifications}
+        soundEnabled={soundEnabled}
+        permission={notificationPermission}
+        onClose={() => setNotificationPanelOpen(false)}
+        onEnable={enableNotifications}
+        onToggleSound={() => setSoundEnabled((current) => !current)}
       />
 
       {selectedMeal ? (
