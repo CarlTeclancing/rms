@@ -2,7 +2,11 @@ import { prisma } from '../config/prisma.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
-const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+const rollingPeriodStart = (date, days = 30) => {
+  const start = startOfDay(date);
+  start.setDate(start.getDate() - days + 1);
+  return start;
+};
 
 const sumDecimal = (rows, field) => rows.reduce((sum, row) => sum + Number(row[field] || 0), 0);
 const optionalFindMany = (delegate, args) => (delegate?.findMany ? delegate.findMany(args).catch(() => []) : Promise.resolve([]));
@@ -32,7 +36,7 @@ const combineTopItems = (saleItems, onlineItems) => {
 export const getStats = asyncHandler(async (_req, res) => {
   const now = new Date();
   const today = startOfDay(now);
-  const month = startOfMonth(now);
+  const month = rollingPeriodStart(now);
 
   const [
     dailySales,

@@ -1,8 +1,15 @@
 import { prisma } from '../config/prisma.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
+const defaultFrom = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 29);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
 const range = (query) => ({
-  gte: query.from ? new Date(query.from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  gte: query.from ? new Date(query.from) : defaultFrom(),
   lte: query.to ? new Date(query.to) : new Date()
 });
 

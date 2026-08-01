@@ -1,7 +1,14 @@
 const toNumber = (value) => Number(value || 0);
 
+const defaultFrom = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 29);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
 const dateRange = (query = {}) => ({
-  from: query.from ? new Date(query.from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  from: query.from ? new Date(query.from) : defaultFrom(),
   to: query.to ? new Date(query.to) : new Date()
 });
 
@@ -47,7 +54,7 @@ export async function buildBusinessIntelligence(prisma, query = {}) {
   const previousFrom = new Date(from);
   previousFrom.setDate(previousFrom.getDate() - previousDays);
 
-  const [sales, previousSales, expenses, previousExpenses, stockItems, saleItems] = await Promise.all([
+  const [sales, previousSales, onlineOrders, previousOnlineOrders, expenses, previousExpenses, stockItems, saleItems, onlineOrderItems] = await Promise.all([
     prisma.sale.findMany({
       where: { createdAt: { gte: from, lte: to }, status: 'COMPLETED' },
       include: {
@@ -66,6 +73,8 @@ export async function buildBusinessIntelligence(prisma, query = {}) {
       orderBy: { createdAt: 'asc' }
     }),
     prisma.sale.findMany({ where: { createdAt: { gte: previousFrom, lt: from }, status: 'COMPLETED' } }),
+    prisma.onlineOrder.findMany({ where: { createdAt: { gte: from, lte: to }, status: { not: 'CANCELLED' } } }),
+    prisma.onlineOrder.findMany({ where: { createdAt: { gte: previousFrom, lt: from }, status: { not: 'CANCELLED' } } }),
     prisma.expense.findMany({
       where: { expenseDate: { gte: from, lte: to } },
       include: { category: true, supplier: true },
@@ -83,16 +92,27 @@ export async function buildBusinessIntelligence(prisma, query = {}) {
           }
         }
       }
+    }),
+    prisma.onlineOrderItem.findMany({
+      where: { onlineOrder: { createdAt: { gte: from, lte: to }, status: { not: 'CANCELLED' } } },
+      include: {
+        menuItem: {
+          include: {
+            category: true,
+            recipeIngredients: { include: { ingredient: { include: { stockItem: true } } } }
+          }
+        }
+      }
     })
   ]);
 
-  const totalSales = sum(sales, (sale) => sale.total);
+  const totalSales = sum(sales, (sale) => sale.total) + sum(onlineOrders, (order) => order.total);
   const totalExpenses = sum(expenses, (expense) => expense.amount);
-  const previousSalesTotal = sum(previousSales, (sale) => sale.total);
+  const previousSalesTotal = sum(previousSales, (sale) => sale.total) + sum(previousOnlineOrders, (order) => order.total);
   const previousExpenseTotal = sum(previousExpenses, (expense) => expense.amount);
 
   const productRows = {};
-  for (const item of saleItems) {
+  for (const item of [...saleItems, ...onlineOrderItems]) {
     const unitCost = recipeCost(item.menuItem);
     const key = item.menuItemId;
     if (!productRows[key]) {
@@ -139,7 +159,7 @@ export async function buildBusinessIntelligence(prisma, query = {}) {
   const inventoryValue = sum(stockItems, (item) => toNumber(item.quantity) * toNumber(item.unitCost));
   const lowStockItems = stockItems.filter((item) => toNumber(item.quantity) <= toNumber(item.reorderLevel));
   const negativeStockItems = stockItems.filter((item) => toNumber(item.quantity) < 0);
-  const dailyTrend = groupByDay(sales);
+  const dailyTrend = groupByDay([...sales, ...onlineOrders]);
   const averageDailySales = totalSales / daysBetween(from, to);
   const forecast = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(to);
@@ -264,7 +284,7 @@ export async function buildBusinessIntelligence(prisma, query = {}) {
       expenseToSalesRatio: money(expenseToSalesRatio),
       salesGrowth: money(salesGrowth),
       expenseGrowth: money(expenseGrowth),
-      averageTransactionValue: money(totalSales / Math.max(1, sales.length)),
+      averageTransactionValue: money(totalSales / Math.max(1, sales.length + onlineOrders.length)),
       inventoryValue: money(inventoryValue),
       lowStockCount: lowStockItems.length,
       unresolvedRecommendations: recommendations.length,

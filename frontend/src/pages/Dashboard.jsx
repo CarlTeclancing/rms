@@ -33,12 +33,12 @@ export default function Dashboard() {
       />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Today's sales" value={currency(data.dailySales)} icon={Banknote} detail={`Online: ${currency(data.dailyOnlineOrdersTotal || 0)}`} />
-        <StatCard title="Monthly sales" value={currency(data.monthlySales)} icon={TrendingUp} tone="blue" detail={`Online: ${currency(data.onlineOrdersTotal || 0)}`} />
-        <StatCard title="Monthly expenses" value={currency(data.monthlyExpenses)} icon={ReceiptText} tone="amber" />
+        <StatCard title="Last 30 days sales" value={currency(data.monthlySales)} icon={TrendingUp} tone="blue" detail={`Online: ${currency(data.onlineOrdersTotal || 0)}`} />
+        <StatCard title="Last 30 days expenses" value={currency(data.monthlyExpenses)} icon={ReceiptText} tone="amber" />
         <StatCard title="Low stock alerts" value={data.lowStockCount} icon={AlertTriangle} tone="rose" detail="Items at or below reorder level" />
       </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <StatCard title="Online orders" value={data.onlineOrdersCount || 0} icon={Banknote} tone="blue" detail={`${currency(data.onlineOrdersTotal)} this month`} />
+        <StatCard title="Online orders" value={data.onlineOrdersCount || 0} icon={Banknote} tone="blue" detail={`${currency(data.onlineOrdersTotal)} in the last 30 days`} />
         <StatCard title="Reservations today" value={data.reservationsToday || 0} icon={TrendingUp} detail="Pending and confirmed meal bookings" />
       </div>
 
