@@ -752,6 +752,7 @@ export default function PublicPortal() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [flashSaleOpen, setFlashSaleOpen] = useState(false);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [profileTab, setProfileTab] = useState('referral');
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('chopasap_sound_enabled') !== 'false');
   const [notificationPermission, setNotificationPermission] = useState(() => ('Notification' in window ? Notification.permission : 'unavailable'));
   const [notifications, setNotifications] = useState([
@@ -1681,99 +1682,131 @@ export default function PublicPortal() {
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-7">
-                    <div className="rounded-2xl bg-[#fff4d7] p-4">
-                      <p className="text-xs font-black uppercase text-[#8b5f00]">Total orders</p>
-                      <p className="mt-2 text-3xl font-black text-[#151923]">{activeOrders.length || customer?.orderCount || 0}</p>
-                    </div>
-                    <div className="rounded-2xl bg-[#f7fbfc] p-4">
-                      <p className="text-xs font-black uppercase text-stone-500">Reward points</p>
-                      <p className="mt-2 text-3xl font-black text-[#151923]">{Number(customer?.points || 0)}</p>
-                    </div>
-                    <div className="rounded-2xl bg-[#e7f8ef] p-4">
-                      <div className="flex items-center gap-2 text-[#0b8f4f]">
-                        <Trophy size={18} />
-                        <p className="text-xs font-black uppercase">Ranking</p>
+                  <div className="grid grid-cols-3 gap-2 p-4 sm:gap-4 sm:p-7">
+                    {[
+                      { label: 'Orders', value: activeOrders.length || customer?.orderCount || 0, icon: ClipboardList, tone: 'bg-[#fff4d7] text-[#8b5f00]' },
+                      { label: 'Points', value: Number(customer?.points || 0), icon: Trophy, tone: 'bg-[#e7f8ef] text-[#0b8f4f]' },
+                      { label: 'Referrals', value: Number(customer?.referralCount || 0), icon: Gift, tone: 'bg-[#eef8fa] text-[#29384d]' }
+                    ].map((stat) => {
+                      const Icon = stat.icon;
+                      return (
+                        <div key={stat.label} className="rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-3 text-center sm:p-4">
+                          <span className={clsx('mx-auto grid h-10 w-10 place-items-center rounded-xl', stat.tone)}>
+                            <Icon size={20} />
+                          </span>
+                          <p className="mt-2 text-2xl font-black text-[#151923] sm:text-3xl">{stat.value}</p>
+                          <p className="mt-1 text-[11px] font-black uppercase text-stone-500 sm:text-xs">{stat.label}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="border-t border-[#edf0f2] px-5 pb-5 sm:px-7 sm:pb-7">
+                    <div className="rounded-2xl bg-[#151923] p-4 text-white">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-xs font-black uppercase text-white/55">Current rank</p>
+                          <p className="mt-1 font-black">{customerRank.title}</p>
+                        </div>
+                        <p className="text-right text-xs font-bold text-white/65">{customerRank.next}</p>
                       </div>
-                      <p className="mt-2 font-black text-[#151923]">{customerRank.title}</p>
-                      <p className="mt-1 text-xs font-bold text-stone-600">{customerRank.next}</p>
-                    </div>
-                    <div className="rounded-2xl bg-[#f7fbfc] p-4 sm:col-span-3">
-                      <p className="text-xs font-black uppercase text-stone-500">Default address</p>
-                      <p className="mt-2 text-sm font-semibold text-stone-700">{customer?.address || 'No default address yet.'}</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-5 rounded-3xl bg-white p-5 shadow-md sm:p-7">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Referral rewards</p>
-                      <h2 className="mt-1 text-xl font-black">Invite friends and earn points</h2>
-                      <p className="mt-1 text-sm font-semibold text-stone-500">They get 10 welcome points after joining with your link. You also earn 10 points.</p>
-                    </div>
-                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]">
-                      <Gift size={23} />
-                    </span>
+                <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-md">
+                  <div className="grid grid-cols-2 gap-2 border-b border-[#edf0f2] bg-[#f7fbfc] p-2">
+                    {[
+                      { id: 'referral', label: 'Share referral link', icon: Share2 },
+                      { id: 'details', label: 'Account details', icon: User }
+                    ].map((tab) => {
+                      const Icon = tab.icon;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          className={clsx('flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black transition', profileTab === tab.id ? 'bg-white text-[#d71920] shadow-sm' : 'text-stone-600')}
+                          onClick={() => setProfileTab(tab.id)}
+                        >
+                          <Icon size={17} /> {tab.label}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
-                    <div className="min-w-0 rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4">
-                      <p className="text-xs font-black uppercase text-stone-500">Your referral link</p>
-                      <p className="mt-2 truncate text-sm font-black text-[#151923]">{referralLink || 'Referral code will appear after your account is ready.'}</p>
-                      <p className="mt-1 text-xs font-bold text-stone-500">{customer?.referralCount || 0} successful referral{Number(customer?.referralCount || 0) === 1 ? '' : 's'}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="flex h-12 items-center justify-center gap-2 rounded-xl bg-[#d71920] px-5 text-sm font-black text-white disabled:opacity-60"
-                      onClick={shareReferral}
-                      disabled={!referralLink}
-                    >
-                      <Share2 size={17} /> Share
-                    </button>
-                  </div>
-                </div>
 
-                <form className="mt-5 grid gap-4 rounded-3xl bg-white p-5 shadow-md sm:p-7" onSubmit={updateCustomerProfile}>
-                  <div>
-                    <h2 className="text-xl font-black">Account details</h2>
-                    <p className="mt-1 text-sm font-semibold text-stone-500">Update your basic information for faster checkout.</p>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label>
-                      <span className="label">Name</span>
-                      <input className="input mt-1" value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} required />
-                    </label>
-                    <label>
-                      <span className="label">Phone</span>
-                      <input className="input mt-1" type="tel" inputMode="tel" value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} required />
-                    </label>
-                    <label>
-                      <span className="label">Email optional</span>
-                      <input className="input mt-1" type="email" value={customerForm.email || ''} onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })} />
-                    </label>
-                    <label>
-                      <span className="label">Default address</span>
-                      <input className="input mt-1" value={customerForm.address || ''} onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })} />
-                    </label>
-                  </div>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <button className="flex h-11 items-center justify-center rounded-xl bg-[#d71920] px-4 text-sm font-black text-white disabled:opacity-60" disabled={customerSaving || avatarUploading}>
-                      {customerSaving ? 'Saving...' : avatarUploading ? 'Uploading...' : 'Save profile'}
-                    </button>
-                    <button
-                      type="button"
-                      className="flex h-11 items-center justify-center rounded-xl bg-stone-100 px-4 text-sm font-black text-stone-700"
-                      onClick={() => {
-                        localStorage.removeItem(customerStorageKey);
-                        setCustomer(null);
-                        setCustomerForm(emptyCustomerForm);
-                        setActiveOrders([]);
-                      }}
-                    >
-                      Change customer
-                    </button>
-                  </div>
-                </form>
+                  {profileTab === 'referral' ? (
+                    <div className="p-5 sm:p-7">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Referral rewards</p>
+                          <h2 className="mt-1 text-xl font-black">Invite friends and earn points</h2>
+                          <p className="mt-1 text-sm font-semibold text-stone-500">They get 10 welcome points after joining with your link. You also earn 10 points.</p>
+                        </div>
+                        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]">
+                          <Gift size={23} />
+                        </span>
+                      </div>
+                      <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+                        <div className="min-w-0 rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4">
+                          <p className="text-xs font-black uppercase text-stone-500">Your referral link</p>
+                          <p className="mt-2 truncate text-sm font-black text-[#151923]">{referralLink || 'Referral code will appear after your account is ready.'}</p>
+                          <p className="mt-1 text-xs font-bold text-stone-500">{customer?.referralCount || 0} successful referral{Number(customer?.referralCount || 0) === 1 ? '' : 's'}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="flex h-12 items-center justify-center gap-2 rounded-xl bg-[#d71920] px-5 text-sm font-black text-white disabled:opacity-60"
+                          onClick={shareReferral}
+                          disabled={!referralLink}
+                        >
+                          <Share2 size={17} /> Share
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {profileTab === 'details' ? (
+                    <form className="grid gap-4 p-5 sm:p-7" onSubmit={updateCustomerProfile}>
+                      <div>
+                        <h2 className="text-xl font-black">Account details</h2>
+                        <p className="mt-1 text-sm font-semibold text-stone-500">Update your basic information for faster checkout.</p>
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <label>
+                          <span className="label">Name</span>
+                          <input className="input mt-1" value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} required />
+                        </label>
+                        <label>
+                          <span className="label">Phone</span>
+                          <input className="input mt-1" type="tel" inputMode="tel" value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} required />
+                        </label>
+                        <label>
+                          <span className="label">Email optional</span>
+                          <input className="input mt-1" type="email" value={customerForm.email || ''} onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })} />
+                        </label>
+                        <label>
+                          <span className="label">Default address</span>
+                          <input className="input mt-1" value={customerForm.address || ''} onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })} />
+                        </label>
+                      </div>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button className="flex h-11 items-center justify-center rounded-xl bg-[#d71920] px-4 text-sm font-black text-white disabled:opacity-60" disabled={customerSaving || avatarUploading}>
+                          {customerSaving ? 'Saving...' : avatarUploading ? 'Uploading...' : 'Save profile'}
+                        </button>
+                        <button
+                          type="button"
+                          className="flex h-11 items-center justify-center rounded-xl bg-stone-100 px-4 text-sm font-black text-stone-700"
+                          onClick={() => {
+                            localStorage.removeItem(customerStorageKey);
+                            setCustomer(null);
+                            setCustomerForm(emptyCustomerForm);
+                            setActiveOrders([]);
+                          }}
+                        >
+                          Change customer
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
+                </div>
               </section>
             ) : null}
           </main>
