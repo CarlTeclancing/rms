@@ -1275,7 +1275,7 @@ export default function PublicPortal() {
                         <p className="mt-1 text-xs font-semibold text-[#8a8f98]">{order.items?.length || 0} item{(order.items?.length || 0) === 1 ? '' : 's'} • {currency(order.total)}</p>
                       </div>
                       <span className="rounded-full bg-[#e7f8ef] px-3 py-1 text-xs font-black text-[#19b567]">{order.status || 'PENDING'}</span>
-                    </div>
+                    </button>
                   )) : (
                     <div className="py-8 text-center">
                       <ClipboardList className="mx-auto text-[#d71920]" size={34} />
@@ -1302,7 +1302,7 @@ export default function PublicPortal() {
                         <h1 className="mt-1 text-2xl font-black">Support</h1>
                         <p className="mt-2 max-w-xl text-sm font-semibold leading-6 text-white/75">Get help with orders, delivery, reservations, and onsite flash sale codes.</p>
                       </div>
-                    </button>
+                    </div>
                   </div>
                   <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-7">
                     <a
