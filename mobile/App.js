@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -17,8 +18,10 @@ import {
   Switch,
   Text,
   TextInput,
+  StatusBar as NativeStatusBar,
   View
 } from 'react-native';
+import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { api, uploadCustomerAvatar, uploadPromotionImage } from './src/api';
 import { t } from './src/i18n';
 
@@ -264,6 +267,7 @@ export default function App() {
   const [customer, setCustomer] = useState(null);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', address: '', email: '', referralCode: '' });
   const [items, setItems] = useState([]);
+  const [menuCategories, setMenuCategories] = useState([]);
   const [settings, setSettings] = useState({});
   const [promotions, setPromotions] = useState([]);
   const [flashSale, setFlashSale] = useState(null);
@@ -275,11 +279,14 @@ export default function App() {
   const [selectedMeal, setSelectedMeal] = useState(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(null);
+  const [checkoutStep, setCheckoutStep] = useState('cart');
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [reservationOpen, setReservationOpen] = useState(false);
   const [promotionOpen, setPromotionOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [flashSaleOpen, setFlashSaleOpen] = useState(false);
   const [fulfillment, setFulfillment] = useState('delivery');
-  const [orderForm, setOrderForm] = useState({ deliveryAddress: '', deliveryNote: '', isGift: false, recipientName: '', recipientPhone: '', recipientAddress: '' });
+  const [orderForm, setOrderForm] = useState({ customerName: '', customerPhone: '', customerEmail: '', deliveryAddress: '', deliveryNote: '', isGift: false, recipientName: '', recipientPhone: '', recipientAddress: '' });
   const [reservationForm, setReservationForm] = useState(emptyReservationForm);
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm);
   const [profileTab, setProfileTab] = useState('referral');
@@ -336,7 +343,7 @@ export default function App() {
       if (savedCustomer) {
         const parsed = JSON.parse(savedCustomer);
         setCustomer(parsed);
-        setCustomerForm({ name: parsed.name || '', phone: parsed.phone || '', email: parsed.email || '', address: parsed.address || '', referralCode: parsed.referralCode || '' });
+        setCustomerForm({ name: parsed.name || '', phone: parsed.phone || '', email: parsed.email || '', address: parsed.address || '', profileImageUrl: parsed.profileImageUrl || '', referralCode: parsed.referralCode || '' });
         loadOrders(parsed.id);
       } else {
         const params = Linking.parse(initialUrl || '').queryParams || {};
@@ -350,6 +357,7 @@ export default function App() {
         api.flashSale().catch(() => ({ item: null }))
       ]);
       setItems(menuData.items || []);
+      setMenuCategories(menuData.categories || []);
       setSettings(settingsData || {});
       setPromotions(promotionData.items || []);
       setFlashSale(flashSaleData.item || null);
@@ -377,8 +385,14 @@ export default function App() {
   const saveCustomer = async (nextCustomer) => {
     const saved = { ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
     setCustomer(saved);
-    setCustomerForm({ name: saved.name || '', phone: saved.phone || '', email: saved.email || '', address: saved.address || '', referralCode: saved.referralCode || '' });
-    setOrderForm((current) => ({ ...current, deliveryAddress: saved.address || current.deliveryAddress }));
+    setCustomerForm({ name: saved.name || '', phone: saved.phone || '', email: saved.email || '', address: saved.address || '', profileImageUrl: saved.profileImageUrl || '', referralCode: saved.referralCode || '' });
+    setOrderForm((current) => ({
+      ...current,
+      customerName: saved.name || current.customerName,
+      customerPhone: saved.phone || current.customerPhone,
+      customerEmail: saved.email || current.customerEmail,
+      deliveryAddress: saved.address || current.deliveryAddress
+    }));
     await AsyncStorage.setItem(customerKey, JSON.stringify(saved));
   };
 
@@ -457,14 +471,18 @@ export default function App() {
     if (fulfillment === 'delivery' && !orderForm.deliveryAddress.trim()) return Alert.alert('ChopASAP', t(language, 'deliveryAddress'));
     if (orderForm.isGift && (!orderForm.recipientName.trim() || !orderForm.recipientPhone.trim())) return Alert.alert('ChopASAP', t(language, 'orderForLovedOne'));
     if (orderForm.isGift && fulfillment === 'delivery' && !orderForm.recipientAddress.trim()) return Alert.alert('ChopASAP', t(language, 'recipientAddress'));
+    const customerName = customer?.name || orderForm.customerName;
+    const customerPhone = customer?.phone || orderForm.customerPhone;
+    if (!customerName?.trim()) return Alert.alert('ChopASAP', t(language, 'name'));
+    if (!customerPhone?.trim()) return Alert.alert('ChopASAP', t(language, 'phone'));
 
     setSaving(true);
     try {
       const submittedCart = cart;
       const submittedCustomer = {
-        customerName: customer.name,
-        customerPhone: customer.phone,
-        customerEmail: customer.email || '',
+        customerName,
+        customerPhone,
+        customerEmail: customer?.email || orderForm.customerEmail || '',
         deliveryAddress: fulfillment === 'delivery' ? orderForm.deliveryAddress : 'Reserve onsite',
         deliveryNote: orderForm.deliveryNote,
         isGift: orderForm.isGift,
@@ -474,15 +492,17 @@ export default function App() {
       };
       const order = await api.createOrder({
         ...submittedCustomer,
-        customerId: customer.id,
+        customerId: customer?.id,
         deliveryFee,
         items: cart.map(({ menuItemId, quantity, variationName }) => ({ menuItemId, quantity, variationName }))
       });
       setCart([]);
       setCheckoutSuccess(order);
       setActiveOrders((current) => [order, ...current.filter((entry) => entry.id !== order.id)].slice(0, 10));
-      await saveCustomer({ ...customer, points: Number(customer.points || 0) + Number(order.pointsEarned || 0), orderCount: Number(customer.orderCount || 0) + 1 });
-      await loadOrders(customer.id);
+      if (customer?.id) {
+        await saveCustomer({ ...customer, points: Number(customer.points || 0) + Number(order.pointsEarned || 0), orderCount: Number(customer.orderCount || 0) + 1 });
+        await loadOrders(customer.id);
+      }
       const phone = cleanPhone(settings.supportPhone);
       if (phone) {
         Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsappMessage(order, submittedCart, submittedCustomer))}`);
@@ -593,12 +613,13 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      <LanguagePrompt visible={languagePrompt} language={language} onChoose={chooseLanguage} />
-      {!customer ? (
-        <CustomerGate language={language} form={customerForm} setForm={setCustomerForm} saving={saving} onSubmit={submitCustomer} />
-      ) : (
-        <>
+      <SafeAreaView style={styles.appSafe}>
+        <StatusBar style="dark" />
+        <LanguagePrompt visible={languagePrompt} language={language} onChoose={chooseLanguage} />
+        {!customer ? (
+          <CustomerGate language={language} form={customerForm} setForm={setCustomerForm} saving={saving} onSubmit={submitCustomer} />
+        ) : (
+          <>
           <View style={styles.header}>
             <View style={styles.brandRow}>
               <Image source={logo} style={styles.logo} />
@@ -607,15 +628,23 @@ export default function App() {
                 <Text style={styles.location} numberOfLines={1}>{orderForm.deliveryAddress || customer.address || 'Choose delivery location'}</Text>
               </View>
             </View>
-            <Pressable style={styles.cartButton} onPress={() => setCheckoutOpen(true)}>
-              <Ionicons name="bag-outline" size={21} color="#29384d" />
-              {cart.length ? <Text style={styles.cartBadge}>{cart.reduce((sum, item) => sum + item.quantity, 0)}</Text> : null}
-            </Pressable>
-            {flashSale ? (
-              <Pressable style={styles.cartButton} onPress={() => setFlashSaleOpen(true)}>
+            <View style={styles.headerActions}>
+              {flashSale ? (
+              <Pressable style={styles.headerIconButton} onPress={() => setFlashSaleOpen(true)}>
                 <Ionicons name="pricetag-outline" size={21} color={brandRed} />
               </Pressable>
             ) : null}
+              <Pressable style={styles.headerIconButton} onPress={() => {
+                setCheckoutStep('cart');
+                setCheckoutOpen(true);
+              }}>
+                <Ionicons name="bag-outline" size={21} color="#29384d" />
+                {cart.length ? <Text style={styles.cartBadge}>{cart.reduce((sum, item) => sum + item.quantity, 0)}</Text> : null}
+              </Pressable>
+              <Pressable style={styles.profileButton} onPress={() => setProfileOpen(true)}>
+                {customer.profileImageUrl ? <Image source={{ uri: customer.profileImageUrl }} style={styles.profileButtonImage} /> : <Ionicons name="person-outline" size={21} color="#29384d" />}
+              </Pressable>
+            </View>
           </View>
 
           {['home', 'meals', 'favorites'].includes(tab) ? (
@@ -629,6 +658,7 @@ export default function App() {
             {tab === 'home' ? (
               <HomeView
                 items={filteredItems}
+                menuCategories={menuCategories}
                 favorites={favorites}
                 promotions={promotions}
                 activeOrders={activeOrders}
@@ -637,33 +667,14 @@ export default function App() {
                 onOpen={setSelectedMeal}
                 onFavorite={toggleFavorite}
                 onShare={shareMeal}
-                onReserve={() => setReservationOpen(true)}
-                onPromote={() => setPromotionOpen(true)}
                 onFlashSale={() => setFlashSaleOpen(true)}
+                onViewOrder={setSelectedOrder}
               />
             ) : null}
             {tab === 'meals' ? <MealsView title={t(language, 'meals')} items={filteredItems} favorites={favorites} onOpen={setSelectedMeal} onFavorite={toggleFavorite} onShare={shareMeal} language={language} /> : null}
             {tab === 'favorites' ? <MealsView title={t(language, 'favorites')} items={favoriteItems} favorites={favorites} onOpen={setSelectedMeal} onFavorite={toggleFavorite} onShare={shareMeal} language={language} /> : null}
-            {tab === 'orders' ? <OrdersView orders={orders} activeOrders={activeOrders} language={language} /> : null}
+            {tab === 'orders' ? <OrdersView orders={orders} activeOrders={activeOrders} language={language} onOpen={setSelectedOrder} /> : null}
             {tab === 'support' ? <SupportView settings={settings} language={language} onReserve={() => setReservationOpen(true)} onPromote={() => setPromotionOpen(true)} /> : null}
-            {tab === 'profile' ? (
-              <ProfileView
-                customer={customer}
-                customerForm={customerForm}
-                setCustomerForm={setCustomerForm}
-                language={language}
-                chooseLanguage={chooseLanguage}
-                profileTab={profileTab}
-                setProfileTab={setProfileTab}
-                rank={rank}
-                orders={orders}
-                referralLink={referralLink}
-                saving={saving}
-                onShareReferral={shareReferral}
-                onPickAvatar={pickAvatar}
-                onUpdateProfile={updateProfile}
-              />
-            ) : null}
           </ScrollView>
 
           <BottomTabs tab={tab} setTab={setTab} language={language} />
@@ -672,6 +683,8 @@ export default function App() {
             visible={checkoutOpen}
             language={language}
             cart={cart}
+            step={checkoutStep}
+            setStep={setCheckoutStep}
             fulfillment={fulfillment}
             setFulfillment={setFulfillment}
             orderForm={orderForm}
@@ -683,7 +696,29 @@ export default function App() {
             total={total}
             saving={saving}
             onClose={() => setCheckoutOpen(false)}
+            onShop={() => {
+              setCheckoutOpen(false);
+              setTab('meals');
+            }}
             onSubmit={submitOrder}
+          />
+          <ProfileModal
+            visible={profileOpen}
+            onClose={() => setProfileOpen(false)}
+            customer={customer}
+            customerForm={customerForm}
+            setCustomerForm={setCustomerForm}
+            language={language}
+            chooseLanguage={chooseLanguage}
+            profileTab={profileTab}
+            setProfileTab={setProfileTab}
+            rank={rank}
+            orders={orders}
+            referralLink={referralLink}
+            saving={saving}
+            onShareReferral={shareReferral}
+            onPickAvatar={pickAvatar}
+            onUpdateProfile={updateProfile}
           />
           <SuccessModal
             visible={Boolean(checkoutSuccess)}
@@ -695,15 +730,17 @@ export default function App() {
             }}
           />
           <FlashSaleModal visible={flashSaleOpen} code={flashSale} onClose={dismissFlashSale} onShare={shareFlashSale} />
+          <OrderDetailModal visible={Boolean(selectedOrder)} order={selectedOrder} onClose={() => setSelectedOrder(null)} />
           <ReservationModal visible={reservationOpen} form={reservationForm} setForm={setReservationForm} saving={saving} onClose={() => setReservationOpen(false)} onSubmit={submitReservation} />
           <PromotionModal visible={promotionOpen} form={promotionForm} setForm={setPromotionForm} saving={saving} onPickImage={pickPromotionImage} onClose={() => setPromotionOpen(false)} onSubmit={submitPromotion} />
-        </>
-      )}
+          </>
+        )}
+      </SafeAreaView>
     </SafeAreaView>
   );
 }
 
-function HomeView({ items, favorites, promotions, activeOrders, flashSale, language, onOpen, onFavorite, onShare, onReserve, onPromote, onFlashSale }) {
+function LegacyHomeView({ items, favorites, promotions, activeOrders, flashSale, language, onOpen, onFavorite, onShare, onReserve, onPromote, onFlashSale }) {
   const featuredPromotion = promotions[0];
   return (
     <View>
@@ -761,7 +798,7 @@ function HomeView({ items, favorites, promotions, activeOrders, flashSale, langu
   );
 }
 
-function MealsView({ title, items, favorites, onOpen, onFavorite, onShare, language }) {
+function LegacyMealsView({ title, items, favorites, onOpen, onFavorite, onShare, language }) {
   return (
     <View>
       <Text style={styles.pageTitle}>{title}</Text>
@@ -774,7 +811,7 @@ function MealsView({ title, items, favorites, onOpen, onFavorite, onShare, langu
   );
 }
 
-function OrdersView({ orders, activeOrders, language }) {
+function LegacyOrdersView({ orders, activeOrders, language }) {
   const mergedOrders = [
     ...activeOrders,
     ...orders.filter((order) => !activeOrders.some((active) => active.id === order.id))
@@ -792,6 +829,310 @@ function OrdersView({ orders, activeOrders, language }) {
         </View>
       )) : <Text style={styles.emptyText}>No orders yet.</Text>}
     </View>
+  );
+}
+
+function groupMealsByCategory(items, categories = []) {
+  const seededGroups = categories.map((category) => ({
+    ...category,
+    items: []
+  }));
+  return items.reduce((groups, item) => {
+    const name = item.category?.name || 'Kitchen';
+    const existing = groups.find((group) => group.name === name);
+    if (existing) {
+      existing.items.push(item);
+      return groups;
+    }
+    return [...groups, { ...(item.category || { name }), items: [item] }];
+  }, seededGroups);
+}
+
+function HomeView({ items, menuCategories, favorites, promotions, activeOrders, flashSale, language, onOpen, onFavorite, onShare, onFlashSale, onViewOrder }) {
+  const categories = groupMealsByCategory(items, menuCategories);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const visibleCategories = selectedCategory === 'all' ? categories : categories.filter((category) => category.name === selectedCategory);
+  const visibleItems = selectedCategory === 'all' ? items : visibleCategories.flatMap((category) => category.items);
+  const featuredMeals = visibleItems.slice(0, 6);
+  return (
+    <View>
+      <View style={styles.categoryQuickAccess}>
+        <View style={styles.categoryGridTop}>
+          <CategoryTile label="All" variant="meal" active={selectedCategory === 'all'} onPress={() => setSelectedCategory('all')} featured />
+          {categories.slice(0, 1).map((category, index) => (
+            <CategoryTile key={category.name} label={category.name} variant={variantForCategory(category.name, index)} active={selectedCategory === category.name} onPress={() => setSelectedCategory(category.name)} featured badge={promotions.length ? 'Promo' : ''} />
+          ))}
+        </View>
+        <View style={styles.categoryGridBottom}>
+          {categories.slice(1, 5).map((category, index) => (
+            <CategoryTile key={category.name} label={category.name} variant={variantForCategory(category.name, index + 1)} active={selectedCategory === category.name} onPress={() => setSelectedCategory(category.name)} />
+          ))}
+          {categories.length > 5 ? <CategoryTile label="More" variant="more" active={false} onPress={() => setSelectedCategory('all')} /> : null}
+        </View>
+      </View>
+
+      {flashSale ? (
+        <Pressable style={styles.flashBanner} onPress={onFlashSale}>
+          <View style={styles.flashIcon}><Ionicons name="flash" size={22} color="#fff" /></View>
+          <View style={styles.flashCopy}>
+            <Text style={styles.flashTitle}>{flashSale.title}</Text>
+            <Text style={styles.flashText}>Use code {flashSale.code} for {flashSale.discountPercent || 10}% off onsite.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#151923" />
+        </Pressable>
+      ) : null}
+
+      {activeOrders.length ? (
+        <View style={styles.activeOrdersBox}>
+          <Text style={styles.sectionTitle}>Active orders</Text>
+          {activeOrders.slice(0, 3).map((order) => (
+            <Pressable key={order.id || order.orderNo} style={styles.activeOrderRow} onPress={() => onViewOrder(order)}>
+              <View>
+                <Text style={styles.orderNo}>{order.orderNo}</Text>
+                <Text style={styles.orderMeta}>{formatMoney(order.total)} - {(order.status || 'PENDING').replaceAll('_', ' ')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={brandRed} />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      <View style={styles.sectionBlock}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.pageTitle}>{t(language, 'todaysMenu')}</Text>
+          <Text style={styles.sectionCount}>{visibleItems.length} meals</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredMealRail}>
+          {featuredMeals.length ? featuredMeals.map((item) => (
+            <FeaturedMealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />
+          )) : <Text style={styles.emptyText}>{t(language, 'noMeals')}</Text>}
+        </ScrollView>
+      </View>
+
+      {visibleCategories.map((category) => (
+        <CategoryMealSection key={category.name} category={category} favorites={favorites} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />
+      ))}
+
+      {promotions.length ? (
+        <View style={styles.promotionStrip}>
+          <Text style={styles.sectionTitle}>Promotions</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promotionRail}>
+            {promotions.slice(0, 4).map((promotion) => (
+              <Pressable key={promotion.id || promotion.title} style={styles.promotionTile} onPress={promotion.ctaUrl ? () => Linking.openURL(promotion.ctaUrl) : undefined}>
+                {promotion.imageUrl ? <Image source={{ uri: promotion.imageUrl }} style={styles.promotionTileImage} /> : <View style={styles.promotionTileFallback}><Ionicons name="sparkles-outline" size={24} color={brandRed} /></View>}
+                <Text style={styles.promoEyebrow}>Offer</Text>
+                <Text style={styles.promoTitle} numberOfLines={2}>{promotion.title}</Text>
+                <Text style={styles.cardCopy} numberOfLines={2}>{promotion.description}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function variantForCategory(name = '', fallback = 0) {
+  const value = name.toLowerCase();
+  if (value.includes('drink') || value.includes('beverage') || value.includes('juice') || value.includes('sweet')) return 'drinks';
+  if (value.includes('alcohol') || value.includes('beer') || value.includes('wine')) return 'bottles';
+  if (value.includes('ice') || value.includes('cream') || value.includes('dessert') || value.includes('sweet')) return 'icecream';
+  if (value.includes('grocery') || value.includes('store')) return 'basket';
+  if (value.includes('african') || value.includes('main') || value.includes('meal') || value.includes('food')) return 'meal';
+  return ['meal', 'basket', 'drinks', 'bottles', 'icecream'][fallback % 5];
+}
+
+function CategoryTile({ label, variant, active, onPress, featured = false, badge = '' }) {
+  return (
+    <Pressable style={[featured ? styles.categoryTileLarge : styles.categoryTileSmall, active && styles.categoryTileActive]} onPress={onPress}>
+      {badge ? <Text style={styles.categoryBadge}>{badge}</Text> : null}
+      <CategorySvg variant={variant} large={featured} />
+      <Text style={[styles.categoryTileText, active && styles.categoryTileTextActive]} numberOfLines={1}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function CategorySvg({ variant, large }) {
+  const size = large ? 62 : 46;
+  if (variant === 'basket') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 64 64">
+        <Rect x="14" y="25" width="38" height="25" rx="4" fill="#ef4d23" />
+        <Path d="M18 25l8-10M46 25l-8-10" stroke="#7a2b16" strokeWidth="4" strokeLinecap="round" />
+        <Rect x="20" y="18" width="11" height="22" rx="2" fill="#fff4d7" />
+        <Rect x="33" y="13" width="10" height="25" rx="2" fill="#dbeafe" />
+        <Path d="M15 31h37M18 39h32" stroke="#9c2f16" strokeWidth="3" />
+      </Svg>
+    );
+  }
+  if (variant === 'drinks' || variant === 'bottles') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 64 64">
+        <Rect x="29" y="12" width="9" height="39" rx="4" fill="#8b3a17" />
+        <Rect x="30" y="8" width="7" height="8" rx="2" fill="#d7a15a" />
+        <Rect x="22" y="31" width="10" height="21" rx="4" fill="#f2a23a" />
+        <Rect x="40" y="24" width="8" height="28" rx="4" fill="#2f5f9f" />
+        <Circle cx="18" cy="45" r="8" fill="#6ee7f9" />
+        <Circle cx="18" cy="45" r="5" fill="#ff8a3d" />
+      </Svg>
+    );
+  }
+  if (variant === 'icecream') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 64 64">
+        <Path d="M31 12c12 10 8 23-4 27 2-9-9-11 4-27z" fill="#ff7b54" />
+        <Path d="M33 16c7 9 2 17-8 20 3-7-2-10 8-20z" fill="#ffd0b8" />
+        <Ellipse cx="28" cy="42" rx="15" ry="8" fill="#9dd8ff" />
+        <Path d="M18 42c5 10 17 11 27 0" fill="#4766d8" opacity="0.7" />
+        <Circle cx="48" cy="47" r="5" fill="#d71920" />
+        <Path d="M50 42c2-5 5-7 8-8" stroke="#4c7a38" strokeWidth="2" />
+      </Svg>
+    );
+  }
+  if (variant === 'more') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 64 64">
+        <Circle cx="22" cy="32" r="4" fill="#d71920" />
+        <Circle cx="32" cy="32" r="4" fill="#111827" />
+        <Circle cx="42" cy="32" r="4" fill="#111827" />
+      </Svg>
+    );
+  }
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64">
+      <Ellipse cx="32" cy="38" rx="22" ry="13" fill="#b91c1c" />
+      <Ellipse cx="32" cy="35" rx="18" ry="10" fill="#fff4d7" />
+      <Circle cx="24" cy="34" r="5" fill="#34d399" />
+      <Circle cx="33" cy="36" r="5" fill="#f97316" />
+      <Circle cx="42" cy="33" r="5" fill="#ef4444" />
+      <Path d="M17 35c9 9 21 10 31 0" stroke="#7f1d1d" strokeWidth="3" fill="none" />
+    </Svg>
+  );
+}
+
+function MealsView({ title, items, favorites, onOpen, onFavorite, onShare, language }) {
+  const categories = groupMealsByCategory(items);
+  return (
+    <View>
+      <Text style={styles.pageTitle}>{title}</Text>
+      {items.length ? categories.map((category) => (
+        <CategoryMealSection key={category.name} category={category} favorites={favorites} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />
+      )) : <Text style={styles.emptyText}>{t(language, 'noMeals')}</Text>}
+    </View>
+  );
+}
+
+function CategoryMealSection({ category, favorites, onOpen, onFavorite, onShare }) {
+  return (
+    <View style={styles.categorySection}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.categoryTitle}>{category.name}</Text>
+        <Text style={styles.sectionCount}>{category.items.length}</Text>
+      </View>
+      <View style={styles.mealGrid}>
+        {category.items.map((item) => (
+          <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function FeaturedMealCard({ item, favorite, onOpen, onFavorite, onShare }) {
+  return (
+    <Pressable style={styles.featuredMealCard} onPress={() => onOpen(item)}>
+      <Image source={{ uri: item.imageUrl || fallbackImage }} style={styles.featuredMealImage} />
+      <Pressable style={styles.shareButton} onPress={() => onShare(item)}>
+        <Ionicons name="share-social-outline" size={18} color="#29384d" />
+      </Pressable>
+      <Pressable style={styles.favoriteButton} onPress={() => onFavorite(item.id)}>
+        <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={18} color={favorite ? brandRed : '#666'} />
+      </Pressable>
+      <View style={styles.featuredMealBody}>
+        <Text style={styles.mealName} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.mealMeta}>{item.category?.name || 'Kitchen'}</Text>
+        <Text style={styles.mealPrice}>{formatMoney(item.price)}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function OrdersView({ orders, activeOrders, language, onOpen }) {
+  const mergedOrders = [
+    ...activeOrders,
+    ...orders.filter((order) => !activeOrders.some((active) => active.id === order.id))
+  ];
+  return (
+    <View>
+      <Text style={styles.pageTitle}>{t(language, 'orders')}</Text>
+      {mergedOrders.length ? mergedOrders.map((order) => (
+        <Pressable key={order.id || order.orderNo} style={styles.orderCard} onPress={() => onOpen(order)}>
+          <View style={styles.orderCardTop}>
+            <Text style={styles.orderNo}>{order.orderNo}</Text>
+            <Ionicons name="chevron-forward" size={20} color="#07142a" />
+          </View>
+          <Text style={styles.orderMeta}>{(order.items || []).length} items - {formatMoney(order.total)}</Text>
+          <Text style={styles.status}>{(order.status || 'PENDING').replaceAll('_', ' ')}</Text>
+          {order.isGift ? <Text style={styles.orderMeta}>For {order.recipientName}</Text> : null}
+          <Text style={styles.orderMeta}>{order.deliveryAddress}</Text>
+        </Pressable>
+      )) : <Text style={styles.emptyText}>No orders yet.</Text>}
+    </View>
+  );
+}
+
+function OrderDetailModal({ visible, order, onClose }) {
+  if (!order) return null;
+  const items = order.items || [];
+  const deliveryFeeValue = Number(order.deliveryFee || 0);
+  const serviceFeeValue = Number(order.serviceFee || order.tax || 0);
+  const subtotalValue = items.reduce((sum, item) => sum + orderItemTotal(item), 0);
+  const totalValue = Number(order.total || subtotalValue + deliveryFeeValue + serviceFeeValue);
+  return (
+    <Modal visible={visible} animationType="slide">
+      <SafeAreaView style={styles.detailScreen}>
+        <View style={styles.checkoutHeader}>
+          <Pressable onPress={onClose}><Ionicons name="chevron-back" size={26} color="#111" /></Pressable>
+          <Text style={styles.checkoutTitle}>Order details</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        <ScrollView contentContainerStyle={styles.checkoutBody}>
+          <View style={styles.orderDetailSummary}>
+            <Text style={styles.orderDetailNo}>{order.orderNo || 'Order'}</Text>
+            <Text style={styles.status}>{(order.status || 'PENDING').replaceAll('_', ' ')}</Text>
+            <Text style={styles.orderMeta}>{order.customerName || 'Customer'}</Text>
+            <Text style={styles.orderMeta}>{order.customerPhone}</Text>
+            <Text style={styles.orderMeta}>{order.deliveryAddress || 'Not provided'}</Text>
+          </View>
+          <View style={styles.checkoutList}>
+            {items.length ? items.map((item, index) => (
+              <View key={item.id || `${item.menuItemId || item.name}-${index}`} style={styles.orderDetailItem}>
+                <View style={styles.checkoutItemInfo}>
+                  <Text style={styles.checkoutItemName}>{orderItemName(item)}</Text>
+                  {item.variationName ? <Text style={styles.checkoutItemVariation}>{item.variationName}</Text> : null}
+                  <Text style={styles.checkoutItemMeta}>{item.quantity || 1} item</Text>
+                </View>
+                <Text style={styles.priceValue}>{formatMoney(orderItemTotal(item))}</Text>
+              </View>
+            )) : <Text style={styles.emptyText}>No order items available.</Text>}
+          </View>
+          {order.isGift ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Gift recipient</Text>
+              <Text style={styles.cardCopy}>{order.recipientName} - {order.recipientPhone}</Text>
+              {order.recipientAddress ? <Text style={styles.cardCopy}>{order.recipientAddress}</Text> : null}
+            </View>
+          ) : null}
+          {order.deliveryNote ? (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Restaurant note</Text>
+              <Text style={styles.cardCopy}>{order.deliveryNote}</Text>
+            </View>
+          ) : null}
+          <PriceRows subtotal={subtotalValue} deliveryFee={deliveryFeeValue} serviceFee={serviceFeeValue} total={totalValue} />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   );
 }
 
@@ -834,10 +1175,16 @@ function ProfileView({ customer, customerForm, setCustomerForm, language, choose
       <View style={styles.profileHeader}>
         <Pressable onPress={onPickAvatar}>
           {customer.profileImageUrl ? <Image source={{ uri: customer.profileImageUrl }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Ionicons name="person" size={34} color="#fff" /></View>}
+          <View style={styles.avatarEditBadge}>
+            <Ionicons name="camera" size={14} color="#fff" />
+          </View>
         </Pressable>
         <View style={styles.profileNameBox}>
           <Text style={styles.profileName}>{customer.name}</Text>
           <Text style={styles.profilePhone}>{customer.phone}</Text>
+          <Pressable style={styles.avatarUploadButton} onPress={onPickAvatar} disabled={saving}>
+            <Text style={styles.avatarUploadText}>{saving ? t(language, 'uploading') : 'Upload profile image'}</Text>
+          </Pressable>
         </View>
       </View>
       <View style={styles.statsRow}>
@@ -888,62 +1235,176 @@ function ProfileView({ customer, customerForm, setCustomerForm, language, choose
   );
 }
 
-function CheckoutModal({ visible, language, cart, fulfillment, setFulfillment, orderForm, setOrderForm, updateQty, subtotal, deliveryFee, serviceFee, total, saving, onClose, onSubmit }) {
+function ProfileModal({ visible, onClose, ...profileProps }) {
   return (
     <Modal visible={visible} animationType="slide">
       <SafeAreaView style={styles.detailScreen}>
         <View style={styles.checkoutHeader}>
-          <Text style={styles.pageTitle}>{t(language, 'checkout')}</Text>
+          <Text style={styles.pageTitle}>{t(profileProps.language, 'profile')}</Text>
           <Pressable onPress={onClose}><Ionicons name="close" size={26} color="#111" /></Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.checkoutBody}>
-          <View style={styles.segment}>
-            {['delivery', 'reserve'].map((item) => (
-              <Pressable key={item} style={[styles.segmentButton, fulfillment === item && styles.segmentActive]} onPress={() => setFulfillment(item)}>
-                <Text style={[styles.segmentText, fulfillment === item && styles.segmentTextActive]}>{t(language, item)}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {fulfillment === 'delivery' ? <Field label={t(language, 'deliveryAddress')} value={orderForm.deliveryAddress} onChangeText={(deliveryAddress) => setOrderForm({ ...orderForm, deliveryAddress })} /> : null}
-          <View style={styles.giftRow}>
-            <Text style={styles.cardTitle}>{t(language, 'orderForLovedOne')}</Text>
-            <Switch value={orderForm.isGift} onValueChange={(isGift) => setOrderForm({ ...orderForm, isGift })} trackColor={{ true: '#ffd8dc' }} thumbColor={orderForm.isGift ? brandRed : '#f4f4f5'} />
-          </View>
-          {orderForm.isGift ? (
-            <>
-              <Field label={t(language, 'recipientName')} value={orderForm.recipientName} onChangeText={(recipientName) => setOrderForm({ ...orderForm, recipientName })} />
-              <Field label={t(language, 'recipientPhone')} value={orderForm.recipientPhone} onChangeText={(recipientPhone) => setOrderForm({ ...orderForm, recipientPhone })} keyboardType="phone-pad" />
-              {fulfillment === 'delivery' ? <Field label={t(language, 'recipientAddress')} value={orderForm.recipientAddress} onChangeText={(recipientAddress) => setOrderForm({ ...orderForm, recipientAddress })} /> : null}
-            </>
-          ) : null}
-          <Field label={t(language, 'noteOptional')} value={orderForm.deliveryNote} onChangeText={(deliveryNote) => setOrderForm({ ...orderForm, deliveryNote })} multiline />
-          {cart.length ? cart.map((item) => (
-            <View key={item.cartItemId} style={styles.cartRow}>
-              <Image source={{ uri: item.imageUrl || fallbackImage }} style={styles.cartImage} />
-              <View style={styles.cartInfo}>
-                <Text style={styles.cartName}>{item.name}</Text>
-                <Text style={styles.mealPrice}>{formatMoney(item.price * item.quantity)}</Text>
-              </View>
-              <View style={styles.qtyBox}>
-                <Pressable onPress={() => updateQty(item.cartItemId, -1)}><Ionicons name="remove" size={18} /></Pressable>
-                <Text style={styles.qtyText}>{item.quantity}</Text>
-                <Pressable onPress={() => updateQty(item.cartItemId, 1)}><Ionicons name="add" size={18} /></Pressable>
-              </View>
-            </View>
-          )) : <Text style={styles.emptyText}>{t(language, 'emptyCart')}</Text>}
-          <View style={styles.totalBox}>
-            <Text style={styles.totalLine}>Items: {formatMoney(subtotal)}</Text>
-            <Text style={styles.totalLine}>Promotion: -{formatMoney(0)}</Text>
-            <Text style={styles.totalLine}>Delivery: {formatMoney(deliveryFee)}</Text>
-            <Text style={styles.totalLine}>Taxes & other fees: {formatMoney(serviceFee)}</Text>
-            <Text style={styles.totalValue}>Total: {formatMoney(total)}</Text>
-          </View>
-          <Pressable style={[styles.primaryButton, saving && styles.disabled]} onPress={onSubmit} disabled={saving}>
-            <Text style={styles.primaryButtonText}>{saving ? t(language, 'checking') : t(language, 'confirmOrder')}</Text>
-          </Pressable>
+          <ProfileView {...profileProps} />
         </ScrollView>
       </SafeAreaView>
     </Modal>
+  );
+}
+
+function CheckoutItem({ item, address, updateQty }) {
+  return (
+    <View style={styles.checkoutItem}>
+      <Image source={{ uri: item.imageUrl || fallbackImage }} style={styles.checkoutItemImage} />
+      <View style={styles.checkoutItemInfo}>
+        <Text style={styles.checkoutItemName} numberOfLines={1}>{item.name}</Text>
+        {item.variationName ? <Text style={styles.checkoutItemVariation} numberOfLines={1}>{item.variationName}</Text> : null}
+        <Text style={styles.checkoutItemMeta}>{item.quantity} item - {formatMoney(item.price * item.quantity)}</Text>
+        <Text style={styles.checkoutItemMeta} numberOfLines={1}>Deliver to {address || 'Bonanjo Biyamassi'}</Text>
+      </View>
+      <Pressable style={styles.checkoutRemove} onPress={() => updateQty(item.cartItemId, -999)}>
+        <Ionicons name="trash-outline" size={16} color={brandRed} />
+      </Pressable>
+      <View style={styles.checkoutQty}>
+        <Pressable onPress={() => updateQty(item.cartItemId, -1)}><Ionicons name="remove" size={17} color="#5f646b" /></Pressable>
+        <Text style={styles.qtyText}>{item.quantity}</Text>
+        <Pressable onPress={() => updateQty(item.cartItemId, 1)}><Ionicons name="add" size={17} color="#5f646b" /></Pressable>
+      </View>
+    </View>
+  );
+}
+
+function PriceRows({ subtotal, deliveryFee, serviceFee, total }) {
+  return (
+    <View style={styles.priceRows}>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>Subtotal</Text><Text style={styles.priceValue}>{formatMoney(subtotal)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>Promotion</Text><Text style={styles.discountValue}>-{formatMoney(0)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>Delivery fee</Text><Text style={styles.priceValue}>{formatMoney(deliveryFee)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>Taxes & Other fees</Text><Text style={styles.priceValue}>{formatMoney(serviceFee)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>Total</Text><Text style={styles.priceTotal}>{formatMoney(total)}</Text></View>
+    </View>
+  );
+}
+
+function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, setFulfillment, orderForm, setOrderForm, updateQty, subtotal, deliveryFee, serviceFee, total, saving, onClose, onShop, onSubmit }) {
+  return (
+    <Modal visible={visible} animationType="slide">
+      <SafeAreaView style={styles.detailScreen}>
+        <View style={styles.checkoutHeader}>
+          <Pressable onPress={step === 'details' ? () => setStep('cart') : onClose}><Ionicons name={step === 'details' ? 'chevron-back' : 'close'} size={26} color="#111" /></Pressable>
+          <Text style={styles.checkoutTitle}>{t(language, 'checkout')}</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+        {step === 'cart' ? (
+          cart.length ? (
+            <ScrollView contentContainerStyle={styles.checkoutBodyFlush}>
+              <View style={styles.checkoutList}>
+                {cart.map((item) => <CheckoutItem key={item.cartItemId} item={item} address={orderForm.deliveryAddress} updateQty={updateQty} />)}
+              </View>
+              <View style={styles.cartTotals}>
+                <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>Items Total</Text><Text style={styles.priceValue}>{formatMoney(subtotal)}</Text></View>
+                <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>Delivery</Text><Text style={styles.priceValue}>{formatMoney(deliveryFee)}</Text></View>
+                <View style={styles.cartGrandTotal}><Text style={styles.priceTotalLabel}>Total</Text><Text style={styles.priceTotal}>{formatMoney(total)}</Text></View>
+              </View>
+              <View style={styles.checkoutCtaBox}>
+                <Pressable style={styles.checkoutButton} onPress={() => setStep('details')}>
+                  <Text style={styles.primaryButtonText}>Proceed to Check out</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          ) : (
+            <View style={styles.emptyCartScreen}>
+              <Ionicons name="bag-outline" size={82} color={brandRed} />
+              <Text style={styles.emptyCartTitle}>Add items to start a basket</Text>
+              <Text style={styles.emptyCartCopy}>OOPPSS your cart is empty to view items try adding an item to cart</Text>
+              <Pressable style={styles.checkoutButton} onPress={onShop}>
+                <Text style={styles.primaryButtonText}>Start Shopping</Text>
+              </Pressable>
+            </View>
+          )
+        ) : (
+          <ScrollView contentContainerStyle={styles.checkoutBodyFlush}>
+            <View style={styles.segmentPill}>
+              {['delivery', 'reserve'].map((item) => (
+                <Pressable key={item} style={[styles.segmentPillButton, fulfillment === item && styles.segmentPillActive]} onPress={() => setFulfillment(item)}>
+                  <Text style={styles.segmentPillText}>{t(language, item)}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <View style={styles.detailRows}>
+              <FieldRow icon="location" label={fulfillment === 'delivery' ? 'Delivery address' : 'Reserve onsite'} hint={fulfillment === 'delivery' ? 'Tell us where to deliver your order.' : 'No delivery details are needed for reserve orders.'}>
+                {fulfillment === 'delivery' ? (
+                  <TextInput style={styles.rowInput} placeholder="Example: Bonanjo, street, landmark" placeholderTextColor="#9aa4ad" value={orderForm.deliveryAddress} onChangeText={(deliveryAddress) => setOrderForm({ ...orderForm, deliveryAddress })} />
+                ) : (
+                  <Text style={styles.rowStatic}>You will come onsite to pick up the meal.</Text>
+                )}
+              </FieldRow>
+              {fulfillment === 'delivery' ? (
+                <>
+                  <FieldRow icon="person" label="Your name" hint="The restaurant will use this name for your order.">
+                    <TextInput style={styles.rowInput} placeholder="Example: Amina N." placeholderTextColor="#9aa4ad" value={orderForm.customerName} onChangeText={(customerName) => setOrderForm({ ...orderForm, customerName })} />
+                  </FieldRow>
+                  <FieldRow icon="call" label="Phone number" hint="We need this to confirm your order if necessary.">
+                    <TextInput style={styles.rowInput} placeholder="Example: 671286999" placeholderTextColor="#9aa4ad" value={orderForm.customerPhone} onChangeText={(customerPhone) => setOrderForm({ ...orderForm, customerPhone })} keyboardType="phone-pad" />
+                  </FieldRow>
+                </>
+              ) : null}
+            </View>
+            <View style={styles.giftPanel}>
+              <View style={styles.giftText}>
+                <Text style={styles.cardTitle}>Order this meal for someone else</Text>
+                <Text style={styles.cardCopy}>Add their name and phone so the restaurant knows who should receive or collect the meal.</Text>
+              </View>
+              <Switch value={orderForm.isGift} onValueChange={(isGift) => setOrderForm({ ...orderForm, isGift })} trackColor={{ true: '#ffd8dc' }} thumbColor={orderForm.isGift ? brandRed : '#f4f4f5'} />
+            </View>
+            {orderForm.isGift ? (
+              <View style={styles.giftFields}>
+                <Field label="Loved one's name" value={orderForm.recipientName} onChangeText={(recipientName) => setOrderForm({ ...orderForm, recipientName })} />
+                <Field label="Loved one's phone" value={orderForm.recipientPhone} onChangeText={(recipientPhone) => setOrderForm({ ...orderForm, recipientPhone })} keyboardType="phone-pad" />
+                {fulfillment === 'delivery' ? <Field label="Loved one's delivery address" value={orderForm.recipientAddress} onChangeText={(recipientAddress) => setOrderForm({ ...orderForm, recipientAddress })} /> : null}
+              </View>
+            ) : null}
+            <View style={styles.deliveryTimeRow}>
+              <Text style={styles.priceTotalLabel}>{fulfillment === 'delivery' ? 'Delivery time' : 'Reserve time'}</Text>
+              <Text style={styles.priceValue}>{fulfillment === 'delivery' ? '15-30 min(s)' : 'Restaurant confirmation'}</Text>
+            </View>
+            <View style={styles.noteBox}>
+              <Text style={styles.noteLabel}>Leave a message for the restaurant (optional)</Text>
+              <TextInput style={styles.noteInput} placeholder="Example: less pepper, call before delivery, no onions" placeholderTextColor="#9aa4ad" value={orderForm.deliveryNote} onChangeText={(deliveryNote) => setOrderForm({ ...orderForm, deliveryNote })} multiline />
+            </View>
+            <View style={styles.checkoutSectionHeader}>
+              <Text style={styles.priceTotalLabel}>Your items</Text>
+              <Pressable onPress={onShop}><Text style={styles.seeMenu}>see menu</Text></Pressable>
+            </View>
+            <View style={styles.checkoutList}>
+              {cart.map((item) => <CheckoutItem key={item.cartItemId} item={item} address={orderForm.deliveryAddress} updateQty={updateQty} />)}
+            </View>
+            <Pressable style={styles.addMoreButton} onPress={onShop}>
+              <Ionicons name="add" size={16} color="#07142a" />
+              <Text style={styles.addMoreText}>Add more items</Text>
+            </Pressable>
+            <PriceRows subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} total={total} />
+            <View style={styles.checkoutCtaBox}>
+              <Pressable style={[styles.checkoutButton, (saving || !cart.length) && styles.disabled]} onPress={onSubmit} disabled={saving || !cart.length}>
+                <Text style={styles.primaryButtonText}>{saving ? 'Placing order...' : 'Confirm order'}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function FieldRow({ icon, label, hint, children }) {
+  return (
+    <View style={styles.fieldRow}>
+      <Ionicons name={icon} size={25} color="#07142a" />
+      <View style={styles.fieldRowBody}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {children}
+        <Text style={styles.fieldHint}>{hint}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -1057,8 +1518,7 @@ function BottomTabs({ tab, setTab, language }) {
     ['meals', 'restaurant-outline', t(language, 'meals')],
     ['support', 'headset-outline', t(language, 'support')],
     ['favorites', 'heart-outline', t(language, 'favorites')],
-    ['orders', 'receipt-outline', t(language, 'orders')],
-    ['profile', 'person-outline', t(language, 'profile')]
+    ['orders', 'receipt-outline', t(language, 'orders')]
   ];
   return (
     <View style={styles.bottomTabs}>
@@ -1073,7 +1533,8 @@ function BottomTabs({ tab, setTab, language }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#eaf5f8' },
+  safe: { flex: 1, backgroundColor: '#eaf5f8', paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight || 0 : 0 },
+  appSafe: { flex: 1, backgroundColor: '#eaf5f8' },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   loaderPlate: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', padding: 28 },
   loaderLogo: { width: 116, height: 116, borderRadius: 30 },
@@ -1106,11 +1567,15 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 48, borderRadius: 16, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
   primaryButtonText: { color: '#fff', fontWeight: '900' },
   disabled: { opacity: 0.55 },
-  header: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   logo: { width: 42, height: 42, borderRadius: 12 },
   brand: { color: brandRed, fontWeight: '900', fontSize: 18 },
-  location: { color: '#29384d', fontWeight: '800', maxWidth: 230 },
+  location: { color: '#29384d', fontWeight: '800', maxWidth: 170 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerIconButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  profileButton: { width: 42, height: 42, borderRadius: 21, overflow: 'hidden', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  profileButtonImage: { width: '100%', height: '100%' },
   cartButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   cartBadge: { position: 'absolute', top: -4, right: -2, backgroundColor: brandRed, color: '#fff', borderRadius: 9, overflow: 'hidden', minWidth: 18, textAlign: 'center', fontSize: 11, fontWeight: '900' },
   searchBox: { marginHorizontal: 16, height: 46, borderWidth: 1, borderColor: '#f15b66', borderRadius: 16, backgroundColor: '#fff', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center' },
@@ -1118,6 +1583,24 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentBody: { padding: 16, paddingBottom: 100 },
   pageTitle: { fontSize: 24, fontWeight: '900', color: '#151923', marginBottom: 14 },
+  categoryQuickAccess: { marginBottom: 12, gap: 8 },
+  categoryGridTop: { flexDirection: 'row', gap: 12 },
+  categoryGridBottom: { flexDirection: 'row', gap: 10 },
+  categoryTileLarge: { flex: 1, height: 106, borderRadius: 12, backgroundColor: '#eef3f4', padding: 12, justifyContent: 'space-between', overflow: 'visible' },
+  categoryTileSmall: { flex: 1, minWidth: 0, height: 82, borderRadius: 8, backgroundColor: '#eef3f4', paddingVertical: 7, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'space-between', overflow: 'visible' },
+  categoryTileActive: { borderWidth: 2, borderColor: '#2fbf71', backgroundColor: '#f2fbf5' },
+  categoryTileText: { alignSelf: 'flex-start', color: '#333b45', fontSize: 14, fontWeight: '900' },
+  categoryTileTextActive: { color: '#0f7f45' },
+  categoryBadge: { position: 'absolute', top: -16, alignSelf: 'center', zIndex: 2, borderRadius: 15, backgroundColor: '#23b35d', color: '#fff', paddingHorizontal: 13, paddingVertical: 4, fontSize: 15, fontWeight: '900', overflow: 'hidden' },
+  sectionBlock: { marginTop: 6, marginBottom: 16 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  sectionCount: { color: '#6d6f76', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  featuredMealRail: { gap: 12, paddingRight: 10 },
+  featuredMealCard: { width: 210, borderRadius: 18, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#f5c45d' },
+  featuredMealImage: { width: '100%', height: 136 },
+  featuredMealBody: { padding: 12, gap: 5 },
+  categorySection: { marginTop: 18 },
+  categoryTitle: { color: '#151923', fontSize: 19, fontWeight: '900' },
   mealGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   mealCard: { width: '48%', borderRadius: 16, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#f5c45d' },
   mealImage: { width: '100%', height: 124 },
@@ -1147,6 +1630,7 @@ const styles = StyleSheet.create({
   qtyBox: { minWidth: 88, height: 46, borderWidth: 1, borderColor: brandRed, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 8 },
   qtyText: { fontWeight: '900', color: '#151923' },
   orderCard: { backgroundColor: '#fff', borderRadius: 18, padding: 16, marginBottom: 12 },
+  orderCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   orderNo: { fontWeight: '900', color: '#151923' },
   orderMeta: { marginTop: 5, color: '#737373', fontWeight: '700' },
   status: { marginTop: 8, color: '#0b8f4f', fontWeight: '900' },
@@ -1156,6 +1640,9 @@ const styles = StyleSheet.create({
   profileHeader: { backgroundColor: '#151923', borderRadius: 24, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 76, height: 76, borderRadius: 22 },
   avatarFallback: { width: 76, height: 76, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  avatarEditBadge: { position: 'absolute', right: -5, bottom: -5, width: 28, height: 28, borderRadius: 14, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#151923' },
+  avatarUploadButton: { alignSelf: 'flex-start', marginTop: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 10, paddingVertical: 7 },
+  avatarUploadText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   profileNameBox: { flex: 1 },
   profileName: { color: '#fff', fontWeight: '900', fontSize: 22 },
   profilePhone: { color: 'rgba(255,255,255,0.7)', fontWeight: '800', marginTop: 4 },
@@ -1181,8 +1668,55 @@ const styles = StyleSheet.create({
   smallLangActive: { backgroundColor: brandRed },
   smallLangText: { color: '#737373', fontWeight: '900' },
   smallLangTextActive: { color: '#fff', fontWeight: '900' },
-  checkoutHeader: { padding: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  checkoutHeader: { minHeight: 92, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#eef8fa' },
+  checkoutTitle: { flex: 1, textAlign: 'center', fontSize: 20, color: '#07142a', fontWeight: '500' },
+  headerSpacer: { width: 26 },
   checkoutBody: { padding: 16, paddingBottom: 34, gap: 12 },
+  checkoutBodyFlush: { paddingBottom: 34 },
+  checkoutList: { backgroundColor: '#fff' },
+  checkoutItem: { minHeight: 102, borderBottomWidth: 1, borderBottomColor: '#dbe5e8', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checkoutItemImage: { width: 74, height: 74, borderRadius: 37 },
+  checkoutItemInfo: { flex: 1, paddingRight: 28 },
+  checkoutItemName: { color: '#111827', fontSize: 15, fontWeight: '600' },
+  checkoutItemVariation: { marginTop: 2, color: brandRed, fontSize: 12, fontWeight: '800' },
+  checkoutItemMeta: { marginTop: 3, color: '#6d6f76', fontSize: 13, fontWeight: '600' },
+  checkoutRemove: { position: 'absolute', right: 14, top: 12 },
+  checkoutQty: { position: 'absolute', right: 12, bottom: 8, width: 84, height: 28, borderRadius: 6, borderWidth: 1, borderColor: '#818892', backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  cartTotals: { marginTop: 20, borderTopWidth: 1, borderTopColor: '#dbe5e8', paddingHorizontal: 24, paddingTop: 14, gap: 14 },
+  cartGrandTotal: { marginTop: 22, borderTopWidth: 1, borderTopColor: '#dbe5e8', paddingTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  checkoutCtaBox: { paddingHorizontal: 24, paddingTop: 36, paddingBottom: 10 },
+  checkoutButton: { minHeight: 48, borderRadius: 6, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
+  emptyCartScreen: { flex: 1, minHeight: 620, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: '#eef8fa' },
+  emptyCartTitle: { marginTop: 18, color: '#07142a', fontSize: 20, fontWeight: '500', textAlign: 'center' },
+  emptyCartCopy: { marginTop: 12, color: '#5f646b', fontSize: 16, lineHeight: 24, textAlign: 'center' },
+  segmentPill: { marginHorizontal: 20, height: 52, borderRadius: 26, backgroundColor: '#e9e9e9', padding: 4, flexDirection: 'row', gap: 4 },
+  segmentPillButton: { flex: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  segmentPillActive: { backgroundColor: '#fff' },
+  segmentPillText: { color: '#000', fontSize: 14, fontWeight: '600', textTransform: 'capitalize' },
+  detailRows: { marginTop: 16, backgroundColor: '#fff' },
+  fieldRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, paddingHorizontal: 22, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#edf0f2', backgroundColor: '#fff' },
+  fieldRowBody: { flex: 1 },
+  rowInput: { minHeight: 28, color: '#07142a', fontSize: 16, fontWeight: '600' },
+  rowStatic: { minHeight: 28, color: '#07142a', fontSize: 16, fontWeight: '600' },
+  fieldHint: { marginTop: 4, color: '#6d6f76', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  giftPanel: { marginTop: 16, padding: 18, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  giftText: { flex: 1 },
+  giftFields: { padding: 16, gap: 12, backgroundColor: '#fff' },
+  deliveryTimeRow: { paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  noteBox: { paddingHorizontal: 22, paddingVertical: 12 },
+  noteLabel: { color: '#07142a', fontSize: 16, lineHeight: 22 },
+  noteInput: { marginTop: 8, minHeight: 112, borderWidth: 1, borderColor: '#aeb6bd', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8, textAlignVertical: 'top', color: '#07142a', fontSize: 14 },
+  checkoutSectionHeader: { paddingHorizontal: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  seeMenu: { color: '#00a35b', fontSize: 14, fontWeight: '700' },
+  addMoreButton: { alignSelf: 'flex-start', margin: 16, height: 38, borderRadius: 19, backgroundColor: '#e9e9e9', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  addMoreText: { color: '#07142a', fontSize: 14, fontWeight: '600' },
+  priceRows: { paddingHorizontal: 24, gap: 13 },
+  priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  priceLabel: { color: '#6d6f76', fontSize: 16 },
+  priceValue: { color: '#07142a', fontSize: 16, fontWeight: '600' },
+  discountValue: { color: '#00a35b', fontSize: 16, fontWeight: '600' },
+  priceTotalLabel: { color: '#07142a', fontSize: 16, fontWeight: '500' },
+  priceTotal: { color: '#07142a', fontSize: 16, fontWeight: '700' },
   giftRow: { backgroundColor: '#fff', borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cartRow: { backgroundColor: '#fff', borderRadius: 18, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   cartImage: { width: 56, height: 56, borderRadius: 14 },
@@ -1205,6 +1739,14 @@ const styles = StyleSheet.create({
   promoBody: { padding: 16, gap: 8 },
   promoEyebrow: { color: brandRed, textTransform: 'uppercase', fontSize: 11, fontWeight: '900' },
   promoTitle: { color: '#151923', fontSize: 18, fontWeight: '900' },
+  promotionStrip: { marginTop: 22, marginBottom: 6 },
+  promotionRail: { gap: 12, paddingRight: 10 },
+  promotionTile: { width: 230, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', overflow: 'hidden', paddingBottom: 12 },
+  promotionTileImage: { width: '100%', height: 106 },
+  promotionTileFallback: { height: 106, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },
+  orderDetailSummary: { backgroundColor: '#151923', borderRadius: 22, padding: 18, gap: 6 },
+  orderDetailNo: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  orderDetailItem: { minHeight: 76, borderBottomWidth: 1, borderBottomColor: '#dbe5e8', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   secondaryButton: { minHeight: 42, borderRadius: 14, backgroundColor: '#fff1ca', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   secondaryButtonText: { color: brandRed, fontWeight: '900' },
   activeOrdersBox: { backgroundColor: '#fff', borderRadius: 20, padding: 14, marginBottom: 14, gap: 10 },

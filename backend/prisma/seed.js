@@ -29,6 +29,16 @@ const appSettings = {
   supportPhone: '+237671286999'
 };
 
+const defaultMenuCategories = [
+  { name: 'African', description: 'Traditional African dishes and local favourites.', kind: 'FOOD' },
+  { name: 'Western', description: 'Western-style meals, grills, fries, and continental plates.', kind: 'FOOD' },
+  { name: 'Ice Cream', description: 'Ice cream, desserts, and sweet treats.', kind: 'FOOD' },
+  { name: 'Fruit Juice', description: 'Fresh juice and natural fruit drinks.', kind: 'DRINK' },
+  { name: 'Sweet Drinks', description: 'Soft drinks, sodas, and sweet beverages.', kind: 'DRINK' },
+  { name: 'Alcohol', description: 'Beer, wine, spirits, and alcoholic beverages.', kind: 'DRINK' },
+  { name: 'Grocery', description: 'Packaged grocery and convenience products.', kind: 'OTHER' }
+];
+
 async function main() {
   const adminPasswordHash = await bcrypt.hash('@data&Chop.com', 12);
   const adminRole = await prisma.role.upsert({
@@ -73,6 +83,19 @@ async function main() {
     update: appSettings,
     create: appSettings
   });
+
+  await Promise.all(
+    defaultMenuCategories.map((category) =>
+      prisma.menuCategory.upsert({
+        where: { name: category.name },
+        update: {
+          description: category.description,
+          kind: category.kind
+        },
+        create: category
+      })
+    )
+  );
 }
 
 main()

@@ -18,6 +18,7 @@
       "bundleIdentifier": "com.chopasap.mobile"
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/chopasap-logo.png",
         "backgroundColor": "#ffffff"

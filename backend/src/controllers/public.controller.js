@@ -31,12 +31,15 @@ const createReferralCode = async (tx, name, phone) => {
 };
 
 export const publicMenu = asyncHandler(async (_req, res) => {
-  const items = await prisma.menuItem.findMany({
-    where: { isAvailable: true },
-    include: menuInclude,
-    orderBy: { name: 'asc' }
-  });
-  res.json({ items });
+  const [items, categories] = await Promise.all([
+    prisma.menuItem.findMany({
+      where: { isAvailable: true },
+      include: menuInclude,
+      orderBy: { name: 'asc' }
+    }),
+    prisma.menuCategory.findMany({ orderBy: { name: 'asc' } })
+  ]);
+  res.json({ items, categories });
 });
 
 export const createOnlineOrder = asyncHandler(async (req, res) => {
