@@ -22,10 +22,18 @@ export default function Menu() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [categoryForm, setCategoryForm] = useState({ name: '', description: '', kind: 'FOOD' });
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [savingCategoryId, setSavingCategoryId] = useState('');
 
   useEffect(() => {
     endpoints.menuCategories().then((res) => setCategories(res.data));
   }, []);
+
+  const reloadCategories = async () => {
+    const res = await endpoints.menuCategories();
+    setCategories(res.data);
+  };
 
   const submit = async (event) => {
     event.preventDefault();
@@ -110,6 +118,35 @@ export default function Menu() {
     }
   };
 
+  const submitCategory = async (event) => {
+    event.preventDefault();
+    setSavingCategory(true);
+    try {
+      await endpoints.createMenuCategory(categoryForm);
+      toast.success('Category added');
+      setCategoryForm({ name: '', description: '', kind: 'FOOD' });
+      reloadCategories();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not save category');
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const updateCategoryKind = async (category, kind) => {
+    setSavingCategoryId(category.id);
+    try {
+      await endpoints.updateMenuCategory(category.id, { kind });
+      toast.success('Category type updated');
+      reloadCategories();
+      refetch();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not update category');
+    } finally {
+      setSavingCategoryId('');
+    }
+  };
+
   const remove = async (item) => {
     if (!confirm(`Delete ${item.name}?`)) return;
     setBusyId(item.id);
@@ -134,6 +171,28 @@ export default function Menu() {
         description="Create dishes, set prices, upload visuals, and control public availability."
         action={<button className="btn-primary" onClick={() => openEditor()}><Plus size={18} /> Add item</button>}
       />
+      <form className="card mb-5 grid gap-3 p-4 lg:grid-cols-[1fr_1fr_170px_auto]" onSubmit={submitCategory}>
+        <input className="input" placeholder="New category name" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} required />
+        <input className="input" placeholder="Category note" value={categoryForm.description} onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })} />
+        <select className="input" value={categoryForm.kind} onChange={(e) => setCategoryForm({ ...categoryForm, kind: e.target.value })}>
+          <option value="FOOD">Food</option>
+          <option value="DRINK">Drink</option>
+          <option value="OTHER">Other</option>
+        </select>
+        <button className="btn-secondary" disabled={savingCategory}><Plus size={17} /> {savingCategory ? 'Adding...' : 'Add category'}</button>
+      </form>
+      <div className="mb-5 flex flex-wrap gap-2">
+        {categories.map((category) => (
+          <label key={category.id} className="flex items-center gap-2 rounded-xl border border-[#dbe5e8] bg-white px-3 py-2 text-sm font-semibold">
+            <span>{category.name}</span>
+            <select className="h-8 rounded-lg border border-[#dbe5e8] bg-brand-50 px-2 text-xs font-black uppercase" disabled={savingCategoryId === category.id} value={category.kind || 'FOOD'} onChange={(e) => updateCategoryKind(category, e.target.value)}>
+              <option value="FOOD">Food</option>
+              <option value="DRINK">Drink</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </label>
+        ))}
+      </div>
       <DataTable
         rows={data.items || []}
         columns={[
@@ -147,7 +206,16 @@ export default function Menu() {
               </div>
             )
           },
-          { key: 'category', label: 'Category', render: (row) => row.category?.name },
+          {
+            key: 'category',
+            label: 'Category',
+            render: (row) => (
+              <div>
+                <p>{row.category?.name}</p>
+                <p className="text-xs font-black uppercase text-stone-400">{row.category?.kind || 'FOOD'}</p>
+              </div>
+            )
+          },
           { key: 'price', label: 'Price', render: (row) => currency(row.price) },
           {
             key: 'variations',

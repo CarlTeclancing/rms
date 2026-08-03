@@ -4,7 +4,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/reports/sales', authenticate, authorize('reports:read'), salesReport);
+router.get('/reports/sales', authenticate, authorize('reports:read', 'sales:read'), salesReport);
 router.get('/reports/expenses', authenticate, authorize('reports:read'), expensesReport);
 
 export default router;

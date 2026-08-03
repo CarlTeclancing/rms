@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './layouts/AppLayout.jsx';
 import { useAuth } from './context/AuthContext.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import Debtors from './pages/Debtors.jsx';
 import BusinessIntelligence from './pages/BusinessIntelligence.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Login from './pages/Login.jsx';
@@ -11,6 +12,7 @@ import PublicPortal from './pages/PublicPortal.jsx';
 import Promotions from './pages/Promotions.jsx';
 import Reports from './pages/Reports.jsx';
 import Sales from './pages/Sales.jsx';
+import SalesHistory from './pages/SalesHistory.jsx';
 import Settings from './pages/Settings.jsx';
 import Stock from './pages/Stock.jsx';
 import Users from './pages/Users.jsx';
@@ -32,6 +34,8 @@ export default function App() {
         <Route path="admin" element={<Dashboard />} />
         <Route path="sales" element={<Sales />} />
         <Route path="online-orders" element={<OnlineOrders />} />
+        <Route path="history" element={<SalesHistory />} />
+        <Route path="debtors" element={<Debtors />} />
         <Route path="menu" element={<Menu />} />
         <Route path="stock" element={<Stock />} />
         <Route path="expenses" element={<Expenses />} />

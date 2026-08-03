@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "ChopASAP",
+    "slug": "chopasap",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/chopasap-logo.png",
+    "scheme": "chopasap",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/chopasap-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#eaf5f8"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.chopasap.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/chopasap-logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.chopasap.mobile"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "replace-with-eas-project-id"
+      }
+    }
+  }
+}

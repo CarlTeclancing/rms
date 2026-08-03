@@ -34,7 +34,7 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Today's sales" value={currency(data.dailySales)} icon={Banknote} detail={`Online: ${currency(data.dailyOnlineOrdersTotal || 0)}`} />
         <StatCard title="Last 30 days sales" value={currency(data.monthlySales)} icon={TrendingUp} tone="blue" detail={`Online: ${currency(data.onlineOrdersTotal || 0)}`} />
-        <StatCard title="Last 30 days expenses" value={currency(data.monthlyExpenses)} icon={ReceiptText} tone="amber" />
+        {data.canViewFinancialReports ? <StatCard title="Last 30 days expenses" value={currency(data.monthlyExpenses)} icon={ReceiptText} tone="amber" /> : null}
         <StatCard title="Low stock alerts" value={data.lowStockCount} icon={AlertTriangle} tone="rose" detail="Items at or below reorder level" />
       </div>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">

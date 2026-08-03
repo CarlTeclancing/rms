@@ -27,7 +27,7 @@ export default function OnlineOrders() {
   const [updatingId, setUpdatingId] = useState('');
   const orders = data?.items || [];
   const activeOrders = orders.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status));
-  const totalRevenue = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const totalRevenue = orders.filter((order) => order.status === 'DELIVERED').reduce((sum, order) => sum + Number(order.total || 0), 0);
 
   const updateOrderStatus = async (id, status) => {
     setUpdatingId(id);
@@ -60,7 +60,7 @@ export default function OnlineOrders() {
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
         <StatCard title="Total orders" value={orders.length} icon={ClipboardList} detail="Latest 100 portal orders" />
         <StatCard title="Active orders" value={activeOrders.length} icon={Truck} tone="blue" detail="Not delivered or cancelled" />
-        <StatCard title="Online revenue" value={currency(totalRevenue)} icon={ClipboardList} tone="amber" detail="From listed online orders" />
+        <StatCard title="Online revenue" value={currency(totalRevenue)} icon={ClipboardList} tone="amber" detail="Delivered orders only" />
       </div>
 
       {orders.length ? (

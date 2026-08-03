@@ -7,6 +7,7 @@ import {
   listIngredients,
   listMenuCategories,
   listMenuItems,
+  updateMenuCategory,
   updateMenuItem
 } from '../controllers/menu.controller.js';
 import { authenticate, authorize } from '../middleware/auth.js';
@@ -26,6 +27,7 @@ router.put('/menu-items/:id', authenticate, authorize('menu:write'), updateMenuI
 router.delete('/menu-items/:id', authenticate, authorize('menu:write'), deleteMenuItem);
 router.get('/menu-categories', authenticate, listMenuCategories);
 router.post('/menu-categories', authenticate, authorize('menu:write'), [body('name').notEmpty(), validate], createMenuCategory);
+router.put('/menu-categories/:id', authenticate, authorize('menu:write'), updateMenuCategory);
 router.get('/ingredients', authenticate, listIngredients);
 
 export default router;

@@ -5,6 +5,8 @@ import {
   ChefHat,
   ChevronLeft,
   ChevronRight,
+  CircleDollarSign,
+  History,
   LineChart,
   Home,
   LogOut,
@@ -23,17 +25,19 @@ import { ErrorBoundary } from '../components/ErrorBoundary.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 
 const navItems = [
-  { to: '/admin', label: 'Dashboard', icon: Home },
-  { to: '/sales', label: 'Sales', icon: ShoppingCart },
-  { to: '/online-orders', label: 'Orders', icon: ShoppingBag },
-  { to: '/stock', label: 'Stock', icon: Boxes },
-  { to: '/expenses', label: 'Expenses', icon: ReceiptText },
-  { to: '/menu', label: 'Menu', icon: ChefHat },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/business-intelligence', label: 'BI', icon: LineChart },
-  { to: '/promotions', label: 'Promotions', icon: Megaphone },
-  { to: '/users', label: 'Users', icon: Users },
-  { to: '/settings', label: 'Settings', icon: Settings }
+  { to: '/admin', label: 'Dashboard', icon: Home, permissions: ['dashboard:read'] },
+  { to: '/sales', label: 'Sales', icon: ShoppingCart, permissions: ['sales:read', 'sales:write'] },
+  { to: '/online-orders', label: 'Orders', icon: ShoppingBag, permissions: ['sales:read'] },
+  { to: '/history', label: 'History', icon: History, permissions: ['sales:read', 'reports:read'] },
+  { to: '/debtors', label: 'Debtors', icon: CircleDollarSign, permissions: ['debtors:read', 'debtors:write'] },
+  { to: '/stock', label: 'Stock', icon: Boxes, permissions: ['stock:write'] },
+  { to: '/expenses', label: 'Expenses', icon: ReceiptText, permissions: ['expenses:read', 'expenses:write'] },
+  { to: '/menu', label: 'Menu', icon: ChefHat, permissions: ['menu:write'] },
+  { to: '/reports', label: 'Reports', icon: BarChart3, permissions: ['reports:read'] },
+  { to: '/business-intelligence', label: 'BI', icon: LineChart, permissions: ['reports:read'] },
+  { to: '/promotions', label: 'Promotions', icon: Megaphone, permissions: ['promotions:read', 'promotions:write'] },
+  { to: '/users', label: 'Users', icon: Users, permissions: ['users:write'] },
+  { to: '/settings', label: 'Settings', icon: Settings, permissions: ['users:write'] }
 ];
 
 const chopasapLogo = '/chopasap-logo.png';
@@ -64,12 +68,14 @@ export function AppLayout() {
   const { settings } = useSettings();
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const primaryMobileItems = navItems.slice(0, 4);
+  const userPermissions = Array.isArray(user?.role?.permissions) ? user.role.permissions : [];
+  const visibleNavItems = navItems.filter((item) => item.permissions.some((permission) => userPermissions.includes(permission)));
+  const primaryMobileItems = visibleNavItems.slice(0, 4);
   const sidebarWidth = collapsed ? 'lg:ml-24' : 'lg:ml-72';
 
   const renderDesktopNav = () => (
     <nav className="mt-8 space-y-1">
-      {navItems.map((item) => {
+      {visibleNavItems.map((item) => {
         const Icon = item.icon;
         return (
           <NavLink
@@ -147,7 +153,7 @@ export function AppLayout() {
           </button>
         </div>
         <nav className="mt-8 grid gap-2">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <div key={item.to} onClick={() => setDrawerOpen(false)}>
               <NavItem item={item} />
             </div>

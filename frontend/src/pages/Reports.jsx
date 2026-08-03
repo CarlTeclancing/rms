@@ -38,6 +38,7 @@ export default function Reports() {
       </div>
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <ChartPanel title="Sales channels" labels={['POS', 'Online']} values={[sales.data.posSales || 0, sales.data.onlineSales || 0]} color="#dc2626" />
+        <ChartPanel title="Food and drink sales" labels={['Food', 'Drinks', 'Other']} values={[sales.data.categoryBreakdown?.food?.total || 0, sales.data.categoryBreakdown?.drink?.total || 0, sales.data.categoryBreakdown?.other?.total || 0]} color="#2563eb" />
         <ChartPanel title="Expenses by category" labels={categoryData.map((item) => item.name)} values={categoryData.map((item) => item.amount)} color="#f97316" />
       </div>
     </>

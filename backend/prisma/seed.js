@@ -12,6 +12,8 @@ const adminPermissions = [
   'expenses:read',
   'expenses:write',
   'reports:read',
+  'debtors:read',
+  'debtors:write',
   'promotions:read',
   'promotions:write',
   'users:write'
@@ -37,11 +39,21 @@ async function main() {
 
   await prisma.role.upsert({
     where: { name: 'Cashier' },
-    update: {},
+    update: { permissions: ['dashboard:read', 'sales:read', 'sales:write'] },
     create: {
       name: 'Cashier',
       description: 'POS and basic reporting access',
       permissions: ['dashboard:read', 'sales:read', 'sales:write']
+    }
+  });
+
+  await prisma.role.upsert({
+    where: { name: 'Sales & Orders Operator' },
+    update: { permissions: ['dashboard:read', 'sales:read', 'sales:write', 'debtors:read', 'debtors:write'] },
+    create: {
+      name: 'Sales & Orders Operator',
+      description: 'Manages POS sales, online orders, reservations, and debtors without financial reports access',
+      permissions: ['dashboard:read', 'sales:read', 'sales:write', 'debtors:read', 'debtors:write']
     }
   });
 

@@ -17,6 +17,7 @@ const sum = (rows, selector) => rows.reduce((total, row) => total + toNumber(sel
 const daysBetween = (from, to) => Math.max(1, Math.ceil((to - from) / 86400000) + 1);
 
 const money = (value) => Math.round(toNumber(value) * 100) / 100;
+const paidOnlineOrderWhere = { status: 'DELIVERED' };
 
 const recipeCost = (menuItem) =>
   sum(menuItem.recipeIngredients || [], (ingredient) => {
@@ -73,8 +74,8 @@ export async function buildBusinessIntelligence(prisma, query = {}) {
       orderBy: { createdAt: 'asc' }
     }),
     prisma.sale.findMany({ where: { createdAt: { gte: previousFrom, lt: from }, status: 'COMPLETED' } }),
-    prisma.onlineOrder.findMany({ where: { createdAt: { gte: from, lte: to }, status: { not: 'CANCELLED' } } }),
-    prisma.onlineOrder.findMany({ where: { createdAt: { gte: previousFrom, lt: from }, status: { not: 'CANCELLED' } } }),
+    prisma.onlineOrder.findMany({ where: { createdAt: { gte: from, lte: to }, ...paidOnlineOrderWhere } }),
+    prisma.onlineOrder.findMany({ where: { createdAt: { gte: previousFrom, lt: from }, ...paidOnlineOrderWhere } }),
     prisma.expense.findMany({
       where: { expenseDate: { gte: from, lte: to } },
       include: { category: true, supplier: true },
@@ -94,7 +95,7 @@ export async function buildBusinessIntelligence(prisma, query = {}) {
       }
     }),
     prisma.onlineOrderItem.findMany({
-      where: { onlineOrder: { createdAt: { gte: from, lte: to }, status: { not: 'CANCELLED' } } },
+      where: { onlineOrder: { createdAt: { gte: from, lte: to }, ...paidOnlineOrderWhere } },
       include: {
         menuItem: {
           include: {

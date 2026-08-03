@@ -125,7 +125,7 @@ export default function Sales() {
   const reservationRows = reservations.data?.items || [];
   const activeOnlineCount = onlineRows.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status)).length;
   const pendingReservationCount = reservationRows.filter((reservation) => reservation.status === 'PENDING').length;
-  const onlineRevenue = onlineRows.filter((order) => order.status !== 'CANCELLED').reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const onlineRevenue = onlineRows.filter((order) => order.status === 'DELIVERED').reduce((sum, order) => sum + Number(order.total || 0), 0);
   const todayReservations = reservationRows.filter((reservation) => new Date(reservation.reservationAt).toDateString() === new Date().toDateString()).length;
 
   const add = (item) => {
@@ -326,7 +326,7 @@ export default function Sales() {
         <div className="mb-5 grid gap-4 sm:grid-cols-3">
           <StatCard title="Active orders" value={activeOnlineCount} icon={Truck} tone="blue" detail="Needs kitchen or delivery action" />
           <StatCard title="Total orders" value={onlineRows.length} icon={ClipboardList} detail="Latest 100 portal orders" />
-          <StatCard title="Online revenue" value={currency(onlineRevenue)} icon={CheckCircle2} tone="amber" detail="Excludes cancelled orders" />
+          <StatCard title="Online revenue" value={currency(onlineRevenue)} icon={CheckCircle2} tone="amber" detail="Delivered orders only" />
         </div>
 
         {onlineRows.length ? (

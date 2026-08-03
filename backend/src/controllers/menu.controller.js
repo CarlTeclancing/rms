@@ -94,6 +94,14 @@ export const createMenuCategory = asyncHandler(async (req, res) => {
   res.status(201).json(category);
 });
 
+export const updateMenuCategory = asyncHandler(async (req, res) => {
+  const category = await prisma.menuCategory.update({
+    where: { id: req.params.id },
+    data: req.body
+  });
+  res.json(category);
+});
+
 export const listIngredients = asyncHandler(async (_req, res) => {
   res.json(await prisma.ingredient.findMany({ orderBy: { name: 'asc' } }));
 });

@@ -10,6 +10,7 @@ const rollingPeriodStart = (date, days = 30) => {
 
 const sumDecimal = (rows, field) => rows.reduce((sum, row) => sum + Number(row[field] || 0), 0);
 const optionalFindMany = (delegate, args) => (delegate?.findMany ? delegate.findMany(args).catch(() => []) : Promise.resolve([]));
+const paidOnlineOrderWhere = { status: 'DELIVERED' };
 const combineTopItems = (saleItems, onlineItems) => {
   const totals = new Map();
 
@@ -33,7 +34,9 @@ const combineTopItems = (saleItems, onlineItems) => {
   return [...totals.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 5);
 };
 
-export const getStats = asyncHandler(async (_req, res) => {
+export const getStats = asyncHandler(async (req, res) => {
+  const permissions = Array.isArray(req.user?.role?.permissions) ? req.user.role.permissions : [];
+  const canViewFinancialReports = permissions.includes('reports:read') || permissions.includes('expenses:read');
   const now = new Date();
   const today = startOfDay(now);
   const month = rollingPeriodStart(now);
@@ -67,13 +70,13 @@ export const getStats = asyncHandler(async (_req, res) => {
     }),
     prisma.onlineOrderItem.groupBy({
       by: ['menuItemId'],
-      where: { onlineOrder: { createdAt: { gte: month }, status: { not: 'CANCELLED' } } },
+      where: { onlineOrder: { createdAt: { gte: month }, ...paidOnlineOrderWhere } },
       _sum: { quantity: true, total: true },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 5
     }),
     optionalFindMany(prisma.onlineOrder, { where: { createdAt: { gte: month }, status: { not: 'CANCELLED' } } }),
-    optionalFindMany(prisma.onlineOrder, { where: { createdAt: { gte: today }, status: { not: 'CANCELLED' } } }),
+    optionalFindMany(prisma.onlineOrder, { where: { createdAt: { gte: today }, ...paidOnlineOrderWhere } }),
     optionalFindMany(prisma.reservation, { where: { reservationAt: { gte: today } } })
   ]);
 
@@ -88,7 +91,8 @@ export const getStats = asyncHandler(async (_req, res) => {
   const dailyPosSalesTotal = sumDecimal(safeDailySales, 'total');
   const monthlyPosSalesTotal = sumDecimal(safeMonthlySales, 'total');
   const dailyOnlineOrdersTotal = sumDecimal(dailyOnlineOrders, 'total');
-  const onlineOrdersTotal = sumDecimal(onlineOrders, 'total');
+  const paidOnlineOrders = onlineOrders.filter((order) => order.status === 'DELIVERED');
+  const onlineOrdersTotal = sumDecimal(paidOnlineOrders, 'total');
   const monthlyExpensesTotal = sumDecimal(safeMonthlyExpenses, 'amount');
   const combinedTopItems = combineTopItems(safeTopItems, safeTopOnlineItems);
 
@@ -106,8 +110,9 @@ export const getStats = asyncHandler(async (_req, res) => {
     posDailySales: dailyPosSalesTotal,
     posMonthlySales: monthlyPosSalesTotal,
     dailyOnlineOrdersTotal,
-    monthlyExpenses: monthlyExpensesTotal,
-    monthlyProfit: monthlyPosSalesTotal + onlineOrdersTotal - monthlyExpensesTotal,
+    monthlyExpenses: canViewFinancialReports ? monthlyExpensesTotal : null,
+    monthlyProfit: canViewFinancialReports ? monthlyPosSalesTotal + onlineOrdersTotal - monthlyExpensesTotal : null,
+    canViewFinancialReports,
     lowStockCount: lowStockItems.length,
     lowStockItems,
     stockItems: safeStockItems.slice(0, 12),
