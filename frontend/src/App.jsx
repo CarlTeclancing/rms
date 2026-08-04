@@ -7,6 +7,7 @@ import BusinessIntelligence from './pages/BusinessIntelligence.jsx';
 import Expenses from './pages/Expenses.jsx';
 import Login from './pages/Login.jsx';
 import Menu from './pages/Menu.jsx';
+import Marketing from './pages/Marketing.jsx';
 import OnlineOrders from './pages/OnlineOrders.jsx';
 import PublicPortal from './pages/PublicPortal.jsx';
 import Promotions from './pages/Promotions.jsx';
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="history" element={<SalesHistory />} />
         <Route path="debtors" element={<Debtors />} />
         <Route path="menu" element={<Menu />} />
+        <Route path="marketing" element={<Marketing />} />
         <Route path="stock" element={<Stock />} />
         <Route path="expenses" element={<Expenses />} />
         <Route path="reports" element={<Reports />} />

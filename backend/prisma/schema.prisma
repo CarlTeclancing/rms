@@ -67,6 +67,31 @@ enum MenuCategoryKind {
   OTHER
 }
 
+enum MarketingItemType {
+  CAMPAIGN
+  DAILY_REWARD
+  SPIN_WHEEL
+  FLASH_DEAL
+  COUPON
+  REFERRAL_PROGRAM
+  LOYALTY_PROGRAM
+  DAILY_STREAK
+  FEATURED_RESTAURANT
+  HOMEPAGE_BANNER
+  PUSH_NOTIFICATION
+  CHALLENGE
+  ANNOUNCEMENT
+}
+
+enum MarketingItemStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  EXPIRED
+  ARCHIVED
+}
+
 enum DebtorStatus {
   OPEN
   PARTIALLY_PAID
@@ -95,8 +120,36 @@ model User {
   sales        Sale[]
   expenses     Expense[]
   debtors      Debtor[]
+  marketingItems MarketingItem[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+model MarketingItem {
+  id          String              @id @default(cuid())
+  type        MarketingItemType
+  status      MarketingItemStatus @default(DRAFT)
+  title       String
+  description String?
+  imageUrl    String?
+  ctaLabel    String?
+  deepLink    String?
+  audience    String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  priority    Int                 @default(0)
+  config      Json                @default("{}")
+  metrics     Json                @default("{}")
+  createdById String?
+  createdBy   User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([priority])
 }
 
 model Customer {

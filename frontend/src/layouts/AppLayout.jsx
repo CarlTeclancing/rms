@@ -36,6 +36,7 @@ const navItems = [
   { to: '/reports', label: 'Reports', icon: BarChart3, permissions: ['reports:read'] },
   { to: '/business-intelligence', label: 'BI', icon: LineChart, permissions: ['reports:read'] },
   { to: '/promotions', label: 'Promotions', icon: Megaphone, permissions: ['promotions:read', 'promotions:write'] },
+  { to: '/marketing', label: 'Marketing', icon: LineChart, permissions: ['marketing:read', 'marketing:write'] },
   { to: '/users', label: 'Users', icon: Users, permissions: ['users:write'] },
   { to: '/settings', label: 'Settings', icon: Settings, permissions: ['users:write'] }
 ];

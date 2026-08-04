@@ -622,6 +622,34 @@ function NotificationPanel({ open, notifications, soundEnabled, permission, onCl
   );
 }
 
+function RewardPanel({ open, rewards, onClose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[80] bg-[#151923]/45 px-4 py-6 backdrop-blur-sm">
+      <div className="ml-auto flex h-full max-w-sm flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#edf0f2] p-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Rewards</p>
+            <h2 className="text-xl font-black">Growth hub</h2>
+          </div>
+          <button className="grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc]" onClick={onClose} aria-label="Close rewards">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="grid gap-3 overflow-y-auto p-4">
+          {rewards.length ? rewards.map((item) => (
+            <article key={item.id} className="rounded-2xl bg-[#fff8e8] p-4">
+              <p className="text-sm font-black text-[#151923]">{item.title}</p>
+              <p className="mt-1 text-xs font-semibold leading-5 text-stone-600">{item.description || 'Open this reward before it expires.'}</p>
+              {item.ctaLabel ? <p className="mt-3 text-xs font-black text-[#d71920]">{item.ctaLabel}</p> : null}
+            </article>
+          )) : <p className="rounded-2xl bg-[#f7fbfc] p-5 text-sm font-semibold text-stone-500">No rewards are active right now.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OrderReviewItem({ item, order }) {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
@@ -916,6 +944,7 @@ function BottomNav({ activeTab, setActiveTab, language = 'en', activeOrderCount 
 export default function PublicPortal() {
   const { data, loading, error, refetch } = useApi(() => endpoints.publicMenu(), []);
   const promotions = useApi(() => endpoints.publicPromotions(), []);
+  const marketing = useApi(() => endpoints.publicMarketing(), []);
   const flashSale = useApi(() => endpoints.publicFlashSale(), []);
   const { settings } = useSettings();
   const [language, setLanguage] = useState(() => localStorage.getItem(languageStorageKey) || 'en');
@@ -978,6 +1007,7 @@ export default function PublicPortal() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [flashSaleOpen, setFlashSaleOpen] = useState(false);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [rewardPanelOpen, setRewardPanelOpen] = useState(false);
   const [profileTab, setProfileTab] = useState('referral');
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('chopasap_sound_enabled') !== 'false');
   const [notificationPermission, setNotificationPermission] = useState(() => ('Notification' in window ? Notification.permission : 'unavailable'));
@@ -992,6 +1022,11 @@ export default function PublicPortal() {
   const filteredItems = items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase()));
   const favoriteItems = items.filter((item) => favorites.includes(item.id));
   const promotionSlides = [
+    ...(marketing.data?.hero ? [{
+      ...marketing.data.hero,
+      id: `marketing-${marketing.data.hero.id}`,
+      businessName: 'Featured campaign'
+    }] : []),
     ...(promotions.data?.items || []),
     {
       id: 'request-promotion',
@@ -2142,6 +2177,22 @@ export default function PublicPortal() {
         onEnable={enableNotifications}
         onToggleSound={() => setSoundEnabled((current) => !current)}
       />
+
+      <RewardPanel
+        open={rewardPanelOpen}
+        rewards={marketing.data?.floatingRewards || []}
+        onClose={() => setRewardPanelOpen(false)}
+      />
+
+      {customer && (marketing.data?.floatingRewards || []).length ? (
+        <button
+          className="fixed bottom-24 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#d71920] text-white shadow-[0_18px_35px_rgba(215,25,32,0.28)] md:bottom-8 md:right-8"
+          onClick={() => setRewardPanelOpen(true)}
+          aria-label="Open rewards"
+        >
+          <Gift size={24} />
+        </button>
+      ) : null}
 
       {selectedMeal ? (
         <MealDetail

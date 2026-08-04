@@ -16,8 +16,12 @@ const adminPermissions = [
   'debtors:write',
   'promotions:read',
   'promotions:write',
+  'marketing:read',
+  'marketing:write',
   'users:write'
 ];
+
+const marketingPermissions = ['marketing:read', 'marketing:write', 'promotions:read', 'promotions:write'];
 
 const appSettings = {
   restaurantName: 'ChopASAP',
@@ -64,6 +68,16 @@ async function main() {
       name: 'Sales & Orders Operator',
       description: 'Manages POS sales, online orders, reservations, and debtors without financial reports access',
       permissions: ['dashboard:read', 'sales:read', 'sales:write', 'debtors:read', 'debtors:write']
+    }
+  });
+
+  await prisma.role.upsert({
+    where: { name: 'Marketing Manager' },
+    update: { permissions: marketingPermissions },
+    create: {
+      name: 'Marketing Manager',
+      description: 'Marketing and growth modules only. No payments, users, settings, stock, or operations access.',
+      permissions: marketingPermissions
     }
   });
 

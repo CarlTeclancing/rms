@@ -318,6 +318,7 @@ export default function App() {
   const [menuCategories, setMenuCategories] = useState([]);
   const [settings, setSettings] = useState({});
   const [promotions, setPromotions] = useState([]);
+  const [marketing, setMarketing] = useState({ items: [], hero: null, floatingRewards: [], flashDeal: null });
   const [flashSale, setFlashSale] = useState(null);
   const [orders, setOrders] = useState([]);
   const [activeOrders, setActiveOrders] = useState([]);
@@ -332,6 +333,7 @@ export default function App() {
   const [homeCategoryLimit, setHomeCategoryLimit] = useState(3);
   const [reservationOpen, setReservationOpen] = useState(false);
   const [promotionOpen, setPromotionOpen] = useState(false);
+  const [rewardOpen, setRewardOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [flashSaleOpen, setFlashSaleOpen] = useState(false);
   const [fulfillment, setFulfillment] = useState('delivery');
@@ -415,16 +417,18 @@ export default function App() {
         setCustomerForm((current) => ({ ...current, referralCode: params.ref || '' }));
       }
 
-      const [menuData, settingsData, promotionData, flashSaleData] = await Promise.all([
+      const [menuData, settingsData, promotionData, marketingData, flashSaleData] = await Promise.all([
         api.menu(),
         api.settings().catch(() => ({})),
         api.promotions().catch(() => ({ items: [] })),
+        api.marketing().catch(() => ({ items: [], hero: null, floatingRewards: [], flashDeal: null })),
         api.flashSale().catch(() => ({ item: null }))
       ]);
       setItems(menuData.items || []);
       setMenuCategories(menuData.categories || []);
       setSettings(settingsData || {});
       setPromotions(promotionData.items || []);
+      setMarketing(marketingData || { items: [], hero: null, floatingRewards: [], flashDeal: null });
       setFlashSale(flashSaleData.item || null);
       if (flashSaleData.item?.id && dismissedFlashSale !== flashSaleData.item.id) {
         setFlashSaleOpen(true);
@@ -487,16 +491,18 @@ export default function App() {
   const refreshApp = async () => {
     setRefreshing(true);
     try {
-      const [menuData, settingsData, promotionData, flashSaleData] = await Promise.all([
+      const [menuData, settingsData, promotionData, marketingData, flashSaleData] = await Promise.all([
         api.menu(),
         api.settings().catch(() => settings),
         api.promotions().catch(() => ({ items: promotions })),
+        api.marketing().catch(() => marketing),
         api.flashSale().catch(() => ({ item: flashSale }))
       ]);
       setItems(menuData.items || []);
       setMenuCategories(menuData.categories || []);
       setSettings(settingsData || {});
       setPromotions(promotionData.items || []);
+      setMarketing(marketingData || { items: [], hero: null, floatingRewards: [], flashDeal: null });
       setFlashSale(flashSaleData.item || null);
       if (customer?.id) await loadOrders(customer.id);
       if (activeOrders.length) {
@@ -776,6 +782,7 @@ export default function App() {
                 categoryLimit={homeCategoryLimit}
                 favorites={favorites}
                 promotions={promotions}
+                marketing={marketing}
                 flashSale={flashSale}
                 language={language}
                 onOpen={setSelectedMeal}
@@ -791,6 +798,11 @@ export default function App() {
           </ScrollView>
 
           <BottomTabs tab={tab} setTab={setTab} language={language} activeOrderCount={activeOrderCount} pulse={activeOrderPulse} />
+          {marketing.floatingRewards?.length ? (
+            <Pressable style={styles.rewardFab} onPress={() => setRewardOpen(true)}>
+              <Ionicons name="gift-outline" size={24} color="#fff" />
+            </Pressable>
+          ) : null}
           <MealDetail item={selectedMeal} visible={Boolean(selectedMeal)} customer={customer} settings={settings} language={language} onClose={() => setSelectedMeal(null)} onAdd={addToCart} onShare={shareMeal} />
           <CheckoutModal
             visible={checkoutOpen}
@@ -845,6 +857,7 @@ export default function App() {
             }}
           />
           <FlashSaleModal visible={flashSaleOpen} code={flashSale} onClose={dismissFlashSale} onShare={shareFlashSale} />
+          <RewardModal visible={rewardOpen} rewards={marketing.floatingRewards || []} onClose={() => setRewardOpen(false)} />
           <OrderDetailModal visible={Boolean(selectedOrder)} order={selectedOrder} language={language} onClose={() => setSelectedOrder(null)} />
           <ReservationModal visible={reservationOpen} language={language} form={reservationForm} setForm={setReservationForm} saving={saving} onClose={() => setReservationOpen(false)} onSubmit={submitReservation} />
           <PromotionModal visible={promotionOpen} language={language} form={promotionForm} setForm={setPromotionForm} saving={saving} onPickImage={pickPromotionImage} onClose={() => setPromotionOpen(false)} onSubmit={submitPromotion} />
@@ -963,13 +976,14 @@ function groupMealsByCategory(items, categories = []) {
   }, seededGroups);
 }
 
-function HomeView({ items, menuCategories, categoryLimit, favorites, promotions, flashSale, language, onOpen, onFavorite, onShare, onFlashSale }) {
+function HomeView({ items, menuCategories, categoryLimit, favorites, promotions, marketing, flashSale, language, onOpen, onFavorite, onShare, onFlashSale }) {
   const categories = groupMealsByCategory(items, menuCategories).filter((category) => category.items.length > 0);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const visibleCategories = selectedCategory === 'all' ? categories : categories.filter((category) => category.name === selectedCategory);
   const visibleItems = selectedCategory === 'all' ? items : visibleCategories.flatMap((category) => category.items);
   const featuredMeals = visibleItems.slice(0, 6);
   const displayedCategories = selectedCategory === 'all' ? visibleCategories.slice(0, categoryLimit) : visibleCategories;
+  const hero = marketing?.hero || promotions[0];
   return (
     <View>
       <View style={styles.categoryQuickAccess}>
@@ -995,6 +1009,17 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
             <Text style={styles.flashText}>Use code {flashSale.code} for {flashSale.discountPercent || 10}% off onsite.</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color="#151923" />
+        </Pressable>
+      ) : null}
+
+      {hero ? (
+        <Pressable style={styles.marketingHero} onPress={hero.deepLink ? () => Linking.openURL(hero.deepLink) : undefined}>
+          {hero.imageUrl ? <Image source={{ uri: hero.imageUrl }} style={styles.marketingHeroImage} /> : null}
+          <View style={styles.marketingHeroCopy}>
+            <Text style={styles.promoEyebrow}>{hero.type === 'HOMEPAGE_BANNER' ? 'Featured' : 'Campaign'}</Text>
+            <Text style={styles.promoTitle} numberOfLines={2}>{hero.title}</Text>
+            {hero.description ? <Text style={styles.cardCopy} numberOfLines={2}>{hero.description}</Text> : null}
+          </View>
         </Pressable>
       ) : null}
 
@@ -1636,6 +1661,30 @@ function FlashSaleModal({ visible, code, onClose, onShare }) {
   );
 }
 
+function RewardModal({ visible, rewards, onClose }) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.rewardOverlay}>
+        <View style={styles.rewardSheet}>
+          <View style={styles.checkoutHeader}>
+            <Text style={styles.pageTitle}>Rewards</Text>
+            <Pressable onPress={onClose}><Ionicons name="close" size={26} color="#111" /></Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.checkoutBody}>
+            {rewards.length ? rewards.map((reward) => (
+              <View key={reward.id} style={styles.rewardCard}>
+                <Text style={styles.cardTitle}>{reward.title}</Text>
+                {reward.description ? <Text style={styles.cardCopy}>{reward.description}</Text> : null}
+                {reward.ctaLabel ? <Text style={styles.linkButtonText}>{reward.ctaLabel}</Text> : null}
+              </View>
+            )) : <Text style={styles.emptyText}>No rewards are active right now.</Text>}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function ReservationModal({ visible, language, form, setForm, saving, onClose, onSubmit }) {
   return (
     <Modal visible={visible} animationType="slide">
@@ -1941,6 +1990,9 @@ const styles = StyleSheet.create({
   promoEyebrow: { color: brandRed, textTransform: 'uppercase', fontSize: 12, fontWeight: '900' },
   promoTitle: { color: '#151923', fontSize: 18, fontWeight: '900' },
   promotionStrip: { marginTop: 22, marginBottom: 6 },
+  marketingHero: { marginTop: 14, borderRadius: 20, backgroundColor: '#fff4d7', overflow: 'hidden', borderWidth: 1, borderColor: '#ffd08a' },
+  marketingHeroImage: { width: '100%', height: 118 },
+  marketingHeroCopy: { padding: 14, gap: 4 },
   promotionRail: { gap: 12, paddingRight: 10 },
   promotionTile: { width: 230, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', overflow: 'hidden', paddingBottom: 12 },
   promotionTileImage: { width: '100%', height: 106 },
@@ -1986,5 +2038,9 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 12, color: '#42495a', fontWeight: '900' },
   tabTextActive: { color: brandRed },
   activeOrderTabBadge: { position: 'absolute', top: -8, right: -10, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
-  activeOrderTabText: { color: '#fff', fontSize: 12, fontWeight: '900' }
+  activeOrderTabText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  rewardFab: { position: 'absolute', right: 18, bottom: 92, width: 56, height: 56, borderRadius: 28, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', shadowColor: brandRed, shadowOpacity: 0.28, shadowRadius: 18, elevation: 8 },
+  rewardOverlay: { flex: 1, backgroundColor: 'rgba(21,25,35,0.45)', justifyContent: 'flex-end' },
+  rewardSheet: { maxHeight: '78%', borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#fff', overflow: 'hidden' },
+  rewardCard: { borderRadius: 18, backgroundColor: '#fff8e8', padding: 16, gap: 8, marginBottom: 12 }
 });
