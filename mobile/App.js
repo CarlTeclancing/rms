@@ -983,7 +983,11 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
   const visibleItems = selectedCategory === 'all' ? items : visibleCategories.flatMap((category) => category.items);
   const featuredMeals = visibleItems.slice(0, 6);
   const displayedCategories = selectedCategory === 'all' ? visibleCategories.slice(0, categoryLimit) : visibleCategories;
-  const hero = marketing?.hero || promotions[0];
+  const marketingBanners = marketing?.banners || (marketing?.hero ? [marketing.hero] : []);
+  const bannerSlides = [
+    ...marketingBanners.map((item) => ({ ...item, label: item.type?.replaceAll('_', ' ') || 'Campaign' })),
+    ...promotions.map((item) => ({ ...item, label: item.businessName || 'Promotion', deepLink: item.ctaUrl }))
+  ];
   return (
     <View>
       <View style={styles.categoryQuickAccess}>
@@ -1012,15 +1016,19 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
         </Pressable>
       ) : null}
 
-      {hero ? (
-        <Pressable style={styles.marketingHero} onPress={hero.deepLink ? () => Linking.openURL(hero.deepLink) : undefined}>
-          {hero.imageUrl ? <Image source={{ uri: hero.imageUrl }} style={styles.marketingHeroImage} /> : null}
-          <View style={styles.marketingHeroCopy}>
-            <Text style={styles.promoEyebrow}>{hero.type === 'HOMEPAGE_BANNER' ? 'Featured' : 'Campaign'}</Text>
-            <Text style={styles.promoTitle} numberOfLines={2}>{hero.title}</Text>
-            {hero.description ? <Text style={styles.cardCopy} numberOfLines={2}>{hero.description}</Text> : null}
-          </View>
-        </Pressable>
+      {bannerSlides.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marketingHeroRail}>
+          {bannerSlides.map((slide) => (
+            <Pressable key={slide.id || slide.title} style={styles.marketingHero} onPress={slide.deepLink ? () => Linking.openURL(slide.deepLink) : undefined}>
+              {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.marketingHeroImage} /> : null}
+              <View style={styles.marketingHeroCopy}>
+                <Text style={styles.promoEyebrow}>{slide.label}</Text>
+                <Text style={styles.promoTitle} numberOfLines={2}>{slide.title}</Text>
+                {slide.description ? <Text style={styles.cardCopy} numberOfLines={2}>{slide.description}</Text> : null}
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
       ) : null}
 
       <View style={styles.sectionBlock}>
@@ -1990,8 +1998,9 @@ const styles = StyleSheet.create({
   promoEyebrow: { color: brandRed, textTransform: 'uppercase', fontSize: 12, fontWeight: '900' },
   promoTitle: { color: '#151923', fontSize: 18, fontWeight: '900' },
   promotionStrip: { marginTop: 22, marginBottom: 6 },
-  marketingHero: { marginTop: 14, borderRadius: 20, backgroundColor: '#fff4d7', overflow: 'hidden', borderWidth: 1, borderColor: '#ffd08a' },
-  marketingHeroImage: { width: '100%', height: 118 },
+  marketingHeroRail: { gap: 12, paddingRight: 12, paddingVertical: 4 },
+  marketingHero: { width: 286, marginTop: 14, borderRadius: 20, backgroundColor: '#fff4d7', overflow: 'hidden', borderWidth: 1, borderColor: '#ffd08a' },
+  marketingHeroImage: { width: '100%', height: 112 },
   marketingHeroCopy: { padding: 14, gap: 4 },
   promotionRail: { gap: 12, paddingRight: 10 },
   promotionTile: { width: 230, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', overflow: 'hidden', paddingBottom: 12 },

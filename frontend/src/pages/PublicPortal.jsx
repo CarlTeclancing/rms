@@ -1021,12 +1021,14 @@ export default function PublicPortal() {
   const categories = [...new Set(items.map((item) => item.category?.name).filter(Boolean))];
   const filteredItems = items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase()));
   const favoriteItems = items.filter((item) => favorites.includes(item.id));
+  const marketingSlides = (marketing.data?.banners || (marketing.data?.hero ? [marketing.data.hero] : [])).map((item) => ({
+    ...item,
+    id: `marketing-${item.id}`,
+    businessName: item.type?.replaceAll('_', ' ') || 'Featured campaign',
+    ctaLabel: item.ctaLabel || (item.type === 'FLASH_DEAL' ? 'View deal' : 'Order now')
+  }));
   const promotionSlides = [
-    ...(marketing.data?.hero ? [{
-      ...marketing.data.hero,
-      id: `marketing-${marketing.data.hero.id}`,
-      businessName: 'Featured campaign'
-    }] : []),
+    ...marketingSlides,
     ...(promotions.data?.items || []),
     {
       id: 'request-promotion',

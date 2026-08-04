@@ -129,9 +129,13 @@ export const publicMarketingItems = asyncHandler(async (_req, res) => {
     select: marketingItemSelect
   });
   const activeItems = items.map(normalizeMarketingItem).filter((item) => item.effectiveStatus === 'ACTIVE');
+  const banners = activeItems.filter((item) =>
+    ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'].includes(item.type)
+  );
   res.json({
     items: activeItems,
-    hero: activeItems.find((item) => ['HOMEPAGE_BANNER', 'CAMPAIGN'].includes(item.type)) || null,
+    banners,
+    hero: banners[0] || null,
     floatingRewards: activeItems.filter((item) => ['DAILY_REWARD', 'SPIN_WHEEL', 'DAILY_STREAK', 'CHALLENGE', 'REFERRAL_PROGRAM'].includes(item.type)).slice(0, 5),
     flashDeal: activeItems.find((item) => item.type === 'FLASH_DEAL') || null
   });
