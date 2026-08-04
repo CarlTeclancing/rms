@@ -26,7 +26,7 @@ import { endpoints } from '../services/api.js';
 import { currency } from '../utils/format.js';
 import { useApi } from '../hooks/useApi.js';
 
-const orderStatuses = ['PENDING', 'ACCEPTED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+const orderStatuses = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DRIVER_ASSIGNED', 'DRIVER_TO_RESTAURANT', 'DRIVER_ARRIVED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DRIVER_NEARBY', 'DELIVERED', 'CANCELLED'];
 const reservationStatuses = ['PENDING', 'CONFIRMED', 'SEATED', 'CANCELLED'];
 
 const statusStyles = {

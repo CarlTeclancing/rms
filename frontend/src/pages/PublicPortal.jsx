@@ -26,6 +26,7 @@ import {
   Star,
   Smartphone,
   Trash2,
+  Truck,
   Trophy,
   User,
   Volume2,
@@ -34,9 +35,10 @@ import {
 import clsx from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { io } from 'socket.io-client';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Loading } from '../components/Loading.jsx';
-import { endpoints } from '../services/api.js';
+import { apiBaseUrl, endpoints } from '../services/api.js';
 import { currency } from '../utils/format.js';
 import { useApi } from '../hooks/useApi.js';
 import { useSettings } from '../context/SettingsContext.jsx';
@@ -44,6 +46,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
 const chopasapLogo = '/chopasap-logo.png';
 const brandRed = '#d71920';
+const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const tabs = [
   { id: 'home', label: { en: 'Home', fr: 'Accueil' }, icon: Home },
   { id: 'meals', label: { en: 'Meals', fr: 'Repas' }, icon: ShoppingBag },
@@ -250,6 +253,21 @@ const rewardRank = (points = 0) => {
 };
 
 const customerFacingMarketingTypes = ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'];
+const deliveryStatusLabels = {
+  PENDING: 'Order received',
+  ACCEPTED: 'Restaurant accepted',
+  PREPARING: 'Preparing',
+  READY: 'Meal ready',
+  DRIVER_ASSIGNED: 'Driver assigned',
+  DRIVER_TO_RESTAURANT: 'Driver to restaurant',
+  DRIVER_ARRIVED: 'Driver arrived',
+  PICKED_UP: 'Picked up',
+  OUT_FOR_DELIVERY: 'On the way',
+  DRIVER_NEARBY: 'Driver nearby',
+  DELIVERED: 'Delivered',
+  CANCELLED: 'Cancelled'
+};
+const deliveryMilestones = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DRIVER_ASSIGNED', 'DRIVER_TO_RESTAURANT', 'DRIVER_ARRIVED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DRIVER_NEARBY', 'DELIVERED'];
 
 const fallbackPromotionSlide = {
   id: 'default-home-offer',
@@ -258,6 +276,13 @@ const fallbackPromotionSlide = {
   description: 'Check back for active campaigns, flash deals, and featured restaurant offers.',
   ctaLabel: 'Explore meals',
   ctaUrl: '#menu'
+};
+
+const trackingMapUrl = (order = {}) => {
+  if (!googleMapsApiKey || !order.driverLatitude || !order.driverLongitude || !order.latitude || !order.longitude) return '';
+  const driver = `${order.driverLatitude},${order.driverLongitude}`;
+  const customer = `${order.latitude},${order.longitude}`;
+  return `https://maps.googleapis.com/maps/api/staticmap?size=960x420&scale=2&maptype=roadmap&markers=color:red%7Clabel:D%7C${driver}&markers=color:green%7Clabel:H%7C${customer}&path=color:0xd71920ff%7Cweight:5%7C${driver}%7C${customer}&key=${googleMapsApiKey}`;
 };
 
 function RedButton({ children, className, ...props }) {
@@ -786,6 +811,66 @@ function OrderReviewItem({ item, order }) {
   );
 }
 
+function OrderTrackingPanel({ order }) {
+  const events = order.trackingEvents || [];
+  const status = order.status || 'PENDING';
+  const statusIndex = Math.max(0, deliveryMilestones.indexOf(status));
+  const progress = status === 'CANCELLED' ? 0 : Math.min(100, ((statusIndex + 1) / deliveryMilestones.length) * 100);
+  const mapUrl = trackingMapUrl(order);
+  return (
+    <section className="mt-5 rounded-3xl border border-[#e2edf0] bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase text-[#d71920]">Live tracking</p>
+          <h3 className="mt-1 text-xl font-black text-[#151923]">{deliveryStatusLabels[status] || status.replaceAll('_', ' ')}</h3>
+        </div>
+        <div className="rounded-full bg-[#fff4f4] px-3 py-1 text-xs font-black text-[#d71920]">
+          {order.etaMinutes ? `${order.etaMinutes} min ETA` : 'ETA updating'}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        {mapUrl ? (
+          <img className="h-52 w-full rounded-2xl object-cover" src={mapUrl} alt="Live delivery route" />
+        ) : (
+          <div className="relative h-52 overflow-hidden rounded-2xl bg-[#eaf5f8]">
+            <div className="absolute left-10 right-10 top-1/2 h-1 -rotate-12 rounded-full bg-[#2fbf71]" />
+            <div className="absolute left-5 top-28 grid h-10 w-10 place-items-center rounded-full border-4 border-white bg-[#151923] text-white"><ShoppingBag size={18} /></div>
+            <div className="absolute left-1/2 top-20 grid h-11 w-11 -translate-x-1/2 place-items-center rounded-full border-4 border-white bg-[#d71920] text-white"><Truck size={20} /></div>
+            <div className="absolute right-7 top-12 grid h-10 w-10 place-items-center rounded-full border-4 border-white bg-[#2fbf71] text-white"><Home size={18} /></div>
+          </div>
+        )}
+        <div className="grid content-start gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            <p className="rounded-2xl bg-[#f7fbfc] p-3 text-center text-xs font-black text-stone-600">{order.distanceKm ? `${Number(order.distanceKm).toFixed(1)} km` : 'Distance'}</p>
+            <p className="rounded-2xl bg-[#f7fbfc] p-3 text-center text-xs font-black text-stone-600">{order.driverSpeedKph ? `${Number(order.driverSpeedKph).toFixed(0)} km/h` : 'Speed'}</p>
+            <p className="rounded-2xl bg-[#f7fbfc] p-3 text-center text-xs font-black text-stone-600">{order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Waiting'}</p>
+          </div>
+          <div className="rounded-2xl bg-[#fff8e8] p-3">
+            <p className="text-sm font-black text-[#151923]">{order.driverName || 'Driver not assigned yet'}</p>
+            <p className="mt-1 text-xs font-semibold text-stone-600">{order.vehicleInfo || 'Vehicle details will appear here'}</p>
+            {order.driverPhone ? <p className="mt-1 text-xs font-black text-[#d71920]">{order.driverPhone}</p> : null}
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[#edf0f2]">
+            <div className="h-full rounded-full bg-[#d71920]" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3">
+        {(events.length ? events : [{ status, title: deliveryStatusLabels[status], createdAt: order.createdAt }]).map((event, index) => (
+          <div key={event.id || `${event.status}-${index}`} className="flex gap-3">
+            <span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-[#d71920]" />
+            <div>
+              <p className="text-sm font-black text-[#151923]">{event.title || deliveryStatusLabels[event.status] || event.status?.replaceAll('_', ' ')}</p>
+              <p className="text-xs font-semibold text-stone-500">{event.createdAt ? new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}</p>
+              {event.message ? <p className="mt-1 text-xs font-semibold text-stone-600">{event.message}</p> : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function OrderDetailView({ order, onBack }) {
   if (!order) return null;
   return (
@@ -820,6 +905,7 @@ function OrderDetailView({ order, onBack }) {
           </div>
         ) : null}
       </div>
+      <OrderTrackingPanel order={order} />
       <div className="mt-5">
         <h3 className="font-black">Items</h3>
         <div className="mt-3 grid gap-2">
@@ -1089,6 +1175,7 @@ export default function PublicPortal() {
   ]);
   const activeOrdersRef = useRef(activeOrders);
   const checkoutPromptTimerRef = useRef(null);
+  const socketRef = useRef(null);
 
   const items = data?.items || [];
   const categories = [...new Set(items.map((item) => item.category?.name).filter(Boolean))];
@@ -1352,6 +1439,32 @@ export default function PublicPortal() {
     activeOrdersRef.current = activeOrders;
     localStorage.setItem(activeOrdersStorageKey, JSON.stringify(activeOrders.slice(0, 10)));
   }, [activeOrders]);
+
+  useEffect(() => {
+    const socketUrl = apiBaseUrl.replace(/\/api\/?$/, '');
+    const socket = io(socketUrl, { transports: ['websocket'], reconnection: true });
+    socketRef.current = socket;
+    socket.on('order:updated', (order) => {
+      setSelectedOrder((current) => (current?.id === order.id ? { ...current, ...order } : current));
+      setActiveOrders((current) => {
+        const exists = current.some((entry) => entry.id === order.id);
+        const next = exists ? current.map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry)) : [order, ...current];
+        return next.slice(0, 10);
+      });
+      showOrderStatusNotification(order);
+    });
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !selectedOrder?.id) return undefined;
+    socket.emit('order:join', selectedOrder.id);
+    return () => socket.emit('order:leave', selectedOrder.id);
+  }, [selectedOrder?.id]);
 
   useEffect(() => {
     if (!customer?.id) return;

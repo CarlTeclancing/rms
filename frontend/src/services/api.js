@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+export const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
   console.warn('VITE_API_URL is not set. The app will try localhost and API calls will fail in production.');
@@ -70,6 +70,7 @@ export const endpoints = {
   sales: (params) => api.get('/sales', { params }),
   onlineOrders: () => api.get('/online-orders'),
   updateOnlineOrderStatus: (id, data) => api.put(`/online-orders/${id}/status`, data),
+  updateOnlineOrderTracking: (id, data) => api.put(`/online-orders/${id}/tracking`, data),
   reservations: () => api.get('/reservations'),
   updateReservationStatus: (id, data) => api.put(`/reservations/${id}/status`, data),
   createSale: (data) => api.post('/sales', data),

@@ -1,21 +1,28 @@
 import { ClipboardList, MapPin, Phone, RefreshCw, Truck } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { io } from 'socket.io-client';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Loading } from '../components/Loading.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { StatCard } from '../components/StatCard.jsx';
 import { useApi } from '../hooks/useApi.js';
-import { endpoints } from '../services/api.js';
+import { apiBaseUrl, endpoints } from '../services/api.js';
 import { currency } from '../utils/format.js';
 
-const statuses = ['PENDING', 'ACCEPTED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+const statuses = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DRIVER_ASSIGNED', 'DRIVER_TO_RESTAURANT', 'DRIVER_ARRIVED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DRIVER_NEARBY', 'DELIVERED', 'CANCELLED'];
 
 const statusStyles = {
   PENDING: 'bg-amber-50 text-amber-700',
   ACCEPTED: 'bg-sky-50 text-sky-700',
   PREPARING: 'bg-indigo-50 text-indigo-700',
+  READY: 'bg-violet-50 text-violet-700',
+  DRIVER_ASSIGNED: 'bg-blue-50 text-blue-700',
+  DRIVER_TO_RESTAURANT: 'bg-cyan-50 text-cyan-700',
+  DRIVER_ARRIVED: 'bg-teal-50 text-teal-700',
+  PICKED_UP: 'bg-emerald-50 text-emerald-700',
   OUT_FOR_DELIVERY: 'bg-cyan-50 text-cyan-700',
+  DRIVER_NEARBY: 'bg-lime-50 text-lime-700',
   DELIVERED: 'bg-emerald-50 text-emerald-700',
   CANCELLED: 'bg-rose-50 text-rose-700'
 };
@@ -23,11 +30,26 @@ const statusStyles = {
 const formatStatus = (status = 'PENDING') => status.replaceAll('_', ' ');
 
 export default function OnlineOrders() {
-  const { data, loading, error, refetch } = useApi(() => endpoints.onlineOrders(), []);
+  const { data, loading, error, refetch, setData } = useApi(() => endpoints.onlineOrders(), []);
   const [updatingId, setUpdatingId] = useState('');
+  const [trackingDrafts, setTrackingDrafts] = useState({});
   const orders = data?.items || [];
   const activeOrders = orders.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status));
   const totalRevenue = orders.filter((order) => order.status === 'DELIVERED').reduce((sum, order) => sum + Number(order.total || 0), 0);
+
+  useEffect(() => {
+    const socket = io(apiBaseUrl.replace(/\/api\/?$/, ''), { transports: ['websocket'], reconnection: true });
+    socket.on('dispatch:order-updated', () => {
+      refetch();
+    });
+    socket.on('order:updated', (order) => {
+      setData((current) => ({
+        ...(current || { items: [] }),
+        items: (current?.items || []).map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry))
+      }));
+    });
+    return () => socket.disconnect();
+  }, [refetch, setData]);
 
   const updateOrderStatus = async (id, status) => {
     setUpdatingId(id);
@@ -37,6 +59,34 @@ export default function OnlineOrders() {
       refetch();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not update order');
+    } finally {
+      setUpdatingId('');
+    }
+  };
+
+  const updateTrackingDraft = (id, patch) => {
+    setTrackingDrafts((current) => ({ ...current, [id]: { ...(current[id] || {}), ...patch } }));
+  };
+
+  const saveTracking = async (order) => {
+    const draft = trackingDrafts[order.id] || {};
+    setUpdatingId(order.id);
+    try {
+      await endpoints.updateOnlineOrderTracking(order.id, {
+        driverName: draft.driverName ?? order.driverName ?? '',
+        driverPhone: draft.driverPhone ?? order.driverPhone ?? '',
+        vehicleInfo: draft.vehicleInfo ?? order.vehicleInfo ?? '',
+        etaMinutes: draft.etaMinutes ?? order.etaMinutes ?? '',
+        distanceKm: draft.distanceKm ?? order.distanceKm ?? '',
+        speedKph: draft.speedKph ?? order.driverSpeedKph ?? '',
+        latitude: draft.latitude ?? order.driverLatitude ?? '',
+        longitude: draft.longitude ?? order.driverLongitude ?? '',
+        message: draft.message || 'Driver tracking updated.'
+      });
+      toast.success('Tracking updated');
+      refetch();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not update tracking');
     } finally {
       setUpdatingId('');
     }
@@ -122,6 +172,29 @@ export default function OnlineOrders() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[#e2edf0] bg-[#f7fbfc] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-black text-[#151923]">Live delivery tracking</p>
+                    <p className="text-xs font-semibold text-stone-500">Update driver and ETA details customers see on their tracking screen.</p>
+                  </div>
+                  <button className="btn-secondary h-9" disabled={updatingId === order.id} onClick={() => saveTracking(order)}>
+                    <Truck size={16} /> Save tracking
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-4">
+                  <input className="input h-10" placeholder="Driver name" value={trackingDrafts[order.id]?.driverName ?? order.driverName ?? ''} onChange={(e) => updateTrackingDraft(order.id, { driverName: e.target.value })} />
+                  <input className="input h-10" placeholder="Driver phone" value={trackingDrafts[order.id]?.driverPhone ?? order.driverPhone ?? ''} onChange={(e) => updateTrackingDraft(order.id, { driverPhone: e.target.value })} />
+                  <input className="input h-10" placeholder="Vehicle e.g. Bike CM-123" value={trackingDrafts[order.id]?.vehicleInfo ?? order.vehicleInfo ?? ''} onChange={(e) => updateTrackingDraft(order.id, { vehicleInfo: e.target.value })} />
+                  <input className="input h-10" placeholder="ETA minutes" type="number" value={trackingDrafts[order.id]?.etaMinutes ?? order.etaMinutes ?? ''} onChange={(e) => updateTrackingDraft(order.id, { etaMinutes: e.target.value })} />
+                  <input className="input h-10" placeholder="Distance km" type="number" value={trackingDrafts[order.id]?.distanceKm ?? order.distanceKm ?? ''} onChange={(e) => updateTrackingDraft(order.id, { distanceKm: e.target.value })} />
+                  <input className="input h-10" placeholder="Speed km/h" type="number" value={trackingDrafts[order.id]?.speedKph ?? order.driverSpeedKph ?? ''} onChange={(e) => updateTrackingDraft(order.id, { speedKph: e.target.value })} />
+                  <input className="input h-10" placeholder="Driver latitude" type="number" value={trackingDrafts[order.id]?.latitude ?? order.driverLatitude ?? ''} onChange={(e) => updateTrackingDraft(order.id, { latitude: e.target.value })} />
+                  <input className="input h-10" placeholder="Driver longitude" type="number" value={trackingDrafts[order.id]?.longitude ?? order.driverLongitude ?? ''} onChange={(e) => updateTrackingDraft(order.id, { longitude: e.target.value })} />
+                </div>
+                <input className="input mt-3 h-10" placeholder="Tracking update message" value={trackingDrafts[order.id]?.message ?? ''} onChange={(e) => updateTrackingDraft(order.id, { message: e.target.value })} />
               </div>
             </article>
           ))}
