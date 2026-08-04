@@ -1,4 +1,18 @@
-export function Loading({ label = 'Loading' }) {
+export function Loading({ label = 'Loading', fullscreen = false }) {
+  if (!fullscreen) {
+    return (
+      <div className="rounded-3xl border border-[#edf0f2] bg-white p-6 shadow-sm" role="status" aria-live="polite" aria-label={label}>
+        <div className="flex items-center gap-4">
+          <span className="h-10 w-10 shrink-0 animate-spin rounded-full border-4 border-[#fff1ca] border-t-[#d71920]" />
+          <div>
+            <p className="text-sm font-black text-[#151923]">{label}</p>
+            <p className="mt-1 text-xs font-semibold text-stone-500">Loading the latest workspace data.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[100] h-screen w-screen bg-[#eaf5f8]" role="status" aria-live="polite" aria-label={label}>
       <div className="chop-loader relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-white px-6 py-8 text-center">

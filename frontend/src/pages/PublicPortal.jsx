@@ -1612,7 +1612,7 @@ export default function PublicPortal() {
     setPromotionOpen(true);
   };
 
-  if (loading) return <Loading label="Loading menu" />;
+  if (loading) return <Loading label="Loading menu" fullscreen />;
   if (error || !data) return <EmptyState title="Menu unavailable" message="The ordering portal could not load the menu." onRetry={refetch} />;
 
   const renderMeals = (list) => (

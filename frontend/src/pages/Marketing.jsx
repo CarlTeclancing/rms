@@ -25,6 +25,33 @@ const modules = [
 
 const campaignTypes = ['Flash Sale', 'Weekend Sale', 'Holiday Sale', 'Happy Hour', 'Restaurant Promotion', 'Product Promotion', 'Free Delivery', 'Buy One Get One', 'Cashback', 'Loyalty Bonus'];
 const rewardTypes = ['Free Delivery', 'Percentage Discount', 'Fixed Discount', 'Free Drink', 'Free Dessert', 'Bonus Points', 'Cashback', 'Mystery Reward'];
+const couponTypes = ['Percentage Coupon', 'Fixed Coupon', 'Restaurant Coupon', 'Category Coupon', 'Free Delivery Coupon', 'Referral Coupon', 'First Order Coupon', 'Birthday Coupon'];
+const audienceOptions = ['All customers', 'New customers', 'Returning customers', 'Inactive customers', 'High-value customers', 'Referral users', 'Birthday users'];
+
+const moduleGroups = [
+  {
+    title: 'Campaigns',
+    helper: 'Sales pushes, restaurant promotions, banners, announcements.',
+    items: ['CAMPAIGN', 'FLASH_DEAL', 'HOMEPAGE_BANNER', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT']
+  },
+  {
+    title: 'Rewards & Retention',
+    helper: 'Daily hooks that increase repeat visits and order frequency.',
+    items: ['DAILY_REWARD', 'SPIN_WHEEL', 'LOYALTY_PROGRAM', 'DAILY_STREAK']
+  },
+  {
+    title: 'Acquisition',
+    helper: 'Coupons, referrals, and challenges that grow the customer base.',
+    items: ['COUPON', 'REFERRAL_PROGRAM', 'CHALLENGE', 'PUSH_NOTIFICATION']
+  }
+];
+
+const optionSections = [
+  { title: 'Campaign Types', items: campaignTypes, tone: 'bg-[#fff4d7] text-[#8b5f00]' },
+  { title: 'Reward Types', items: rewardTypes, tone: 'bg-[#e7f8ef] text-[#0b8f4f]' },
+  { title: 'Coupon Types', items: couponTypes, tone: 'bg-[#eef8fa] text-[#29384d]' },
+  { title: 'Target Audiences', items: audienceOptions, tone: 'bg-[#fff4f4] text-[#d71920]' }
+];
 
 const emptyForm = {
   type: 'CAMPAIGN',
@@ -81,6 +108,21 @@ function CompactList({ title, items }) {
   );
 }
 
+function OptionSection({ title, items, tone }) {
+  return (
+    <section className="rounded-3xl bg-white p-5 shadow-sm">
+      <h2 className="font-black text-[#151923]">{title}</h2>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span key={item} className={`rounded-full px-3 py-2 text-xs font-black ${tone}`}>
+            {item}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Marketing() {
   const [dashboard, setDashboard] = useState(null);
   const [items, setItems] = useState([]);
@@ -129,7 +171,8 @@ export default function Marketing() {
         config: {
           ...form.config,
           campaignType: form.config.campaignType || campaignTypes[0],
-          rewardType: form.config.rewardType || rewardTypes[0]
+          rewardType: form.config.rewardType || rewardTypes[0],
+          couponType: form.config.couponType || couponTypes[0]
         }
       };
       if (editingId) await endpoints.updateMarketingItem(editingId, payload);
@@ -190,27 +233,43 @@ export default function Marketing() {
         <CompactList title="Scheduled Notifications" items={dashboard.scheduledNotifications} />
       </div>
 
+      <div className="grid gap-4 xl:grid-cols-4">
+        {optionSections.map((section) => (
+          <OptionSection key={section.title} {...section} />
+        ))}
+      </div>
+
       <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
         <aside className="rounded-3xl bg-white p-3 shadow-sm">
           <p className="px-2 pb-2 text-xs font-black uppercase tracking-wide text-stone-500">Marketing modules</p>
-          <div className="grid gap-1">
-            {modules.map((module) => {
-              const Icon = module.icon;
-              return (
-                <button
-                  key={module.id}
-                  type="button"
-                  className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-black ${activeType === module.id ? 'bg-[#d71920] text-white' : 'text-[#42495a] hover:bg-[#fff4f4] hover:text-[#d71920]'}`}
-                  onClick={() => {
-                    setActiveType(module.id);
-                    setForm({ ...emptyForm, type: module.id });
-                    setEditingId(null);
-                  }}
-                >
-                  <Icon size={17} /> {module.label}
-                </button>
-              );
-            })}
+          <div className="grid gap-4">
+            {moduleGroups.map((group) => (
+              <div key={group.title}>
+                <p className="px-2 text-xs font-black uppercase text-stone-500">{group.title}</p>
+                <p className="px-2 pb-2 pt-1 text-xs font-semibold leading-4 text-stone-400">{group.helper}</p>
+                <div className="grid gap-1">
+                  {group.items.map((moduleId) => {
+                    const module = modules.find((entry) => entry.id === moduleId);
+                    if (!module) return null;
+                    const Icon = module.icon;
+                    return (
+                      <button
+                        key={module.id}
+                        type="button"
+                        className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-black ${activeType === module.id ? 'bg-[#d71920] text-white' : 'text-[#42495a] hover:bg-[#fff4f4] hover:text-[#d71920]'}`}
+                        onClick={() => {
+                          setActiveType(module.id);
+                          setForm({ ...emptyForm, type: module.id });
+                          setEditingId(null);
+                        }}
+                      >
+                        <Icon size={17} /> {module.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </aside>
 
@@ -262,11 +321,12 @@ export default function Marketing() {
                 <label><span className="label">CTA label</span><input className={inputClass} value={form.ctaLabel || ''} onChange={(event) => setForm({ ...form, ctaLabel: event.target.value })} /></label>
                 <label><span className="label">Deep link</span><input className={inputClass} value={form.deepLink || ''} onChange={(event) => setForm({ ...form, deepLink: event.target.value })} /></label>
               </div>
-              <label><span className="label">Target audience</span><input className={inputClass} value={form.audience || ''} onChange={(event) => setForm({ ...form, audience: event.target.value })} /></label>
+              <label><span className="label">Target audience</span><select className={inputClass} value={form.audience || audienceOptions[0]} onChange={(event) => setForm({ ...form, audience: event.target.value })}>{audienceOptions.map((audience) => <option key={audience}>{audience}</option>)}</select></label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label><span className="label">Campaign type</span><select className={inputClass} value={form.config?.campaignType || campaignTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, campaignType: event.target.value } })}>{campaignTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
                 <label><span className="label">Reward type</span><select className={inputClass} value={form.config?.rewardType || rewardTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, rewardType: event.target.value } })}>{rewardTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
               </div>
+              <label><span className="label">Coupon type</span><select className={inputClass} value={form.config?.couponType || couponTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, couponType: event.target.value } })}>{couponTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label><span className="label">Usage / stock limit</span><input className={inputClass} type="number" value={form.config?.maxClaims || ''} onChange={(event) => setForm({ ...form, config: { ...form.config, maxClaims: event.target.value } })} /></label>
                 <label><span className="label">Minimum order</span><input className={inputClass} type="number" value={form.config?.minimumOrder || ''} onChange={(event) => setForm({ ...form, config: { ...form.config, minimumOrder: event.target.value } })} /></label>
