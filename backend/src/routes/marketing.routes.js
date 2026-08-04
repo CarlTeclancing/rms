@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import {
   createMarketingItem,
+  claimPublicReward,
   deleteMarketingItem,
   exportMarketingReport,
   listMarketingItems,
@@ -21,6 +22,7 @@ const validation = [
 ];
 
 router.get('/public/marketing', publicMarketingItems);
+router.post('/public/marketing/:id/claim', claimPublicReward);
 router.get('/marketing/dashboard', authenticate, authorize('marketing:read'), marketingDashboard);
 router.get('/marketing/items', authenticate, authorize('marketing:read'), listMarketingItems);
 router.post('/marketing/items', authenticate, authorize('marketing:write'), validation, createMarketingItem);

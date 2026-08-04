@@ -1,8 +1,6 @@
 import dotenv from 'dotenv';
 
-const runtimePort = process.env.PORT;
-dotenv.config({ override: true });
-if (runtimePort) process.env.PORT = runtimePort;
+dotenv.config();
 
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',

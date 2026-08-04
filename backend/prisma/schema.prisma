@@ -142,6 +142,7 @@ model MarketingItem {
   metrics     Json                @default("{}")
   createdById String?
   createdBy   User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  rewardClaims CustomerRewardClaim[]
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
@@ -165,10 +166,27 @@ model Customer {
   referredBy      Customer?     @relation("CustomerReferrals", fields: [referredById], references: [id], onDelete: SetNull)
   referrals       Customer[]    @relation("CustomerReferrals")
   onlineOrders    OnlineOrder[]
+  rewardClaims    CustomerRewardClaim[]
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@index([referredById])
+}
+
+model CustomerRewardClaim {
+  id              String        @id @default(cuid())
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  marketingItemId String
+  marketingItem   MarketingItem @relation(fields: [marketingItemId], references: [id], onDelete: Cascade)
+  claimDate       DateTime
+  points          Int           @default(0)
+  streakCount     Int           @default(1)
+  createdAt       DateTime      @default(now())
+
+  @@unique([customerId, marketingItemId, claimDate])
+  @@index([customerId, claimDate])
+  @@index([marketingItemId])
 }
 
 model MenuCategory {

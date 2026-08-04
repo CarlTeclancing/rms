@@ -107,6 +107,16 @@ const fallbackPromotionSlide = {
   description: 'Check back for active campaigns, flash deals, and featured restaurant offers.'
 };
 
+const rewardClaimTypes = ['DAILY_REWARD', 'DAILY_STREAK', 'LOYALTY_PROGRAM', 'CHALLENGE', 'REFERRAL_PROGRAM'];
+
+function campaignActionFor(slide = {}) {
+  const text = `${slide.type || ''} ${slide.title || ''} ${slide.ctaLabel || ''} ${slide.deepLink || ''}`.toLowerCase();
+  if (rewardClaimTypes.includes(slide.type) || text.includes('reward') || text.includes('claim') || text.includes('point') || text.includes('streak')) return 'reward';
+  if (slide.type === 'FLASH_DEAL' || text.includes('flash') || text.includes('deal') || text.includes('offer')) return 'flash';
+  if (text.includes('support') || text.includes('promote')) return 'support';
+  return 'meals';
+}
+
 function Loader({ label = 'Loading' }) {
   return (
     <View style={styles.loader}>
@@ -352,7 +362,10 @@ export default function App() {
   const [profileTab, setProfileTab] = useState('referral');
   const [refreshing, setRefreshing] = useState(false);
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
+  const [rewardClaimingId, setRewardClaimingId] = useState('');
+  const [rewardClaim, setRewardClaim] = useState(null);
   const activeOrderPulse = useRef(new Animated.Value(1)).current;
+  const rewardBurst = useRef(new Animated.Value(0)).current;
 
   const filteredItems = useMemo(() => items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase())), [items, search]);
   const favoriteItems = useMemo(() => items.filter((item) => favorites.includes(item.id)), [items, favorites]);
@@ -557,6 +570,25 @@ export default function App() {
   const shareReferral = async () => {
     if (!referralLink) return;
     await Share.share({ title: 'ChopASAP', message: referralLink });
+  };
+
+  const claimReward = async (reward) => {
+    if (!customer?.id || !reward?.id) return;
+    setRewardClaimingId(reward.id);
+    try {
+      const result = await api.claimReward(reward.id, { customerId: customer.id });
+      if (result.customer) await saveCustomer(result.customer);
+      setRewardClaim({ ...result, reward });
+      rewardBurst.setValue(0);
+      Animated.sequence([
+        Animated.spring(rewardBurst, { toValue: 1, useNativeDriver: true, friction: 4, tension: 90 }),
+        Animated.timing(rewardBurst, { toValue: 0, duration: 900, useNativeDriver: true })
+      ]).start();
+    } catch (error) {
+      Alert.alert('ChopASAP', error.message);
+    } finally {
+      setRewardClaimingId('');
+    }
   };
 
   const addToCart = (item, quantity = 1, variationName = '') => {
@@ -819,6 +851,18 @@ export default function App() {
                 onFavorite={toggleFavorite}
                 onShare={shareMeal}
                 onFlashSale={() => setFlashSaleOpen(true)}
+                onCampaignAction={(action) => {
+                  if (action === 'reward') {
+                    setRewardOpen(true);
+                    return;
+                  }
+                  if (action === 'flash') {
+                    if (flashSale || marketing.flashDeal) setFlashSaleOpen(true);
+                    else setTab('meals');
+                    return;
+                  }
+                  setTab(action === 'support' ? 'support' : 'meals');
+                }}
               />
             ) : null}
             {tab === 'meals' ? <MealsView title={t(language, 'meals')} items={filteredItems} favorites={favorites} onOpen={setSelectedMeal} onFavorite={toggleFavorite} onShare={shareMeal} language={language} /> : null}
@@ -887,7 +931,15 @@ export default function App() {
             }}
           />
           <FlashSaleModal visible={flashSaleOpen} code={flashSale} onClose={dismissFlashSale} onShare={shareFlashSale} />
-          <RewardModal visible={rewardOpen} rewards={marketing.floatingRewards || []} onClose={() => setRewardOpen(false)} />
+          <RewardModal
+            visible={rewardOpen}
+            rewards={marketing.floatingRewards || []}
+            claim={rewardClaim}
+            claimingId={rewardClaimingId}
+            burst={rewardBurst}
+            onClaim={claimReward}
+            onClose={() => setRewardOpen(false)}
+          />
           <OrderDetailModal visible={Boolean(selectedOrder)} order={selectedOrder} language={language} onClose={() => setSelectedOrder(null)} />
           <ReservationModal visible={reservationOpen} language={language} form={reservationForm} setForm={setReservationForm} saving={saving} onClose={() => setReservationOpen(false)} onSubmit={submitReservation} />
           <PromotionModal visible={promotionOpen} language={language} form={promotionForm} setForm={setPromotionForm} saving={saving} onPickImage={pickPromotionImage} onClose={() => setPromotionOpen(false)} onSubmit={submitPromotion} />
@@ -1006,7 +1058,7 @@ function groupMealsByCategory(items, categories = []) {
   }, seededGroups);
 }
 
-function HomeView({ items, menuCategories, categoryLimit, favorites, promotions, marketing, flashSale, language, onOpen, onFavorite, onShare, onFlashSale }) {
+function HomeView({ items, menuCategories, categoryLimit, favorites, promotions, marketing, flashSale, language, onOpen, onFavorite, onShare, onFlashSale, onCampaignAction }) {
   const categories = groupMealsByCategory(items, menuCategories).filter((category) => category.items.length > 0);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const visibleCategories = selectedCategory === 'all' ? categories : categories.filter((category) => category.name === selectedCategory);
@@ -1025,7 +1077,7 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
   const visibleBannerSlides = bannerSlides.length ? bannerSlides : [fallbackPromotionSlide];
   return (
     <View>
-      <PromotionCarousel slides={visibleBannerSlides} />
+      <PromotionCarousel slides={visibleBannerSlides} onAction={onCampaignAction} />
 
       <View style={styles.categoryQuickAccess}>
         <View style={styles.categoryGridTop}>
@@ -1105,16 +1157,11 @@ function variantForCategory(name = '', fallback = 0) {
   return ['meal', 'basket', 'drinks', 'bottles', 'icecream'][fallback % 5];
 }
 
-function PromotionCarousel({ slides }) {
+function PromotionCarousel({ slides, onAction }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(width - 32, 430);
   const activeSlide = slides[activeIndex] || slides[0];
-  const openSlide = (slide) => {
-    if (!slide.deepLink) return;
-    const url = slide.deepLink.startsWith('http') ? slide.deepLink : `${portalUrl}${slide.deepLink.startsWith('/') ? slide.deepLink : `/${slide.deepLink}`}`;
-    Linking.openURL(url);
-  };
   useEffect(() => {
     if (activeIndex < slides.length) return;
     setActiveIndex(0);
@@ -1133,7 +1180,7 @@ function PromotionCarousel({ slides }) {
         }}
       >
         {slides.map((slide) => (
-          <Pressable key={slide.id || slide.title} style={[styles.promotionHeroCard, { width: cardWidth }]} onPress={slide.deepLink ? () => openSlide(slide) : undefined}>
+          <Pressable key={slide.id || slide.title} style={[styles.promotionHeroCard, { width: cardWidth }]} onPress={() => onAction?.(campaignActionFor(slide), slide)}>
             <View style={styles.promotionHeroText}>
               <Text style={styles.promoEyebrow}>{slide.label || 'Featured'}</Text>
               <Text style={styles.promotionHeroTitle} numberOfLines={2}>{slide.title}</Text>
@@ -1745,7 +1792,11 @@ function FlashSaleModal({ visible, code, onClose, onShare }) {
   );
 }
 
-function RewardModal({ visible, rewards, onClose }) {
+function RewardModal({ visible, rewards, claim, claimingId, burst, onClaim, onClose }) {
+  const streak = Number(claim?.streakCount || 0);
+  const streakProgress = `${Math.min(100, (streak / 7) * 100)}%`;
+  const burstScale = burst.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.18] });
+  const burstOpacity = burst.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] });
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.rewardOverlay}>
@@ -1754,12 +1805,39 @@ function RewardModal({ visible, rewards, onClose }) {
             <Text style={styles.pageTitle}>Rewards</Text>
             <Pressable onPress={onClose}><Ionicons name="close" size={26} color="#111" /></Pressable>
           </View>
+          <View style={styles.streakPanel}>
+            <View>
+              <Text style={styles.streakLabel}>Daily streak</Text>
+              <Text style={styles.streakValue}>{streak || 0} day{streak === 1 ? '' : 's'}</Text>
+            </View>
+            <View style={styles.streakTrack}>
+              <View style={[styles.streakFill, { width: streakProgress }]} />
+            </View>
+            <Text style={styles.streakHint}>{streak >= 7 ? 'Weekly streak completed' : `${Math.max(0, 7 - streak)} days to a full week`}</Text>
+            <Animated.View style={[styles.rewardBurst, { opacity: burstOpacity, transform: [{ scale: burstScale }] }]}>
+              <Ionicons name="sparkles" size={20} color="#fff" />
+              <Text style={styles.rewardBurstText}>+{claim?.pointsEarned || 0}</Text>
+            </Animated.View>
+          </View>
           <ScrollView contentContainerStyle={styles.checkoutBody}>
             {rewards.length ? rewards.map((reward) => (
               <View key={reward.id} style={styles.rewardCard}>
-                <Text style={styles.cardTitle}>{reward.title}</Text>
-                {reward.description ? <Text style={styles.cardCopy}>{reward.description}</Text> : null}
-                {reward.ctaLabel ? <Text style={styles.linkButtonText}>{reward.ctaLabel}</Text> : null}
+                <View style={styles.rewardCardHeader}>
+                  <View style={styles.rewardIcon}>
+                    <Ionicons name={reward.type === 'DAILY_STREAK' ? 'flame-outline' : 'gift-outline'} size={20} color={brandRed} />
+                  </View>
+                  <View style={styles.rewardCardCopy}>
+                    <Text style={styles.cardTitle}>{reward.title}</Text>
+                    {reward.description ? <Text style={styles.cardCopy}>{reward.description}</Text> : null}
+                  </View>
+                </View>
+                <Pressable style={[styles.claimButton, claimingId === reward.id && styles.disabled]} disabled={claimingId === reward.id} onPress={() => onClaim(reward)}>
+                  <Ionicons name="sparkles-outline" size={17} color="#fff" />
+                  <Text style={styles.claimButtonText}>{claimingId === reward.id ? 'Claiming...' : reward.ctaLabel || 'Claim reward'}</Text>
+                </Pressable>
+                {claim?.reward?.id === reward.id ? (
+                  <Text style={styles.claimResult}>{claim.alreadyClaimed ? 'Already claimed today. Keep your streak tomorrow.' : `Reward claimed. ${claim.pointsEarned} points added.`}</Text>
+                ) : null}
               </View>
             )) : <Text style={styles.emptyText}>No rewards are active right now.</Text>}
           </ScrollView>
@@ -1906,18 +1984,18 @@ const styles = StyleSheet.create({
   pageTitle: { fontSize: 24, fontWeight: '900', color: '#151923', marginBottom: 14 },
   promotionHeroBlock: { marginBottom: 14 },
   promotionHeroRail: { gap: 10 },
-  promotionHeroCard: { minHeight: 156, borderRadius: 18, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#ffd08a', overflow: 'hidden', flexDirection: 'row' },
-  promotionHeroText: { flex: 1, padding: 14, justifyContent: 'center' },
-  promotionHeroTitle: { color: '#151923', fontSize: 20, lineHeight: 24, fontWeight: '900' },
-  promotionHeroCopy: { marginTop: 5, color: '#6c6250', fontSize: 12, lineHeight: 17, fontWeight: '700' },
-  promotionHeroCta: { marginTop: 12, alignSelf: 'flex-start', height: 32, borderRadius: 16, backgroundColor: '#151923', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  promotionHeroCard: { minHeight: 112, borderRadius: 16, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#ffd08a', overflow: 'hidden', flexDirection: 'row' },
+  promotionHeroText: { flex: 1, padding: 12, justifyContent: 'center' },
+  promotionHeroTitle: { color: '#151923', fontSize: 16, lineHeight: 20, fontWeight: '900' },
+  promotionHeroCopy: { marginTop: 3, color: '#6c6250', fontSize: 12, lineHeight: 15, fontWeight: '700' },
+  promotionHeroCta: { marginTop: 8, alignSelf: 'flex-start', height: 28, borderRadius: 14, backgroundColor: '#151923', paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
   promotionHeroCtaText: { color: '#fff', fontSize: 12, fontWeight: '900' },
-  promotionHeroMedia: { width: 118, backgroundColor: '#ffe6a3', alignItems: 'center', justifyContent: 'center' },
+  promotionHeroMedia: { width: 92, backgroundColor: '#ffe6a3', alignItems: 'center', justifyContent: 'center' },
   promotionHeroImage: { width: '100%', height: '100%' },
-  promotionHeroDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  promotionHeroDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
   promotionHeroDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#d8dee2' },
   promotionHeroDotActive: { width: 22, backgroundColor: brandRed },
-  promotionHeroStatus: { position: 'absolute', right: 2, bottom: 0, color: brandRed, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  promotionHeroStatus: { position: 'absolute', right: 2, bottom: 0, color: brandRed, fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
   categoryQuickAccess: { marginBottom: 10, gap: 6 },
   categoryGridTop: { flexDirection: 'row', gap: 8 },
   categoryGridBottom: { flexDirection: 'row', gap: 7 },
@@ -2141,5 +2219,19 @@ const styles = StyleSheet.create({
   rewardFab: { position: 'absolute', right: 18, bottom: 92, width: 56, height: 56, borderRadius: 28, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', shadowColor: brandRed, shadowOpacity: 0.28, shadowRadius: 18, elevation: 8 },
   rewardOverlay: { flex: 1, backgroundColor: 'rgba(21,25,35,0.45)', justifyContent: 'flex-end' },
   rewardSheet: { maxHeight: '78%', borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#fff', overflow: 'hidden' },
-  rewardCard: { borderRadius: 18, backgroundColor: '#fff8e8', padding: 16, gap: 8, marginBottom: 12 }
+  streakPanel: { marginHorizontal: 16, marginBottom: 4, borderRadius: 18, backgroundColor: '#151923', padding: 14, overflow: 'hidden' },
+  streakLabel: { color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  streakValue: { marginTop: 2, color: '#fff', fontSize: 24, fontWeight: '900' },
+  streakTrack: { marginTop: 12, height: 9, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.16)', overflow: 'hidden' },
+  streakFill: { height: '100%', borderRadius: 8, backgroundColor: '#2fbf71' },
+  streakHint: { marginTop: 7, color: 'rgba(255,255,255,0.72)', fontSize: 12, fontWeight: '800' },
+  rewardBurst: { position: 'absolute', right: 14, top: 16, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 16, backgroundColor: brandRed, paddingHorizontal: 10, paddingVertical: 6 },
+  rewardBurstText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  rewardCard: { borderRadius: 18, backgroundColor: '#fff8e8', padding: 14, gap: 12, marginBottom: 12, borderWidth: 1, borderColor: '#ffd08a' },
+  rewardCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  rewardIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  rewardCardCopy: { flex: 1 },
+  claimButton: { height: 42, borderRadius: 16, backgroundColor: brandRed, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  claimButtonText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  claimResult: { color: '#16894d', fontSize: 12, fontWeight: '900' }
 });

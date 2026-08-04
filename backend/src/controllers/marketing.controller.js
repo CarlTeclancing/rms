@@ -16,6 +16,34 @@ const startOfToday = () => {
 
 const parseDate = (value) => (value ? new Date(value) : null);
 const visibleBannerTypes = ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'];
+const claimableRewardTypes = ['DAILY_REWARD', 'DAILY_STREAK', 'LOYALTY_PROGRAM', 'CHALLENGE', 'REFERRAL_PROGRAM'];
+
+const startOfUtcDay = (value = new Date()) => {
+  const date = new Date(value);
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+};
+
+const rewardPointsFor = (item) => {
+  const configured = Number(item.config?.points || item.config?.rewardPoints || item.config?.bonusPoints || 0);
+  if (configured > 0) return configured;
+  if (item.type === 'DAILY_STREAK') return 10;
+  if (item.type === 'DAILY_REWARD') return 5;
+  return 5;
+};
+
+const serializeRewardCustomer = (customer, orderCount = 0) => ({
+  id: customer.id,
+  name: customer.name,
+  phone: customer.phone,
+  email: customer.email,
+  address: customer.address,
+  profileImageUrl: customer.profileImageUrl,
+  points: customer.points,
+  referralCode: customer.referralCode,
+  orderCount,
+  referralCount: customer._count?.referrals || 0
+});
 
 const sanitizePayload = (body, userId) => ({
   type: body.type,
@@ -142,6 +170,89 @@ export const publicMarketingItems = asyncHandler(async (_req, res) => {
     hero: banners[0] || null,
     floatingRewards: activeItems.filter((item) => ['DAILY_REWARD', 'SPIN_WHEEL', 'DAILY_STREAK', 'CHALLENGE', 'REFERRAL_PROGRAM'].includes(item.type)).slice(0, 5),
     flashDeal: activeItems.find((item) => item.type === 'FLASH_DEAL') || null
+  });
+});
+
+export const claimPublicReward = asyncHandler(async (req, res) => {
+  const now = new Date();
+  const today = startOfUtcDay(now);
+  const yesterday = new Date(today);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+
+  const [customer, reward] = await Promise.all([
+    prisma.customer.findUnique({ where: { id: req.body.customerId }, include: { _count: { select: { referrals: true } } } }),
+    prisma.marketingItem.findFirst({
+      where: {
+        id: req.params.id,
+        type: { in: claimableRewardTypes },
+        status: { in: ['ACTIVE', 'SCHEDULED'] },
+        OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+        AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }]
+      },
+      select: marketingItemSelect
+    })
+  ]);
+
+  if (!customer) throw new ApiError(404, 'Customer not found');
+  if (!reward) throw new ApiError(404, 'Reward is not available');
+
+  const existingClaim = await prisma.customerRewardClaim.findUnique({
+    where: {
+      customerId_marketingItemId_claimDate: {
+        customerId: customer.id,
+        marketingItemId: reward.id,
+        claimDate: today
+      }
+    }
+  });
+  if (existingClaim) {
+    res.json({
+      claimed: false,
+      alreadyClaimed: true,
+      pointsEarned: 0,
+      streakCount: existingClaim.streakCount,
+      customer: serializeRewardCustomer(customer)
+    });
+    return;
+  }
+
+  const previousClaim = await prisma.customerRewardClaim.findFirst({
+    where: {
+      customerId: customer.id,
+      marketingItemId: reward.id,
+      claimDate: yesterday
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+  const streakCount = previousClaim ? previousClaim.streakCount + 1 : 1;
+  const pointsEarned = rewardPointsFor(reward);
+
+  const updatedCustomer = await prisma.$transaction(async (tx) => {
+    await tx.customerRewardClaim.create({
+      data: {
+        customerId: customer.id,
+        marketingItemId: reward.id,
+        claimDate: today,
+        points: pointsEarned,
+        streakCount
+      }
+    });
+    return tx.customer.update({
+      where: { id: customer.id },
+      data: { points: { increment: pointsEarned } },
+      include: { _count: { select: { referrals: true } } }
+    });
+  });
+  const orderCount = await prisma.onlineOrder.count({
+    where: { OR: [{ customerId: updatedCustomer.id }, { customerPhone: updatedCustomer.phone }] }
+  });
+
+  res.status(201).json({
+    claimed: true,
+    pointsEarned,
+    streakCount,
+    reward: normalizeMarketingItem(reward, now),
+    customer: serializeRewardCustomer(updatedCustomer, orderCount)
   });
 });
 

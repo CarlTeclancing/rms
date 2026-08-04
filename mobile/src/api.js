@@ -64,6 +64,7 @@ export const api = {
   flashSale: () => request('/public/flash-sale'),
   promotions: () => request('/public/promotions'),
   marketing: () => request('/public/marketing'),
+  claimReward: (id, data) => request(`/public/marketing/${id}/claim`, { method: 'POST', body: JSON.stringify(data) }),
   customerSession: (data) => request('/public/customers/session', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomer: (id, data) => request(`/public/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   customerOrders: (id) => request(`/public/customers/${id}/orders`),
