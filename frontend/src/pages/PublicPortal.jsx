@@ -249,6 +249,8 @@ const rewardRank = (points = 0) => {
   return { title: 'Food Explorer', next: `${50 - value} points to Taste Champion` };
 };
 
+const customerFacingMarketingTypes = ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'];
+
 function RedButton({ children, className, ...props }) {
   return (
     <button
@@ -1021,11 +1023,17 @@ export default function PublicPortal() {
   const categories = [...new Set(items.map((item) => item.category?.name).filter(Boolean))];
   const filteredItems = items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase()));
   const favoriteItems = items.filter((item) => favorites.includes(item.id));
-  const marketingSlides = (marketing.data?.banners || (marketing.data?.hero ? [marketing.data.hero] : [])).map((item) => ({
+  const marketingBannerSource = [
+    ...(marketing.data?.banners || []),
+    ...(marketing.data?.hero ? [marketing.data.hero] : []),
+    ...(marketing.data?.items || []).filter((item) => customerFacingMarketingTypes.includes(item.type))
+  ].filter((item, index, source) => item?.id && source.findIndex((entry) => entry?.id === item.id) === index);
+  const marketingSlides = marketingBannerSource.map((item) => ({
     ...item,
     id: `marketing-${item.id}`,
     businessName: item.type?.replaceAll('_', ' ') || 'Featured campaign',
-    ctaLabel: item.ctaLabel || (item.type === 'FLASH_DEAL' ? 'View deal' : 'Order now')
+    ctaLabel: item.ctaLabel || (item.type === 'FLASH_DEAL' ? 'View deal' : 'Order now'),
+    ctaUrl: item.deepLink
   }));
   const promotionSlides = [
     ...marketingSlides,

@@ -98,6 +98,8 @@ function RewardRank(points = 0) {
   return { title: 'Food Explorer', next: `${50 - value} points to Taste Champion` };
 }
 
+const customerFacingMarketingTypes = ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'];
+
 function Loader({ label = 'Loading' }) {
   return (
     <View style={styles.loader}>
@@ -1004,7 +1006,11 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
   const visibleItems = selectedCategory === 'all' ? items : visibleCategories.flatMap((category) => category.items);
   const featuredMeals = visibleItems.slice(0, 6);
   const displayedCategories = selectedCategory === 'all' ? visibleCategories.slice(0, categoryLimit) : visibleCategories;
-  const marketingBanners = marketing?.banners || (marketing?.hero ? [marketing.hero] : []);
+  const marketingBanners = [
+    ...(marketing?.banners || []),
+    ...(marketing?.hero ? [marketing.hero] : []),
+    ...(marketing?.items || []).filter((item) => customerFacingMarketingTypes.includes(item.type))
+  ].filter((item, index, source) => item?.id && source.findIndex((entry) => entry?.id === item.id) === index);
   const bannerSlides = [
     ...marketingBanners.map((item) => ({ ...item, label: item.type?.replaceAll('_', ' ') || 'Campaign' })),
     ...promotions.map((item) => ({ ...item, label: item.businessName || 'Promotion', deepLink: item.ctaUrl }))

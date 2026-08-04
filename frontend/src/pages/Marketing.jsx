@@ -90,7 +90,7 @@ const createActions = [
 
 const emptyForm = {
   type: 'CAMPAIGN',
-  status: 'DRAFT',
+  status: 'ACTIVE',
   title: '',
   description: '',
   imageUrl: '',
@@ -547,7 +547,7 @@ export default function Marketing() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <label>
                   <span className="label">Publication status</span>
-                  <p className="mt-1 text-xs font-semibold text-stone-500">Draft stays hidden. Scheduled and Active can appear when dates match. Paused hides it.</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Active appears when dates match. Scheduled appears once the start time arrives. Draft and Paused stay hidden from customers.</p>
                   <select className={inputClass} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{['DRAFT', 'SCHEDULED', 'ACTIVE', 'PAUSED', 'ARCHIVED'].map((status) => <option key={status}>{status}</option>)}</select>
                 </label>
                 <label>

@@ -15,6 +15,7 @@ const startOfToday = () => {
 };
 
 const parseDate = (value) => (value ? new Date(value) : null);
+const visibleBannerTypes = ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'];
 
 const sanitizePayload = (body, userId) => ({
   type: body.type,
@@ -129,9 +130,7 @@ export const publicMarketingItems = asyncHandler(async (_req, res) => {
     select: marketingItemSelect
   });
   const activeItems = items.map(normalizeMarketingItem).filter((item) => item.effectiveStatus === 'ACTIVE');
-  const banners = activeItems.filter((item) =>
-    ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'].includes(item.type)
-  );
+  const banners = activeItems.filter((item) => visibleBannerTypes.includes(item.type));
   res.json({
     items: activeItems,
     banners,
