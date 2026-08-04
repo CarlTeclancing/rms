@@ -75,10 +75,10 @@ export const marketingDashboard = asyncHandler(async (_req, res) => {
       referralSignups,
       activeCampaigns
     },
-    recentCampaigns: recentCampaigns.map(normalizeMarketingItem),
-    upcomingCampaigns: upcomingCampaigns.map(normalizeMarketingItem),
-    todaysFlashDeals: todaysFlashDeals.map(normalizeMarketingItem),
-    scheduledNotifications: scheduledNotifications.map(normalizeMarketingItem),
+    recentCampaigns: recentCampaigns.map((item) => normalizeMarketingItem(item, now)),
+    upcomingCampaigns: upcomingCampaigns.map((item) => normalizeMarketingItem(item, now)),
+    todaysFlashDeals: todaysFlashDeals.map((item) => normalizeMarketingItem(item, now)),
+    scheduledNotifications: scheduledNotifications.map((item) => normalizeMarketingItem(item, now)),
     modules: marketingModules
   });
 });
@@ -92,7 +92,8 @@ export const listMarketingItems = asyncHandler(async (req, res) => {
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
     select: marketingItemSelect
   });
-  res.json({ items: items.map(normalizeMarketingItem), modules: marketingModules });
+  const now = new Date();
+  res.json({ items: items.map((item) => normalizeMarketingItem(item, now)), modules: marketingModules });
 });
 
 export const createMarketingItem = asyncHandler(async (req, res) => {
@@ -133,7 +134,7 @@ export const publicMarketingItems = asyncHandler(async (_req, res) => {
     take: 20,
     select: marketingItemSelect
   });
-  const activeItems = items.map(normalizeMarketingItem).filter((item) => item.effectiveStatus === 'ACTIVE');
+  const activeItems = items.map((item) => normalizeMarketingItem(item, now)).filter((item) => item.effectiveStatus === 'ACTIVE');
   const banners = activeItems.filter((item) => visibleBannerTypes.includes(item.type));
   res.json({
     items: activeItems,
