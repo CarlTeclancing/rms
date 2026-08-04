@@ -162,7 +162,7 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
       const created = await tx.onlineOrder.create({
         data: {
           orderNo: `WEB-${Date.now()}`,
-          customerId: customerId || orderCustomer.id,
+          customerId: orderCustomer.id,
           customerName: customer.customerName,
           customerPhone: phone,
           customerEmail: customer.customerEmail || null,
@@ -193,16 +193,23 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
       await applyStockDeductions(tx, deductions, `Online order ${created.orderNo}`);
       if (pointsEarned > 0) {
         await tx.customer.update({
-          where: { id: customerId || orderCustomer.id },
+          where: { id: orderCustomer.id },
           data: { points: { increment: pointsEarned } }
         });
       }
-      return created;
+      const updatedCustomer = await tx.customer.findUnique({
+        where: { id: orderCustomer.id },
+        include: { _count: { select: { referrals: true } } }
+      });
+      const orderCount = await tx.onlineOrder.count({
+        where: { OR: [{ customerId: updatedCustomer.id }, { customerPhone: updatedCustomer.phone }] }
+      });
+      return { order: created, customer: serializeCustomer(updatedCustomer, orderCount) };
     },
     orderTransactionOptions
   );
 
-  res.status(201).json({ ...order, pointsEarned });
+  res.status(201).json({ ...order.order, pointsEarned, customer: order.customer });
 });
 
 export const upsertPublicCustomer = asyncHandler(async (req, res) => {

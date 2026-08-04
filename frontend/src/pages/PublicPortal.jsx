@@ -1139,6 +1139,19 @@ export default function PublicPortal() {
     }
   };
 
+  const refreshCustomerSession = async (currentCustomer = customer) => {
+    if (!currentCustomer?.name || !currentCustomer?.phone) return null;
+    const response = await endpoints.publicCustomerSession({
+      name: currentCustomer.name,
+      phone: currentCustomer.phone,
+      email: currentCustomer.email || '',
+      address: currentCustomer.address || '',
+      referralCode: currentCustomer.referralCode || ''
+    });
+    saveCustomerSession(response.data);
+    return response.data;
+  };
+
   const submitCustomerSession = async (event) => {
     event.preventDefault();
     setCustomerSaving(true);
@@ -1269,7 +1282,9 @@ export default function PublicPortal() {
 
   useEffect(() => {
     if (!customer?.id) return;
-    loadCustomerOrders(customer.id);
+    refreshCustomerSession(customer)
+      .then((freshCustomer) => loadCustomerOrders(freshCustomer?.id || customer.id))
+      .catch(() => loadCustomerOrders(customer.id));
   }, [customer?.id]);
 
   useEffect(() => () => {
@@ -1505,13 +1520,12 @@ export default function PublicPortal() {
         customerEmail: customer?.email || current.customerEmail,
         deliveryAddress: customer?.address || current.deliveryAddress
       }));
-      if (customer?.id) {
-        await loadCustomerOrders(customer.id);
-        saveCustomerSession({
-          ...customer,
-          orderCount: Number(customer.orderCount || 0) + 1,
-          points: Number(customer.points || 0) + Number(response.data.pointsEarned || 0)
-        });
+      if (response.data.customer) {
+        saveCustomerSession(response.data.customer);
+        await loadCustomerOrders(response.data.customer.id);
+      } else if (customer?.id) {
+        const freshCustomer = await refreshCustomerSession(customer).catch(() => null);
+        await loadCustomerOrders(freshCustomer?.id || customer.id);
       }
       refetch();
       const adminPhone = whatsappPhone(settings.supportPhone);

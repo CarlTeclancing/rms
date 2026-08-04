@@ -411,7 +411,9 @@ export default function App() {
         const parsed = JSON.parse(savedCustomer);
         setCustomer(parsed);
         setCustomerForm({ name: parsed.name || '', phone: parsed.phone || '', email: parsed.email || '', address: parsed.address || '', profileImageUrl: parsed.profileImageUrl || '', referralCode: parsed.referralCode || '' });
-        loadOrders(parsed.id);
+        refreshCustomer(parsed)
+          .then((freshCustomer) => loadOrders(freshCustomer?.id || parsed.id))
+          .catch(() => loadOrders(parsed.id));
       } else {
         const params = Linking.parse(initialUrl || '').queryParams || {};
         setCustomerForm((current) => ({ ...current, referralCode: params.ref || '' }));
@@ -465,6 +467,19 @@ export default function App() {
     await AsyncStorage.setItem(customerKey, JSON.stringify(saved));
   };
 
+  const refreshCustomer = async (currentCustomer = customer) => {
+    if (!currentCustomer?.name || !currentCustomer?.phone) return null;
+    const response = await api.customerSession({
+      name: currentCustomer.name,
+      phone: currentCustomer.phone,
+      email: currentCustomer.email || '',
+      address: currentCustomer.address || '',
+      referralCode: currentCustomer.referralCode || ''
+    });
+    await saveCustomer(response);
+    return response;
+  };
+
   const submitCustomer = async () => {
     setSaving(true);
     try {
@@ -504,7 +519,10 @@ export default function App() {
       setPromotions(promotionData.items || []);
       setMarketing(marketingData || { items: [], hero: null, floatingRewards: [], flashDeal: null });
       setFlashSale(flashSaleData.item || null);
-      if (customer?.id) await loadOrders(customer.id);
+      if (customer?.id) {
+        const freshCustomer = await refreshCustomer(customer).catch(() => null);
+        await loadOrders(freshCustomer?.id || customer.id);
+      }
       if (activeOrders.length) {
         const refreshed = await Promise.all(activeOrders.map((order) => (order.id ? api.order(order.id).catch(() => order) : order)));
         setActiveOrders(refreshed);
@@ -596,9 +614,12 @@ export default function App() {
       setCart([]);
       setCheckoutSuccess(order);
       setActiveOrders((current) => [order, ...current.filter((entry) => entry.id !== order.id)].slice(0, 10));
-      if (customer?.id) {
-        await saveCustomer({ ...customer, points: Number(customer.points || 0) + Number(order.pointsEarned || 0), orderCount: Number(customer.orderCount || 0) + 1 });
-        await loadOrders(customer.id);
+      if (order.customer) {
+        await saveCustomer(order.customer);
+        await loadOrders(order.customer.id);
+      } else if (customer?.id) {
+        const freshCustomer = await refreshCustomer(customer).catch(() => null);
+        await loadOrders(freshCustomer?.id || customer.id);
       }
       const phone = cleanPhone(settings.supportPhone);
       if (phone) {
