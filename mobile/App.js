@@ -3,14 +3,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Image,
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   Share,
@@ -149,7 +151,7 @@ function CustomerGate({ language, form, setForm, saving, onSubmit }) {
           <Field label={t(language, 'name')} value={form.name} onChangeText={(name) => setForm({ ...form, name })} placeholder="Amina N." />
           <Field label={t(language, 'phone')} value={form.phone} onChangeText={(phone) => setForm({ ...form, phone })} placeholder="671286999" keyboardType="phone-pad" />
           <Field label={t(language, 'addressOptional')} value={form.address} onChangeText={(address) => setForm({ ...form, address })} placeholder="Bonanjo, near..." />
-          {form.referralCode ? <Text style={styles.referralBadge}>Referral bonus active</Text> : null}
+          {form.referralCode ? <Text style={styles.referralBadge}>{t(language, 'referralActive')}</Text> : null}
           <Pressable style={[styles.primaryButton, (!complete || saving) && styles.disabled]} disabled={!complete || saving} onPress={onSubmit}>
             <Text style={styles.primaryButtonText}>{saving ? t(language, 'checking') : t(language, 'continue')}</Text>
           </Pressable>
@@ -192,18 +194,32 @@ function MealCard({ item, favorite, onOpen, onFavorite, onShare }) {
   );
 }
 
-function MealDetail({ item, visible, onClose, onAdd, onShare }) {
+function MealDetail({ item, visible, customer, settings, language, onClose, onAdd, onShare }) {
   const [quantity, setQuantity] = useState(1);
   const variations = mealVariations(item);
   const [variation, setVariation] = useState('');
+  const [reviews, setReviews] = useState([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   useEffect(() => {
     setQuantity(1);
-    setVariation(variations[0]?.name || '');
+    setVariation('');
+    setShowAllReviews(false);
   }, [item?.id]);
+
+  useEffect(() => {
+    if (!visible || !item?.id) return;
+    api.mealReviews(item.id)
+      .then((data) => setReviews(data.items || []))
+      .catch(() => setReviews(item.reviews || []));
+  }, [visible, item?.id]);
 
   if (!item) return null;
   const price = mealPrice(item, variation);
+  const visibleReviews = showAllReviews ? reviews : reviews.slice(0, 2);
+  const averageRating = reviews.length
+    ? (reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1)
+    : item.averageRating || 0;
 
   return (
     <Modal visible={visible} animationType="slide">
@@ -219,18 +235,50 @@ function MealDetail({ item, visible, onClose, onAdd, onShare }) {
           <View style={styles.detailBody}>
             <Text style={styles.detailTitle}>{item.name}</Text>
             <Text style={styles.detailPrice}>{formatMoney(price)}</Text>
+            <View style={styles.restaurantInfoCard}>
+              <Image source={logo} style={styles.restaurantLogo} />
+              <View style={styles.restaurantInfoText}>
+                <Text style={styles.restaurantName}>{settings?.restaurantName || 'ChopASAP'}</Text>
+                <Text style={styles.restaurantMeta}>{t(language, 'restaurantKitchen')}</Text>
+              </View>
+              <View style={styles.openBadge}><Text style={styles.openBadgeText}>{settings?.publicOrdering === false ? 'Closed' : 'Open now'}</Text></View>
+            </View>
             <Text style={styles.detailCopy}>{item.description || 'Freshly prepared ChopASAP meal served hot for reserve or delivery.'}</Text>
             {variations.length ? (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Variation</Text>
+                <Text style={styles.sectionTitle}>{t(language, 'extrasAndVariations')}</Text>
+                <Text style={styles.optionHelp}>{t(language, 'optionalAddons')}</Text>
                 {variations.map((entry) => (
-                  <Pressable key={entry.name} style={styles.optionRow} onPress={() => setVariation(variation === entry.name ? '' : entry.name)}>
+                  <Pressable key={entry.name} style={[styles.variationCard, variation === entry.name && styles.variationCardActive]} onPress={() => setVariation(variation === entry.name ? '' : entry.name)}>
                     <Ionicons name={variation === entry.name ? 'radio-button-on' : 'radio-button-off'} size={20} color={brandRed} />
-                    <Text style={styles.optionText}>{entry.name}</Text>
+                    <View style={styles.variationTextBox}>
+                      <Text style={styles.optionText}>{entry.name}</Text>
+                      <Text style={styles.mealMeta}>{formatMoney(entry.price || item.price)}</Text>
+                    </View>
                   </Pressable>
                 ))}
               </View>
             ) : null}
+            <View style={styles.reviewSection}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.sectionTitle}>{t(language, 'mealReviews')}</Text>
+                <Text style={styles.reviewScore}>{averageRating ? `${averageRating} ★` : 'No ratings'}</Text>
+              </View>
+              {visibleReviews.length ? visibleReviews.map((review) => (
+                <View key={review.id || `${review.customerName}-${review.createdAt}`} style={styles.reviewCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.cardTitle}>{review.customerName}</Text>
+                    <Text style={styles.reviewStars}>{'★'.repeat(Number(review.rating || 0))}</Text>
+                  </View>
+                  {review.comment ? <Text style={styles.cardCopy}>{review.comment}</Text> : null}
+                </View>
+              )) : <Text style={styles.cardCopy}>{t(language, 'noReviewsYet')}</Text>}
+              {reviews.length > 2 ? (
+                <Pressable style={styles.linkButton} onPress={() => setShowAllReviews((current) => !current)}>
+                  <Text style={styles.linkButtonText}>{showAllReviews ? 'Show fewer reviews' : 'See all reviews'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         </ScrollView>
         <View style={styles.detailFooter}>
@@ -239,7 +287,7 @@ function MealDetail({ item, visible, onClose, onAdd, onShare }) {
             <Text style={styles.qtyText}>{quantity}</Text>
             <Pressable onPress={() => setQuantity(quantity + 1)}><Ionicons name="add" size={18} /></Pressable>
           </View>
-          <Pressable style={styles.primaryButton} onPress={() => onAdd(item, quantity, variation)}>
+          <Pressable style={[styles.primaryButton, styles.detailAddButton]} onPress={() => onAdd(item, quantity, variation)}>
             <Text style={styles.primaryButtonText}>{t('en', 'addToCart')} {formatMoney(price * quantity)}</Text>
           </Pressable>
         </View>
@@ -281,6 +329,7 @@ export default function App() {
   const [checkoutSuccess, setCheckoutSuccess] = useState(null);
   const [checkoutStep, setCheckoutStep] = useState('cart');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [homeCategoryLimit, setHomeCategoryLimit] = useState(3);
   const [reservationOpen, setReservationOpen] = useState(false);
   const [promotionOpen, setPromotionOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -290,6 +339,9 @@ export default function App() {
   const [reservationForm, setReservationForm] = useState(emptyReservationForm);
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm);
   const [profileTab, setProfileTab] = useState('referral');
+  const [refreshing, setRefreshing] = useState(false);
+  const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
+  const activeOrderPulse = useRef(new Animated.Value(1)).current;
 
   const filteredItems = useMemo(() => items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase())), [items, search]);
   const favoriteItems = useMemo(() => items.filter((item) => favorites.includes(item.id)), [items, favorites]);
@@ -299,10 +351,23 @@ export default function App() {
   const total = subtotal + deliveryFee + serviceFee;
   const referralLink = customer?.referralCode ? `${portalUrl}/?ref=${customer.referralCode}` : '';
   const rank = RewardRank(customer?.points);
+  const activeOrderCount = activeOrders.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status)).length;
 
   useEffect(() => {
     bootstrap();
   }, []);
+
+  useEffect(() => {
+    if (!activeOrderCount) return undefined;
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(activeOrderPulse, { toValue: 0.35, duration: 650, useNativeDriver: true }),
+        Animated.timing(activeOrderPulse, { toValue: 1, duration: 650, useNativeDriver: true })
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [activeOrderCount, activeOrderPulse]);
 
   useEffect(() => {
     AsyncStorage.setItem(favoritesKey, JSON.stringify(favorites));
@@ -416,6 +481,32 @@ export default function App() {
       setOrders(response.items || []);
     } catch {
       setOrders([]);
+    }
+  };
+
+  const refreshApp = async () => {
+    setRefreshing(true);
+    try {
+      const [menuData, settingsData, promotionData, flashSaleData] = await Promise.all([
+        api.menu(),
+        api.settings().catch(() => settings),
+        api.promotions().catch(() => ({ items: promotions })),
+        api.flashSale().catch(() => ({ item: flashSale }))
+      ]);
+      setItems(menuData.items || []);
+      setMenuCategories(menuData.categories || []);
+      setSettings(settingsData || {});
+      setPromotions(promotionData.items || []);
+      setFlashSale(flashSaleData.item || null);
+      if (customer?.id) await loadOrders(customer.id);
+      if (activeOrders.length) {
+        const refreshed = await Promise.all(activeOrders.map((order) => (order.id ? api.order(order.id).catch(() => order) : order)));
+        setActiveOrders(refreshed);
+      }
+    } catch (error) {
+      Alert.alert('ChopASAP', error.message);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -609,6 +700,17 @@ export default function App() {
     }
   };
 
+  const switchAccount = async () => {
+    await AsyncStorage.removeItem(customerKey);
+    await AsyncStorage.removeItem(activeOrdersKey);
+    setCustomer(null);
+    setOrders([]);
+    setActiveOrders([]);
+    setCart([]);
+    setProfileOpen(false);
+    setCustomerForm({ name: '', phone: '', email: '', address: '', profileImageUrl: '', referralCode: '' });
+  };
+
   if (loading) return <Loader label="Loading ChopASAP" />;
 
   return (
@@ -654,31 +756,42 @@ export default function App() {
             </View>
           ) : null}
 
-          <ScrollView style={styles.content} contentContainerStyle={styles.contentBody}>
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.contentBody}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshApp} colors={[brandRed]} tintColor={brandRed} />}
+            scrollEventThrottle={200}
+            onScroll={({ nativeEvent }) => {
+              if (tab !== 'home') return;
+              const distanceFromBottom = nativeEvent.contentSize.height - nativeEvent.layoutMeasurement.height - nativeEvent.contentOffset.y;
+              if (distanceFromBottom < 280) {
+                setHomeCategoryLimit((current) => current + 2);
+              }
+            }}
+          >
             {tab === 'home' ? (
               <HomeView
                 items={filteredItems}
                 menuCategories={menuCategories}
+                categoryLimit={homeCategoryLimit}
                 favorites={favorites}
                 promotions={promotions}
-                activeOrders={activeOrders}
                 flashSale={flashSale}
                 language={language}
                 onOpen={setSelectedMeal}
                 onFavorite={toggleFavorite}
                 onShare={shareMeal}
                 onFlashSale={() => setFlashSaleOpen(true)}
-                onViewOrder={setSelectedOrder}
               />
             ) : null}
             {tab === 'meals' ? <MealsView title={t(language, 'meals')} items={filteredItems} favorites={favorites} onOpen={setSelectedMeal} onFavorite={toggleFavorite} onShare={shareMeal} language={language} /> : null}
             {tab === 'favorites' ? <MealsView title={t(language, 'favorites')} items={favoriteItems} favorites={favorites} onOpen={setSelectedMeal} onFavorite={toggleFavorite} onShare={shareMeal} language={language} /> : null}
-            {tab === 'orders' ? <OrdersView orders={orders} activeOrders={activeOrders} language={language} onOpen={setSelectedOrder} /> : null}
+            {tab === 'orders' ? <OrdersView orders={orders} activeOrders={activeOrders} language={language} statusFilter={orderStatusFilter} onFilter={setOrderStatusFilter} onOpen={setSelectedOrder} /> : null}
             {tab === 'support' ? <SupportView settings={settings} language={language} onReserve={() => setReservationOpen(true)} onPromote={() => setPromotionOpen(true)} /> : null}
           </ScrollView>
 
-          <BottomTabs tab={tab} setTab={setTab} language={language} />
-          <MealDetail item={selectedMeal} visible={Boolean(selectedMeal)} onClose={() => setSelectedMeal(null)} onAdd={addToCart} onShare={shareMeal} />
+          <BottomTabs tab={tab} setTab={setTab} language={language} activeOrderCount={activeOrderCount} pulse={activeOrderPulse} />
+          <MealDetail item={selectedMeal} visible={Boolean(selectedMeal)} customer={customer} settings={settings} language={language} onClose={() => setSelectedMeal(null)} onAdd={addToCart} onShare={shareMeal} />
           <CheckoutModal
             visible={checkoutOpen}
             language={language}
@@ -719,9 +832,11 @@ export default function App() {
             onShareReferral={shareReferral}
             onPickAvatar={pickAvatar}
             onUpdateProfile={updateProfile}
+            onSwitchAccount={switchAccount}
           />
           <SuccessModal
             visible={Boolean(checkoutSuccess)}
+            language={language}
             order={checkoutSuccess}
             onClose={() => {
               setCheckoutSuccess(null);
@@ -730,9 +845,9 @@ export default function App() {
             }}
           />
           <FlashSaleModal visible={flashSaleOpen} code={flashSale} onClose={dismissFlashSale} onShare={shareFlashSale} />
-          <OrderDetailModal visible={Boolean(selectedOrder)} order={selectedOrder} onClose={() => setSelectedOrder(null)} />
-          <ReservationModal visible={reservationOpen} form={reservationForm} setForm={setReservationForm} saving={saving} onClose={() => setReservationOpen(false)} onSubmit={submitReservation} />
-          <PromotionModal visible={promotionOpen} form={promotionForm} setForm={setPromotionForm} saving={saving} onPickImage={pickPromotionImage} onClose={() => setPromotionOpen(false)} onSubmit={submitPromotion} />
+          <OrderDetailModal visible={Boolean(selectedOrder)} order={selectedOrder} language={language} onClose={() => setSelectedOrder(null)} />
+          <ReservationModal visible={reservationOpen} language={language} form={reservationForm} setForm={setReservationForm} saving={saving} onClose={() => setReservationOpen(false)} onSubmit={submitReservation} />
+          <PromotionModal visible={promotionOpen} language={language} form={promotionForm} setForm={setPromotionForm} saving={saving} onPickImage={pickPromotionImage} onClose={() => setPromotionOpen(false)} onSubmit={submitPromotion} />
           </>
         )}
       </SafeAreaView>
@@ -848,12 +963,13 @@ function groupMealsByCategory(items, categories = []) {
   }, seededGroups);
 }
 
-function HomeView({ items, menuCategories, favorites, promotions, activeOrders, flashSale, language, onOpen, onFavorite, onShare, onFlashSale, onViewOrder }) {
-  const categories = groupMealsByCategory(items, menuCategories);
+function HomeView({ items, menuCategories, categoryLimit, favorites, promotions, flashSale, language, onOpen, onFavorite, onShare, onFlashSale }) {
+  const categories = groupMealsByCategory(items, menuCategories).filter((category) => category.items.length > 0);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const visibleCategories = selectedCategory === 'all' ? categories : categories.filter((category) => category.name === selectedCategory);
   const visibleItems = selectedCategory === 'all' ? items : visibleCategories.flatMap((category) => category.items);
   const featuredMeals = visibleItems.slice(0, 6);
+  const displayedCategories = selectedCategory === 'all' ? visibleCategories.slice(0, categoryLimit) : visibleCategories;
   return (
     <View>
       <View style={styles.categoryQuickAccess}>
@@ -882,21 +998,6 @@ function HomeView({ items, menuCategories, favorites, promotions, activeOrders, 
         </Pressable>
       ) : null}
 
-      {activeOrders.length ? (
-        <View style={styles.activeOrdersBox}>
-          <Text style={styles.sectionTitle}>Active orders</Text>
-          {activeOrders.slice(0, 3).map((order) => (
-            <Pressable key={order.id || order.orderNo} style={styles.activeOrderRow} onPress={() => onViewOrder(order)}>
-              <View>
-                <Text style={styles.orderNo}>{order.orderNo}</Text>
-                <Text style={styles.orderMeta}>{formatMoney(order.total)} - {(order.status || 'PENDING').replaceAll('_', ' ')}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={brandRed} />
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
       <View style={styles.sectionBlock}>
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.pageTitle}>{t(language, 'todaysMenu')}</Text>
@@ -909,18 +1010,25 @@ function HomeView({ items, menuCategories, favorites, promotions, activeOrders, 
         </ScrollView>
       </View>
 
-      {visibleCategories.map((category) => (
+      {displayedCategories.map((category) => (
         <CategoryMealSection key={category.name} category={category} favorites={favorites} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />
       ))}
 
+      {selectedCategory === 'all' && displayedCategories.length < visibleCategories.length ? (
+        <View style={styles.loadingMoreBox}>
+          <ActivityIndicator color={brandRed} />
+          <Text style={styles.loadingMoreText}>{t(language, 'loadingMeals')}</Text>
+        </View>
+      ) : null}
+
       {promotions.length ? (
         <View style={styles.promotionStrip}>
-          <Text style={styles.sectionTitle}>Promotions</Text>
+          <Text style={styles.sectionTitle}>{t(language, 'promotions')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promotionRail}>
             {promotions.slice(0, 4).map((promotion) => (
               <Pressable key={promotion.id || promotion.title} style={styles.promotionTile} onPress={promotion.ctaUrl ? () => Linking.openURL(promotion.ctaUrl) : undefined}>
                 {promotion.imageUrl ? <Image source={{ uri: promotion.imageUrl }} style={styles.promotionTileImage} /> : <View style={styles.promotionTileFallback}><Ionicons name="sparkles-outline" size={24} color={brandRed} /></View>}
-                <Text style={styles.promoEyebrow}>Offer</Text>
+                <Text style={styles.promoEyebrow}>{t(language, 'offer')}</Text>
                 <Text style={styles.promoTitle} numberOfLines={2}>{promotion.title}</Text>
                 <Text style={styles.cardCopy} numberOfLines={2}>{promotion.description}</Text>
               </Pressable>
@@ -1057,15 +1165,26 @@ function FeaturedMealCard({ item, favorite, onOpen, onFavorite, onShare }) {
   );
 }
 
-function OrdersView({ orders, activeOrders, language, onOpen }) {
+function OrdersView({ orders, activeOrders, language, statusFilter, onFilter, onOpen }) {
   const mergedOrders = [
     ...activeOrders,
     ...orders.filter((order) => !activeOrders.some((active) => active.id === order.id))
   ];
+  const statusOptions = ['ALL', ...Array.from(new Set(mergedOrders.map((order) => order.status || 'PENDING')))];
+  const visibleOrders = statusFilter === 'ALL' ? mergedOrders : mergedOrders.filter((order) => (order.status || 'PENDING') === statusFilter);
   return (
     <View>
       <Text style={styles.pageTitle}>{t(language, 'orders')}</Text>
-      {mergedOrders.length ? mergedOrders.map((order) => (
+      {mergedOrders.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRail}>
+          {statusOptions.map((status) => (
+            <Pressable key={status} style={[styles.filterChip, statusFilter === status && styles.filterChipActive]} onPress={() => onFilter(status)}>
+              <Text style={[styles.filterChipText, statusFilter === status && styles.filterChipTextActive]}>{status === 'ALL' ? t(language, 'all') : status.replaceAll('_', ' ')}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
+      {visibleOrders.length ? visibleOrders.map((order) => (
         <Pressable key={order.id || order.orderNo} style={styles.orderCard} onPress={() => onOpen(order)}>
           <View style={styles.orderCardTop}>
             <Text style={styles.orderNo}>{order.orderNo}</Text>
@@ -1076,12 +1195,65 @@ function OrdersView({ orders, activeOrders, language, onOpen }) {
           {order.isGift ? <Text style={styles.orderMeta}>For {order.recipientName}</Text> : null}
           <Text style={styles.orderMeta}>{order.deliveryAddress}</Text>
         </Pressable>
-      )) : <Text style={styles.emptyText}>No orders yet.</Text>}
+      )) : <Text style={styles.emptyText}>{mergedOrders.length ? t(language, 'noOrdersForStatus') : t(language, 'noOrdersYet')}</Text>}
     </View>
   );
 }
 
-function OrderDetailModal({ visible, order, onClose }) {
+function OrderReviewItem({ item, order, language }) {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const menuItemId = item.menuItemId || item.menuItem?.id;
+
+  const submitReview = async () => {
+    if (!menuItemId) return Alert.alert('ChopASAP', 'This meal cannot be reviewed from this order.');
+    setSaving(true);
+    try {
+      await api.createMealReview(menuItemId, {
+        customerName: order.customerName || 'Customer',
+        customerPhone: order.customerPhone || '',
+        rating,
+        comment
+      });
+      setSubmitted(true);
+      setComment('');
+      Alert.alert('ChopASAP', 'Thanks for your review.');
+    } catch (error) {
+      Alert.alert('ChopASAP', error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.orderReviewBox}>
+      <Text style={styles.cardTitle}>{t(language, 'rateThisMeal')}</Text>
+      <View style={styles.ratingRow}>
+        {[1, 2, 3, 4, 5].map((value) => (
+          <Pressable key={value} onPress={() => setRating(value)} disabled={submitted}>
+            <Ionicons name={value <= rating ? 'star' : 'star-outline'} size={23} color="#f5a400" />
+          </Pressable>
+        ))}
+      </View>
+      <TextInput
+        style={styles.reviewInput}
+        value={comment}
+        onChangeText={setComment}
+        editable={!submitted}
+        placeholder={submitted ? t(language, 'reviewed') : t(language, 'reviewPlaceholder')}
+        placeholderTextColor="#9aa4ad"
+        multiline
+      />
+      <Pressable style={[styles.secondaryButton, (saving || submitted) && styles.disabled]} onPress={submitReview} disabled={saving || submitted}>
+        <Text style={styles.secondaryButtonText}>{submitted ? t(language, 'reviewed') : saving ? t(language, 'submitting') : t(language, 'submitReview')}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function OrderDetailModal({ visible, order, language, onClose }) {
   if (!order) return null;
   const items = order.items || [];
   const deliveryFeeValue = Number(order.deliveryFee || 0);
@@ -1093,7 +1265,7 @@ function OrderDetailModal({ visible, order, onClose }) {
       <SafeAreaView style={styles.detailScreen}>
         <View style={styles.checkoutHeader}>
           <Pressable onPress={onClose}><Ionicons name="chevron-back" size={26} color="#111" /></Pressable>
-          <Text style={styles.checkoutTitle}>Order details</Text>
+          <Text style={styles.checkoutTitle}>{t(language, 'orderDetails')}</Text>
           <View style={styles.headerSpacer} />
         </View>
         <ScrollView contentContainerStyle={styles.checkoutBody}>
@@ -1106,30 +1278,34 @@ function OrderDetailModal({ visible, order, onClose }) {
           </View>
           <View style={styles.checkoutList}>
             {items.length ? items.map((item, index) => (
-              <View key={item.id || `${item.menuItemId || item.name}-${index}`} style={styles.orderDetailItem}>
-                <View style={styles.checkoutItemInfo}>
-                  <Text style={styles.checkoutItemName}>{orderItemName(item)}</Text>
-                  {item.variationName ? <Text style={styles.checkoutItemVariation}>{item.variationName}</Text> : null}
-                  <Text style={styles.checkoutItemMeta}>{item.quantity || 1} item</Text>
+              <View key={item.id || `${item.menuItemId || item.name}-${index}`} style={styles.orderDetailItemBlock}>
+                <View style={styles.orderDetailItem}>
+                  <Image source={{ uri: item.menuItem?.imageUrl || item.imageUrl || fallbackImage }} style={styles.orderDetailImage} />
+                  <View style={styles.checkoutItemInfo}>
+                    <Text style={styles.checkoutItemName}>{orderItemName(item)}</Text>
+                    {item.variationName ? <Text style={styles.checkoutItemVariation}>{item.variationName}</Text> : null}
+                    <Text style={styles.checkoutItemMeta}>{item.quantity || 1} item</Text>
+                  </View>
+                  <Text style={styles.priceValue}>{formatMoney(orderItemTotal(item))}</Text>
                 </View>
-                <Text style={styles.priceValue}>{formatMoney(orderItemTotal(item))}</Text>
+                <OrderReviewItem item={item} order={order} language={language} />
               </View>
-            )) : <Text style={styles.emptyText}>No order items available.</Text>}
+            )) : <Text style={styles.emptyText}>{t(language, 'noOrderItems')}</Text>}
           </View>
           {order.isGift ? (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Gift recipient</Text>
+              <Text style={styles.cardTitle}>{t(language, 'giftRecipient')}</Text>
               <Text style={styles.cardCopy}>{order.recipientName} - {order.recipientPhone}</Text>
               {order.recipientAddress ? <Text style={styles.cardCopy}>{order.recipientAddress}</Text> : null}
             </View>
           ) : null}
           {order.deliveryNote ? (
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Restaurant note</Text>
+              <Text style={styles.cardTitle}>{t(language, 'restaurantNote')}</Text>
               <Text style={styles.cardCopy}>{order.deliveryNote}</Text>
             </View>
           ) : null}
-          <PriceRows subtotal={subtotalValue} deliveryFee={deliveryFeeValue} serviceFee={serviceFeeValue} total={totalValue} />
+          <PriceRows language={language} subtotal={subtotalValue} deliveryFee={deliveryFeeValue} serviceFee={serviceFeeValue} total={totalValue} />
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -1152,11 +1328,11 @@ function SupportView({ settings, language, onReserve, onPromote }) {
       <View style={styles.actionRow}>
         <Pressable style={styles.actionButton} onPress={onReserve}>
           <Ionicons name="calendar-outline" size={19} color={brandRed} />
-          <Text style={styles.actionText}>Reserve a meal</Text>
+          <Text style={styles.actionText}>{t(language, 'reserveMeal')}</Text>
         </Pressable>
         <Pressable style={styles.actionButton} onPress={onPromote}>
           <Ionicons name="megaphone-outline" size={19} color={brandRed} />
-          <Text style={styles.actionText}>Promote</Text>
+          <Text style={styles.actionText}>{t(language, 'promote')}</Text>
         </Pressable>
       </View>
       {supportFaqs.map((faq) => (
@@ -1169,7 +1345,7 @@ function SupportView({ settings, language, onReserve, onPromote }) {
   );
 }
 
-function ProfileView({ customer, customerForm, setCustomerForm, language, chooseLanguage, profileTab, setProfileTab, rank, orders, referralLink, saving, onShareReferral, onPickAvatar, onUpdateProfile }) {
+function ProfileView({ customer, customerForm, setCustomerForm, language, chooseLanguage, profileTab, setProfileTab, rank, orders, referralLink, saving, onShareReferral, onPickAvatar, onUpdateProfile, onSwitchAccount }) {
   return (
     <View>
       <View style={styles.profileHeader}>
@@ -1229,6 +1405,10 @@ function ProfileView({ customer, customerForm, setCustomerForm, language, choose
           <Pressable style={[styles.primaryButton, saving && styles.disabled]} onPress={onUpdateProfile} disabled={saving}>
             <Text style={styles.primaryButtonText}>{t(language, 'saveProfile')}</Text>
           </Pressable>
+          <Pressable style={styles.switchAccountButton} onPress={onSwitchAccount}>
+            <Ionicons name="swap-horizontal-outline" size={18} color={brandRed} />
+            <Text style={styles.switchAccountText}>{t(language, 'switchAccount')}</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -1273,14 +1453,14 @@ function CheckoutItem({ item, address, updateQty }) {
   );
 }
 
-function PriceRows({ subtotal, deliveryFee, serviceFee, total }) {
+function PriceRows({ language, subtotal, deliveryFee, serviceFee, total }) {
   return (
     <View style={styles.priceRows}>
-      <View style={styles.priceRow}><Text style={styles.priceLabel}>Subtotal</Text><Text style={styles.priceValue}>{formatMoney(subtotal)}</Text></View>
-      <View style={styles.priceRow}><Text style={styles.priceLabel}>Promotion</Text><Text style={styles.discountValue}>-{formatMoney(0)}</Text></View>
-      <View style={styles.priceRow}><Text style={styles.priceLabel}>Delivery fee</Text><Text style={styles.priceValue}>{formatMoney(deliveryFee)}</Text></View>
-      <View style={styles.priceRow}><Text style={styles.priceLabel}>Taxes & Other fees</Text><Text style={styles.priceValue}>{formatMoney(serviceFee)}</Text></View>
-      <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>Total</Text><Text style={styles.priceTotal}>{formatMoney(total)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>{t(language, 'subtotal')}</Text><Text style={styles.priceValue}>{formatMoney(subtotal)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>{t(language, 'promotion')}</Text><Text style={styles.discountValue}>-{formatMoney(0)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>{t(language, 'deliveryFee')}</Text><Text style={styles.priceValue}>{formatMoney(deliveryFee)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceLabel}>{t(language, 'taxesFees')}</Text><Text style={styles.priceValue}>{formatMoney(serviceFee)}</Text></View>
+      <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>{t(language, 'total')}</Text><Text style={styles.priceTotal}>{formatMoney(total)}</Text></View>
     </View>
   );
 }
@@ -1301,23 +1481,23 @@ function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, se
                 {cart.map((item) => <CheckoutItem key={item.cartItemId} item={item} address={orderForm.deliveryAddress} updateQty={updateQty} />)}
               </View>
               <View style={styles.cartTotals}>
-                <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>Items Total</Text><Text style={styles.priceValue}>{formatMoney(subtotal)}</Text></View>
-                <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>Delivery</Text><Text style={styles.priceValue}>{formatMoney(deliveryFee)}</Text></View>
-                <View style={styles.cartGrandTotal}><Text style={styles.priceTotalLabel}>Total</Text><Text style={styles.priceTotal}>{formatMoney(total)}</Text></View>
+                <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>{t(language, 'itemsTotal')}</Text><Text style={styles.priceValue}>{formatMoney(subtotal)}</Text></View>
+                <View style={styles.priceRow}><Text style={styles.priceTotalLabel}>{t(language, 'delivery')}</Text><Text style={styles.priceValue}>{formatMoney(deliveryFee)}</Text></View>
+                <View style={styles.cartGrandTotal}><Text style={styles.priceTotalLabel}>{t(language, 'total')}</Text><Text style={styles.priceTotal}>{formatMoney(total)}</Text></View>
               </View>
               <View style={styles.checkoutCtaBox}>
                 <Pressable style={styles.checkoutButton} onPress={() => setStep('details')}>
-                  <Text style={styles.primaryButtonText}>Proceed to Check out</Text>
+                  <Text style={styles.primaryButtonText}>{t(language, 'proceedCheckout')}</Text>
                 </Pressable>
               </View>
             </ScrollView>
           ) : (
             <View style={styles.emptyCartScreen}>
               <Ionicons name="bag-outline" size={82} color={brandRed} />
-              <Text style={styles.emptyCartTitle}>Add items to start a basket</Text>
-              <Text style={styles.emptyCartCopy}>OOPPSS your cart is empty to view items try adding an item to cart</Text>
+              <Text style={styles.emptyCartTitle}>{t(language, 'emptyBasketTitle')}</Text>
+              <Text style={styles.emptyCartCopy}>{t(language, 'emptyBasketCopy')}</Text>
               <Pressable style={styles.checkoutButton} onPress={onShop}>
-                <Text style={styles.primaryButtonText}>Start Shopping</Text>
+                <Text style={styles.primaryButtonText}>{t(language, 'startShopping')}</Text>
               </Pressable>
             </View>
           )
@@ -1335,7 +1515,7 @@ function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, se
                 {fulfillment === 'delivery' ? (
                   <TextInput style={styles.rowInput} placeholder="Example: Bonanjo, street, landmark" placeholderTextColor="#9aa4ad" value={orderForm.deliveryAddress} onChangeText={(deliveryAddress) => setOrderForm({ ...orderForm, deliveryAddress })} />
                 ) : (
-                  <Text style={styles.rowStatic}>You will come onsite to pick up the meal.</Text>
+                  <Text style={styles.rowStatic}>{t(language, 'pickupOnsite')}</Text>
                 )}
               </FieldRow>
               {fulfillment === 'delivery' ? (
@@ -1351,8 +1531,8 @@ function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, se
             </View>
             <View style={styles.giftPanel}>
               <View style={styles.giftText}>
-                <Text style={styles.cardTitle}>Order this meal for someone else</Text>
-                <Text style={styles.cardCopy}>Add their name and phone so the restaurant knows who should receive or collect the meal.</Text>
+                <Text style={styles.cardTitle}>{t(language, 'orderForSomeoneElse')}</Text>
+                <Text style={styles.cardCopy}>{t(language, 'orderGiftHelp')}</Text>
               </View>
               <Switch value={orderForm.isGift} onValueChange={(isGift) => setOrderForm({ ...orderForm, isGift })} trackColor={{ true: '#ffd8dc' }} thumbColor={orderForm.isGift ? brandRed : '#f4f4f5'} />
             </View>
@@ -1368,21 +1548,21 @@ function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, se
               <Text style={styles.priceValue}>{fulfillment === 'delivery' ? '15-30 min(s)' : 'Restaurant confirmation'}</Text>
             </View>
             <View style={styles.noteBox}>
-              <Text style={styles.noteLabel}>Leave a message for the restaurant (optional)</Text>
+              <Text style={styles.noteLabel}>{t(language, 'restaurantMessage')}</Text>
               <TextInput style={styles.noteInput} placeholder="Example: less pepper, call before delivery, no onions" placeholderTextColor="#9aa4ad" value={orderForm.deliveryNote} onChangeText={(deliveryNote) => setOrderForm({ ...orderForm, deliveryNote })} multiline />
             </View>
             <View style={styles.checkoutSectionHeader}>
-              <Text style={styles.priceTotalLabel}>Your items</Text>
-              <Pressable onPress={onShop}><Text style={styles.seeMenu}>see menu</Text></Pressable>
+              <Text style={styles.priceTotalLabel}>{t(language, 'yourItems')}</Text>
+              <Pressable onPress={onShop}><Text style={styles.seeMenu}>{t(language, 'seeMenu')}</Text></Pressable>
             </View>
             <View style={styles.checkoutList}>
               {cart.map((item) => <CheckoutItem key={item.cartItemId} item={item} address={orderForm.deliveryAddress} updateQty={updateQty} />)}
             </View>
             <Pressable style={styles.addMoreButton} onPress={onShop}>
               <Ionicons name="add" size={16} color="#07142a" />
-              <Text style={styles.addMoreText}>Add more items</Text>
+              <Text style={styles.addMoreText}>{t(language, 'addMoreItems')}</Text>
             </Pressable>
-            <PriceRows subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} total={total} />
+            <PriceRows language={language} subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} total={total} />
             <View style={styles.checkoutCtaBox}>
               <Pressable style={[styles.checkoutButton, (saving || !cart.length) && styles.disabled]} onPress={onSubmit} disabled={saving || !cart.length}>
                 <Text style={styles.primaryButtonText}>{saving ? 'Placing order...' : 'Confirm order'}</Text>
@@ -1408,15 +1588,15 @@ function FieldRow({ icon, label, hint, children }) {
   );
 }
 
-function SuccessModal({ visible, order, onClose }) {
+function SuccessModal({ visible, order, language, onClose }) {
   return (
     <Modal visible={visible} animationType="slide">
       <SafeAreaView style={styles.successScreen}>
         <View style={styles.successCard}>
           <View style={styles.successIcon}><Ionicons name="checkmark" size={54} color="#fff" /></View>
-          <Text style={styles.successTitle}>Order was placed!</Text>
+          <Text style={styles.successTitle}>{t(language, 'orderPlacedSuccess')}</Text>
           <Text style={styles.cardCopy}>{order?.orderNo ? `Track ${order.orderNo} in Orders.` : 'Track your order in Orders.'}</Text>
-          <Text style={styles.supportTitle}>Rate your order</Text>
+          <Text style={styles.supportTitle}>{t(language, 'rateYourOrder')}</Text>
           <View style={styles.ratingRow}>
             {[1, 2, 3, 4, 5].map((rating) => (
               <Pressable key={rating} style={styles.ratingButton} onPress={() => Alert.alert('ChopASAP', `Thanks for rating ${rating} star${rating === 1 ? '' : 's'}.`)}>
@@ -1425,7 +1605,7 @@ function SuccessModal({ visible, order, onClose }) {
             ))}
           </View>
           <Pressable style={styles.primaryButton} onPress={onClose}>
-            <Text style={styles.primaryButtonText}>Back to Home</Text>
+            <Text style={styles.primaryButtonText}>{t(language, 'backHome')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1456,12 +1636,12 @@ function FlashSaleModal({ visible, code, onClose, onShare }) {
   );
 }
 
-function ReservationModal({ visible, form, setForm, saving, onClose, onSubmit }) {
+function ReservationModal({ visible, language, form, setForm, saving, onClose, onSubmit }) {
   return (
     <Modal visible={visible} animationType="slide">
       <SafeAreaView style={styles.detailScreen}>
         <View style={styles.checkoutHeader}>
-          <Text style={styles.pageTitle}>Reserve a meal</Text>
+          <Text style={styles.pageTitle}>{t(language, 'reserveMeal')}</Text>
           <Pressable onPress={onClose}><Ionicons name="close" size={26} color="#111" /></Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.checkoutBody}>
@@ -1481,12 +1661,12 @@ function ReservationModal({ visible, form, setForm, saving, onClose, onSubmit })
   );
 }
 
-function PromotionModal({ visible, form, setForm, saving, onPickImage, onClose, onSubmit }) {
+function PromotionModal({ visible, language, form, setForm, saving, onPickImage, onClose, onSubmit }) {
   return (
     <Modal visible={visible} animationType="slide">
       <SafeAreaView style={styles.detailScreen}>
         <View style={styles.checkoutHeader}>
-          <Text style={styles.pageTitle}>Promote on ChopASAP</Text>
+          <Text style={styles.pageTitle}>{t(language, 'promoteOnChopasap')}</Text>
           <Pressable onPress={onClose}><Ionicons name="close" size={26} color="#111" /></Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.checkoutBody}>
@@ -1512,7 +1692,7 @@ function PromotionModal({ visible, form, setForm, saving, onPickImage, onClose, 
   );
 }
 
-function BottomTabs({ tab, setTab, language }) {
+function BottomTabs({ tab, setTab, language, activeOrderCount = 0, pulse }) {
   const tabs = [
     ['home', 'home-outline', t(language, 'home')],
     ['meals', 'restaurant-outline', t(language, 'meals')],
@@ -1524,7 +1704,14 @@ function BottomTabs({ tab, setTab, language }) {
     <View style={styles.bottomTabs}>
       {tabs.map(([id, icon, label]) => (
         <Pressable key={id} style={styles.tabButton} onPress={() => setTab(id)}>
-          <Ionicons name={icon} size={21} color={tab === id ? brandRed : '#42495a'} />
+          <View>
+            <Ionicons name={icon} size={21} color={tab === id ? brandRed : '#42495a'} />
+            {id === 'orders' && activeOrderCount ? (
+              <Animated.View style={[styles.activeOrderTabBadge, { opacity: pulse || 1 }]}>
+                <Text style={styles.activeOrderTabText}>{activeOrderCount}</Text>
+              </Animated.View>
+            ) : null}
+          </View>
           <Text style={[styles.tabText, tab === id && styles.tabTextActive]} numberOfLines={1}>{label}</Text>
         </Pressable>
       ))}
@@ -1561,11 +1748,12 @@ const styles = StyleSheet.create({
   gateCopy: { marginTop: 8, color: 'rgba(255,255,255,0.72)', fontWeight: '700' },
   formBody: { padding: 22, gap: 14 },
   field: { borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#f7fbfc', borderRadius: 18, padding: 14 },
-  fieldLabel: { fontSize: 11, color: brandRed, textTransform: 'uppercase', fontWeight: '900', marginBottom: 6 },
+  fieldLabel: { fontSize: 12, color: brandRed, textTransform: 'uppercase', fontWeight: '900', marginBottom: 6 },
   input: { fontSize: 16, color: '#151923', fontWeight: '800', minHeight: 24 },
   referralBadge: { backgroundColor: '#fff4d7', color: '#8b5f00', padding: 12, borderRadius: 16, textAlign: 'center', fontWeight: '900' },
   primaryButton: { minHeight: 48, borderRadius: 16, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
   primaryButtonText: { color: '#fff', fontWeight: '900' },
+  detailAddButton: { flex: 1 },
   disabled: { opacity: 0.55 },
   header: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
@@ -1577,28 +1765,28 @@ const styles = StyleSheet.create({
   profileButton: { width: 42, height: 42, borderRadius: 21, overflow: 'hidden', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   profileButtonImage: { width: '100%', height: '100%' },
   cartButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  cartBadge: { position: 'absolute', top: -4, right: -2, backgroundColor: brandRed, color: '#fff', borderRadius: 9, overflow: 'hidden', minWidth: 18, textAlign: 'center', fontSize: 11, fontWeight: '900' },
+  cartBadge: { position: 'absolute', top: -4, right: -2, backgroundColor: brandRed, color: '#fff', borderRadius: 9, overflow: 'hidden', minWidth: 18, textAlign: 'center', fontSize: 12, fontWeight: '900' },
   searchBox: { marginHorizontal: 16, height: 46, borderWidth: 1, borderColor: '#f15b66', borderRadius: 16, backgroundColor: '#fff', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center' },
   searchInput: { flex: 1, fontWeight: '800', color: '#29384d' },
   content: { flex: 1 },
   contentBody: { padding: 16, paddingBottom: 100 },
   pageTitle: { fontSize: 24, fontWeight: '900', color: '#151923', marginBottom: 14 },
-  categoryQuickAccess: { marginBottom: 12, gap: 8 },
-  categoryGridTop: { flexDirection: 'row', gap: 12 },
-  categoryGridBottom: { flexDirection: 'row', gap: 10 },
-  categoryTileLarge: { flex: 1, height: 106, borderRadius: 12, backgroundColor: '#eef3f4', padding: 12, justifyContent: 'space-between', overflow: 'visible' },
-  categoryTileSmall: { flex: 1, minWidth: 0, height: 82, borderRadius: 8, backgroundColor: '#eef3f4', paddingVertical: 7, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'space-between', overflow: 'visible' },
+  categoryQuickAccess: { marginBottom: 10, gap: 6 },
+  categoryGridTop: { flexDirection: 'row', gap: 8 },
+  categoryGridBottom: { flexDirection: 'row', gap: 7 },
+  categoryTileLarge: { flex: 1, height: 76, borderRadius: 10, backgroundColor: '#eef3f4', padding: 8, justifyContent: 'space-between', overflow: 'visible' },
+  categoryTileSmall: { flex: 1, minWidth: 0, height: 58, borderRadius: 8, backgroundColor: '#eef3f4', paddingVertical: 5, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'space-between', overflow: 'visible' },
   categoryTileActive: { borderWidth: 2, borderColor: '#2fbf71', backgroundColor: '#f2fbf5' },
-  categoryTileText: { alignSelf: 'flex-start', color: '#333b45', fontSize: 14, fontWeight: '900' },
-  categoryTileTextActive: { color: '#0f7f45' },
-  categoryBadge: { position: 'absolute', top: -16, alignSelf: 'center', zIndex: 2, borderRadius: 15, backgroundColor: '#23b35d', color: '#fff', paddingHorizontal: 13, paddingVertical: 4, fontSize: 15, fontWeight: '900', overflow: 'hidden' },
+  categoryTileText: { alignSelf: 'flex-start', color: '#333b45', fontSize: 12, fontWeight: '600' },
+  categoryTileTextActive: { color: '#0f7f45', fontWeight: '800' },
+  categoryBadge: { position: 'absolute', top: -12, alignSelf: 'center', zIndex: 2, borderRadius: 12, backgroundColor: '#23b35d', color: '#fff', paddingHorizontal: 10, paddingVertical: 3, fontSize: 12, fontWeight: '900', overflow: 'hidden' },
   sectionBlock: { marginTop: 6, marginBottom: 16 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   sectionCount: { color: '#6d6f76', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
-  featuredMealRail: { gap: 12, paddingRight: 10 },
-  featuredMealCard: { width: 210, borderRadius: 18, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#f5c45d' },
-  featuredMealImage: { width: '100%', height: 136 },
-  featuredMealBody: { padding: 12, gap: 5 },
+  featuredMealRail: { gap: 8, paddingRight: 10 },
+  featuredMealCard: { width: 118, borderRadius: 14, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#f5c45d' },
+  featuredMealImage: { width: '100%', height: 84 },
+  featuredMealBody: { padding: 8, gap: 3 },
   categorySection: { marginTop: 18 },
   categoryTitle: { color: '#151923', fontSize: 19, fontWeight: '900' },
   mealGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
@@ -1613,6 +1801,8 @@ const styles = StyleSheet.create({
   mealPrice: { color: brandRed, fontWeight: '900' },
   addCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center' },
   emptyText: { width: '100%', textAlign: 'center', color: '#737373', fontWeight: '800', padding: 28 },
+  loadingMoreBox: { paddingVertical: 18, alignItems: 'center', gap: 8 },
+  loadingMoreText: { color: '#6d6f76', fontSize: 12, fontWeight: '800' },
   detailScreen: { flex: 1, backgroundColor: '#fff' },
   detailContent: { paddingBottom: 120 },
   detailImage: { width: '100%', height: 300 },
@@ -1622,12 +1812,23 @@ const styles = StyleSheet.create({
   detailTitle: { fontSize: 24, fontWeight: '900', color: '#151923' },
   detailPrice: { marginTop: 8, fontSize: 18, color: brandRed, fontWeight: '900' },
   detailCopy: { marginTop: 14, color: '#5f646b', lineHeight: 22, fontWeight: '600' },
+  restaurantInfoCard: { marginTop: 14, borderRadius: 18, borderWidth: 1, borderColor: '#edf0f2', backgroundColor: '#fff', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  restaurantLogo: { width: 44, height: 44, borderRadius: 22 },
+  restaurantInfoText: { flex: 1 },
+  restaurantName: { color: '#151923', fontWeight: '900' },
+  restaurantMeta: { marginTop: 2, color: '#6d6f76', fontSize: 12, fontWeight: '700' },
+  openBadge: { borderRadius: 14, backgroundColor: '#e7f8ef', paddingHorizontal: 10, paddingVertical: 6 },
+  openBadgeText: { color: '#0b8f4f', fontSize: 12, fontWeight: '900' },
   section: { marginTop: 22 },
   sectionTitle: { fontWeight: '900', marginBottom: 10, color: '#151923' },
+  optionHelp: { marginTop: -4, marginBottom: 10, color: '#6d6f76', fontSize: 13, fontWeight: '700' },
+  variationCard: { marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#fff', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  variationCardActive: { borderColor: brandRed, backgroundColor: '#fff4d7' },
+  variationTextBox: { flex: 1 },
   optionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   optionText: { fontWeight: '700', color: '#5f646b' },
-  detailFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#edf0f2', flexDirection: 'row', gap: 12 },
-  qtyBox: { minWidth: 88, height: 46, borderWidth: 1, borderColor: brandRed, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 8 },
+  detailFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#edf0f2', flexDirection: 'row', gap: 8 },
+  qtyBox: { width: 76, height: 46, borderWidth: 1, borderColor: brandRed, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 6 },
   qtyText: { fontWeight: '900', color: '#151923' },
   orderCard: { backgroundColor: '#fff', borderRadius: 18, padding: 16, marginBottom: 12 },
   orderCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
@@ -1649,7 +1850,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   statPill: { flex: 1, alignItems: 'center', backgroundColor: '#fff', borderRadius: 18, padding: 12 },
   statValue: { marginTop: 5, fontSize: 22, fontWeight: '900', color: '#151923' },
-  statLabel: { fontSize: 11, color: '#737373', fontWeight: '900', textTransform: 'uppercase' },
+  statLabel: { fontSize: 12, color: '#737373', fontWeight: '900', textTransform: 'uppercase' },
   rankCard: { marginTop: 12, backgroundColor: '#151923', borderRadius: 18, padding: 14 },
   rankLabel: { color: '#fff', fontWeight: '900' },
   rankCopy: { color: 'rgba(255,255,255,0.68)', marginTop: 4, fontWeight: '700' },
@@ -1737,7 +1938,7 @@ const styles = StyleSheet.create({
   promoImage: { width: '100%', height: 132 },
   promoImageFallback: { height: 116, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },
   promoBody: { padding: 16, gap: 8 },
-  promoEyebrow: { color: brandRed, textTransform: 'uppercase', fontSize: 11, fontWeight: '900' },
+  promoEyebrow: { color: brandRed, textTransform: 'uppercase', fontSize: 12, fontWeight: '900' },
   promoTitle: { color: '#151923', fontSize: 18, fontWeight: '900' },
   promotionStrip: { marginTop: 22, marginBottom: 6 },
   promotionRail: { gap: 12, paddingRight: 10 },
@@ -1746,7 +1947,8 @@ const styles = StyleSheet.create({
   promotionTileFallback: { height: 106, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },
   orderDetailSummary: { backgroundColor: '#151923', borderRadius: 22, padding: 18, gap: 6 },
   orderDetailNo: { color: '#fff', fontSize: 22, fontWeight: '900' },
-  orderDetailItem: { minHeight: 76, borderBottomWidth: 1, borderBottomColor: '#dbe5e8', backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  orderDetailItem: { minHeight: 76, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  orderDetailImage: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#fff' },
   secondaryButton: { minHeight: 42, borderRadius: 14, backgroundColor: '#fff1ca', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   secondaryButtonText: { color: brandRed, fontWeight: '900' },
   activeOrdersBox: { backgroundColor: '#fff', borderRadius: 20, padding: 14, marginBottom: 14, gap: 10 },
@@ -1758,6 +1960,21 @@ const styles = StyleSheet.create({
   successTitle: { color: '#33c85a', fontSize: 20, fontWeight: '900' },
   ratingRow: { flexDirection: 'row', gap: 8 },
   ratingButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff1ca', alignItems: 'center', justifyContent: 'center' },
+  reviewSection: { marginTop: 24, gap: 10 },
+  reviewScore: { color: brandRed, fontSize: 13, fontWeight: '900' },
+  reviewCard: { borderRadius: 16, backgroundColor: '#f7fbfc', borderWidth: 1, borderColor: '#edf0f2', padding: 12, gap: 6 },
+  reviewStars: { color: '#f5a400', fontSize: 12, fontWeight: '900' },
+  reviewForm: { marginTop: 6, borderRadius: 18, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff', padding: 14, gap: 10 },
+  reviewInput: { minHeight: 76, borderRadius: 14, borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#f7fbfc', padding: 12, color: '#151923', textAlignVertical: 'top', fontWeight: '700' },
+  orderReviewBox: { marginTop: 10, borderRadius: 16, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff', padding: 12, gap: 10 },
+  orderDetailItemBlock: { borderRadius: 18, backgroundColor: '#fff4d7', padding: 12, gap: 8 },
+  filterRail: { gap: 8, paddingBottom: 12 },
+  filterChip: { borderRadius: 999, borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8 },
+  filterChipActive: { borderColor: brandRed, backgroundColor: '#fff4f4' },
+  filterChipText: { color: '#5f646b', fontSize: 12, fontWeight: '900' },
+  filterChipTextActive: { color: brandRed },
+  switchAccountButton: { marginTop: 12, minHeight: 46, borderRadius: 16, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff8f8', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
+  switchAccountText: { color: brandRed, fontSize: 12, fontWeight: '900' },
   flashModal: { width: '100%', maxWidth: 380, borderRadius: 26, backgroundColor: '#fff', padding: 22, alignItems: 'center', gap: 12 },
   codeBox: { width: '100%', borderRadius: 18, backgroundColor: '#151923', color: '#fff', textAlign: 'center', padding: 16, fontSize: 24, fontWeight: '900', letterSpacing: 1 },
   linkButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
@@ -1766,6 +1983,8 @@ const styles = StyleSheet.create({
   uploadPreview: { width: '100%', height: 150, borderRadius: 14 },
   bottomTabs: { position: 'absolute', left: 0, right: 0, bottom: 0, minHeight: 74, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#dde7ea', flexDirection: 'row', paddingHorizontal: 4, paddingBottom: 4 },
   tabButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tabText: { fontSize: 10, color: '#42495a', fontWeight: '900' },
-  tabTextActive: { color: brandRed }
+  tabText: { fontSize: 12, color: '#42495a', fontWeight: '900' },
+  tabTextActive: { color: brandRed },
+  activeOrderTabBadge: { position: 'absolute', top: -8, right: -10, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
+  activeOrderTabText: { color: '#fff', fontSize: 12, fontWeight: '900' }
 });

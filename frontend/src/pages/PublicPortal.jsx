@@ -72,6 +72,8 @@ const translations = {
     points: 'Points',
     referrals: 'Referrals',
     currentRank: 'Current rank',
+    all: 'All',
+    noOrdersForStatus: 'No orders match this status.',
     shareReferralLink: 'Share referral link',
     accountDetails: 'Account details',
     referralRewards: 'Referral rewards',
@@ -112,6 +114,8 @@ const translations = {
     points: 'Points',
     referrals: 'Parrainages',
     currentRank: 'Rang actuel',
+    all: 'Toutes',
+    noOrdersForStatus: 'Aucune commande avec ce statut.',
     shareReferralLink: 'Partager le lien',
     accountDetails: 'Compte',
     referralRewards: 'Récompenses de parrainage',
@@ -260,20 +264,27 @@ function RedButton({ children, className, ...props }) {
   );
 }
 
-function TabButton({ tab, active, onClick, desktop = false, language = 'en' }) {
+function TabButton({ tab, active, onClick, desktop = false, language = 'en', badge = 0 }) {
   const Icon = tab.icon;
   return (
     <button
       className={clsx(
         desktop
           ? 'flex h-12 w-full items-center gap-3 rounded-2xl px-4 text-left text-sm font-extrabold transition'
-          : 'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-[10px] font-black transition',
+          : 'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-xs font-black transition',
         active ? (desktop ? 'text-white shadow-lg' : 'text-[#d71920]') : 'text-[#42495a] hover:text-[#d71920]'
       )}
       style={active && desktop ? { backgroundColor: brandRed, boxShadow: '0 14px 28px rgba(215, 25, 32, 0.16)' } : undefined}
       onClick={onClick}
     >
-      <Icon size={desktop ? 20 : 21} fill={tab.id === 'favorites' && active ? 'currentColor' : 'none'} />
+      <span className="relative">
+        <Icon size={desktop ? 20 : 21} fill={tab.id === 'favorites' && active ? 'currentColor' : 'none'} />
+        {badge ? (
+          <span className="absolute -right-2 -top-2 grid h-4 min-w-4 animate-pulse place-items-center rounded-full bg-[#d71920] px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
+            {badge}
+          </span>
+        ) : null}
+      </span>
       {textFor(tab.label, language)}
     </button>
   );
@@ -611,6 +622,69 @@ function NotificationPanel({ open, notifications, soundEnabled, permission, onCl
   );
 }
 
+function OrderReviewItem({ item, order }) {
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const menuItemId = item.menuItemId || item.menuItem?.id;
+
+  const submitReview = async () => {
+    if (!menuItemId) return toast.error('This meal cannot be reviewed from this order');
+    try {
+      setSaving(true);
+      await endpoints.createPublicMealReview(menuItemId, {
+        customerName: order.customerName || 'Customer',
+        customerPhone: order.customerPhone || '',
+        rating,
+        comment
+      });
+      setSubmitted(true);
+      setComment('');
+      toast.success('Review submitted');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not submit review');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-[#ffd5d7] bg-white p-3">
+      <p className="text-xs font-black uppercase text-[#8a6d2a]">Rate this meal</p>
+      <div className="mt-2 flex gap-1">
+        {[1, 2, 3, 4, 5].map((value) => (
+          <button
+            key={value}
+            type="button"
+            className={clsx('grid h-8 w-8 place-items-center rounded-full', value <= rating ? 'bg-[#d71920] text-white' : 'bg-[#fff8e8] text-[#c6a54b]')}
+            disabled={submitted}
+            onClick={() => setRating(value)}
+            aria-label={`Rate ${value} stars`}
+          >
+            <Star size={15} fill="currentColor" />
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="mt-3 min-h-[70px] w-full rounded-2xl border border-[#ead9ae] bg-[#f8fbfc] px-3 py-2 text-sm font-semibold outline-none focus:border-[#d71920] disabled:opacity-60"
+        value={comment}
+        disabled={submitted}
+        onChange={(event) => setComment(event.target.value)}
+        placeholder={submitted ? 'Review submitted' : 'Share what you liked about this meal'}
+      />
+      <button
+        type="button"
+        className="mt-3 rounded-xl bg-[#151923] px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+        disabled={saving || submitted}
+        onClick={submitReview}
+      >
+        {submitted ? 'Reviewed' : saving ? 'Saving...' : 'Submit review'}
+      </button>
+    </div>
+  );
+}
+
 function OrderDetailView({ order, onBack }) {
   if (!order) return null;
   return (
@@ -649,12 +723,16 @@ function OrderDetailView({ order, onBack }) {
         <h3 className="font-black">Items</h3>
         <div className="mt-3 grid gap-2">
           {(order.items || []).map((item) => (
-            <div key={item.id || `${item.menuItemId}:${item.variationName || 'base'}`} className="flex items-center justify-between gap-3 rounded-2xl bg-[#fff4d7] p-3">
-              <div className="min-w-0">
-                <p className="font-black">{item.quantity} x {item.menuItem?.name || item.name || 'Menu item'}</p>
-                {item.variationName ? <p className="mt-0.5 text-xs font-semibold text-stone-600">{item.variationName}</p> : null}
+            <div key={item.id || `${item.menuItemId}:${item.variationName || 'base'}`} className="rounded-2xl bg-[#fff4d7] p-3">
+              <div className="flex items-center justify-between gap-3">
+                <img className="h-14 w-14 shrink-0 rounded-2xl object-cover" src={item.menuItem?.imageUrl || item.imageUrl || fallbackImage} alt={item.menuItem?.name || item.name || 'Menu item'} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-black">{item.quantity} x {item.menuItem?.name || item.name || 'Menu item'}</p>
+                  {item.variationName ? <p className="mt-0.5 text-xs font-semibold text-stone-600">{item.variationName}</p> : null}
+                </div>
+                <p className="shrink-0 font-black text-[#d71920]">{currency(orderItemTotal(item))}</p>
               </div>
-              <p className="shrink-0 font-black text-[#d71920]">{currency(orderItemTotal(item))}</p>
+              <OrderReviewItem item={item} order={order} />
             </div>
           ))}
         </div>
@@ -677,10 +755,24 @@ function OrderDetailView({ order, onBack }) {
   );
 }
 
-function MealDetail({ item, quantity, selectedVariation, onVariationChange, onQuantityChange, onClose, onAdd, onShare }) {
+function MealDetail({
+  item,
+  quantity,
+  selectedVariation,
+  reviews = [],
+  showAllReviews,
+  onVariationChange,
+  onQuantityChange,
+  onClose,
+  onAdd,
+  onShare,
+  onToggleReviews
+}) {
   if (!item) return null;
   const variations = mealVariations(item);
   const price = mealPrice(item, selectedVariation);
+  const visibleReviews = showAllReviews ? reviews : reviews.slice(0, 2);
+  const averageRating = reviews.length ? (reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1) : item.averageRating;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#eef8fa] text-[#111827] sm:grid sm:place-items-center sm:bg-black/45 sm:p-4">
@@ -707,7 +799,14 @@ function MealDetail({ item, quantity, selectedVariation, onVariationChange, onQu
               <h1 className="text-lg font-black tracking-normal">{item.name}</h1>
               <p className="text-xs text-[#6d6f76]">Delivery Free&nbsp;&nbsp;&nbsp; 10-25 min</p>
             </div>
-            <p className="shrink-0 pt-5 text-base font-black text-[#777]">{currency(price)}</p>
+            <div className="shrink-0 pt-4 text-right">
+              <p className="text-base font-black text-[#777]">{currency(price)}</p>
+              {averageRating ? (
+                <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-amber-600">
+                  <Star size={13} fill="currentColor" /> {averageRating}
+                </p>
+              ) : null}
+            </div>
           </div>
           <p className="mt-4 text-[13px] font-medium leading-5 text-[#5f646b]">
             {item.description || 'Freshly prepared ChopASAP meal made with quality ingredients and served hot for reserve or delivery.'}
@@ -715,44 +814,88 @@ function MealDetail({ item, quantity, selectedVariation, onVariationChange, onQu
 
           {variations.length ? (
             <section className="mt-7">
-              <h2 className="font-medium">Chose variation</h2>
-              <div className="mt-3 grid gap-3">
+              <h2 className="font-medium">Extras and variations</h2>
+              <p className="mt-1 text-xs font-semibold text-[#7a7f86]">Optional add-ons. Leave blank to order the standard meal.</p>
+              <div className="mt-3 grid gap-2">
                 {variations.map((variation) => (
-                  <label key={variation.name} className="flex items-center gap-2 text-sm text-[#6d6f76]">
+                  <label
+                    key={variation.name}
+                    className={clsx(
+                      'flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition',
+                      selectedVariation === variation.name ? 'border-[#d71920] bg-[#fff4f4] text-[#151923]' : 'border-[#e7edf0] bg-[#f8fbfc] text-[#6d6f76]'
+                    )}
+                  >
+                    <span className="font-bold">{variation.name}</span>
+                    <span className="flex items-center gap-2 font-black text-[#d71920]">
+                      {currency(Number(variation.price || item.price || 0))}
+                    </span>
                     <input
-                      className="h-3 w-3 accent-[#d71920]"
-                      type="checkbox"
+                      className="h-4 w-4 accent-[#d71920]"
+                      type="radio"
+                      name={`meal-variation-${item.id}`}
                       checked={selectedVariation === variation.name}
-                      onChange={() => onVariationChange(selectedVariation === variation.name ? '' : variation.name)}
+                      onChange={() => onVariationChange(variation.name)}
                     />
-                    <span>{variation.name}</span>
                   </label>
                 ))}
               </div>
             </section>
           ) : null}
 
+          <section className="mt-7 rounded-2xl bg-[#fff8e8] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-medium">Meal reviews</h2>
+                <p className="mt-1 text-xs font-semibold text-[#6d6f76]">
+                  {reviews.length ? `${reviews.length} customer review${reviews.length === 1 ? '' : 's'}` : 'No reviews yet'}
+                </p>
+              </div>
+              {reviews.length > 2 ? (
+                <button className="text-xs font-black text-[#d71920]" type="button" onClick={onToggleReviews}>
+                  {showAllReviews ? 'Show less' : 'See all reviews'}
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-4 grid gap-3">
+              {visibleReviews.length ? visibleReviews.map((review) => (
+                <div key={review.id} className="rounded-2xl bg-white p-3 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-black text-[#151923]">{review.customerName}</p>
+                    <span className="inline-flex items-center gap-1 text-xs font-black text-amber-600">
+                      <Star size={13} fill="currentColor" /> {review.rating}
+                    </span>
+                  </div>
+                  {review.comment ? <p className="mt-2 text-xs font-semibold leading-5 text-[#5f646b]">{review.comment}</p> : null}
+                </div>
+              )) : (
+                <p className="rounded-2xl bg-white p-3 text-xs font-semibold text-[#6d6f76]">No reviews yet. You can review ordered meals from your Orders page.</p>
+              )}
+            </div>
+          </section>
+
           <section className="mt-7">
             <h2 className="font-medium">Seller information</h2>
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-4 flex items-center gap-3 rounded-2xl bg-[#f8fbfc] p-3 ring-1 ring-[#e7edf0]">
               <img className="h-12 w-12 rounded-full object-cover" src={chopasapLogo} alt="ChopASAP" />
               <div className="min-w-0 flex-1">
                 <p className="font-black">ChopASAP</p>
                 <p className="text-xs text-[#6d6f76]">Restaurant kitchen</p>
               </div>
-              <span className="text-xs font-medium text-[#44d18b]">Open Now</span>
+              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-[#16894d]">Open Now</span>
               <ChevronRight size={24} />
             </div>
           </section>
         </div>
         <div className="fixed bottom-0 left-0 right-0 z-10 bg-white px-6 py-5 sm:absolute sm:left-auto sm:right-auto sm:w-full sm:max-w-[390px]">
-          <div className="grid grid-cols-[86px_1fr] gap-5">
+          <div className="grid grid-cols-[72px_1fr] gap-3">
             <div className="flex h-10 items-center justify-between rounded-md border border-[#d71920] px-3 text-sm">
               <button type="button" onClick={() => onQuantityChange(-1)} aria-label="Decrease quantity"><Minus size={16} /></button>
               <span>{quantity}</span>
               <button type="button" onClick={() => onQuantityChange(1)} aria-label="Increase quantity"><Plus size={16} /></button>
             </div>
-            <RedButton className="rounded-md" onClick={() => onAdd(item, quantity, selectedVariation)}>Add To Cart {currency(price * quantity)}</RedButton>
+            <RedButton className="w-full rounded-md" onClick={() => onAdd(item, quantity, selectedVariation)}>
+              Add To Cart {currency(price * quantity)}
+            </RedButton>
           </div>
         </div>
       </div>
@@ -760,11 +903,11 @@ function MealDetail({ item, quantity, selectedVariation, onVariationChange, onQu
   );
 }
 
-function BottomNav({ activeTab, setActiveTab, language = 'en' }) {
+function BottomNav({ activeTab, setActiveTab, language = 'en', activeOrderCount = 0 }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 grid h-[72px] grid-cols-5 border-t border-[#dde7ea] bg-white px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_25px_rgba(40,50,60,0.08)] md:hidden">
       {tabs.map((tab) => (
-        <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} language={language} />
+        <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} language={language} badge={tab.id === 'orders' ? activeOrderCount : 0} />
       ))}
     </nav>
   );
@@ -805,6 +948,8 @@ export default function PublicPortal() {
   const [selectedMeal, setSelectedMeal] = useState(null);
   const [detailQuantity, setDetailQuantity] = useState(1);
   const [selectedVariation, setSelectedVariation] = useState('');
+  const [mealReviews, setMealReviews] = useState([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
   const [activeOrders, setActiveOrders] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(activeOrdersStorageKey) || '[]');
@@ -828,6 +973,7 @@ export default function PublicPortal() {
   const [customerSaving, setCustomerSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [flashSaleOpen, setFlashSaleOpen] = useState(false);
@@ -862,6 +1008,9 @@ export default function PublicPortal() {
   const serviceFee = 0;
   const grandTotal = subtotal + deliveryFee + serviceFee;
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const activeOrderCount = activeOrders.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status)).length;
+  const orderStatusOptions = ['ALL', ...Array.from(new Set(activeOrders.map((order) => order.status || 'PENDING')))];
+  const visibleOrders = orderStatusFilter === 'ALL' ? activeOrders : activeOrders.filter((order) => (order.status || 'PENDING') === orderStatusFilter);
   const focusedPageTitle = activeTab === 'profile' ? tr(language, 'profile') : activeTab === 'orders' && selectedOrder ? tr(language, 'orderDetails') : '';
   const isFocusedPage = Boolean(focusedPageTitle);
   const customerRank = rewardRank(customer?.points);
@@ -1158,10 +1307,14 @@ export default function PublicPortal() {
   };
 
   const openMealDetail = (item) => {
-    const variations = mealVariations(item);
     setSelectedMeal(item);
     setDetailQuantity(1);
-    setSelectedVariation(variations[0]?.name || '');
+    setSelectedVariation('');
+    setMealReviews(item.reviews || []);
+    setShowAllReviews(false);
+    endpoints.publicMealReviews(item.id)
+      .then((response) => setMealReviews(response.data?.items || []))
+      .catch(() => {});
   };
 
   const shareMeal = async (item) => {
@@ -1197,6 +1350,8 @@ export default function PublicPortal() {
     setSelectedMeal(null);
     setDetailQuantity(1);
     setSelectedVariation('');
+    setMealReviews([]);
+    setShowAllReviews(false);
   };
 
   const add = (item, quantity = 1, variationName = '') => {
@@ -1508,9 +1663,9 @@ export default function PublicPortal() {
               </div>
             </div>
             <nav className="grid gap-2">
-              {tabs.map((tab) => (
-                <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} desktop language={language} />
-              ))}
+                {tabs.map((tab) => (
+                  <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} desktop language={language} badge={tab.id === 'orders' ? activeOrderCount : 0} />
+                ))}
             </nav>
             <button className="mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-[#fff1ca] text-sm font-black text-[#d71920] disabled:opacity-50" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
               <CalendarClock size={17} /> Reserve
@@ -1656,8 +1811,22 @@ export default function PublicPortal() {
                   <>
                 <h1 className="text-2xl font-black">Orders</h1>
                 <p className="mt-1 text-sm font-semibold text-stone-600">Track orders placed during this session.</p>
+                {activeOrders.length ? (
+                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                    {orderStatusOptions.map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        className={clsx('shrink-0 rounded-full border px-4 py-2 text-xs font-black', orderStatusFilter === status ? 'border-[#d71920] bg-[#fff4f4] text-[#d71920]' : 'border-[#dbe5e8] bg-white text-stone-600')}
+                        onClick={() => setOrderStatusFilter(status)}
+                      >
+                        {status === 'ALL' ? tr(language, 'all') : status.replaceAll('_', ' ')}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="mt-5 rounded-xl bg-white px-3 shadow-sm">
-                  {activeOrders.length ? activeOrders.map((order) => (
+                  {visibleOrders.length ? visibleOrders.map((order) => (
                     <button key={order.id || order.orderNo} className="flex w-full items-center gap-3 border-b border-[#dbe5e8] py-4 text-left last:border-b-0" onClick={() => setSelectedOrder(order)}>
                       <ClipboardList size={22} className="text-[#d71920]" />
                       <div className="min-w-0 flex-1">
@@ -1669,8 +1838,8 @@ export default function PublicPortal() {
                   )) : (
                     <div className="py-8 text-center">
                       <ClipboardList className="mx-auto text-[#d71920]" size={34} />
-                      <p className="mt-3 font-black">No orders yet</p>
-                      <p className="mt-1 text-sm font-semibold text-[#8a8f98]">Orders you place from this portal will appear here.</p>
+                      <p className="mt-3 font-black">{activeOrders.length ? tr(language, 'noOrdersForStatus') : 'No orders yet'}</p>
+                      <p className="mt-1 text-sm font-semibold text-[#8a8f98]">{activeOrders.length ? '' : 'Orders you place from this portal will appear here.'}</p>
                     </div>
                   )}
                 </div>
@@ -1946,7 +2115,7 @@ export default function PublicPortal() {
           </aside> : null}
         </div>
 
-        {!isFocusedPage ? <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} language={language} /> : null}
+        {!isFocusedPage ? <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} language={language} activeOrderCount={activeOrderCount} /> : null}
       </div>
 
       <FlashSalePopup
@@ -1979,11 +2148,14 @@ export default function PublicPortal() {
           item={selectedMeal}
           quantity={detailQuantity}
           selectedVariation={selectedVariation}
+          reviews={mealReviews}
+          showAllReviews={showAllReviews}
           onVariationChange={setSelectedVariation}
           onQuantityChange={(delta) => setDetailQuantity((current) => Math.max(1, current + delta))}
           onClose={closeMealDetail}
           onAdd={add}
           onShare={shareMeal}
+          onToggleReviews={() => setShowAllReviews((current) => !current)}
         />
       ) : null}
 

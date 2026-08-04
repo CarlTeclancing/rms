@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import {
   createOnlineOrder,
+  createMealReview,
   createReservation,
   getPublicOnlineOrder,
+  listMealReviews,
   listPublicCustomerOrders,
   listOnlineOrders,
   listReservations,
@@ -19,6 +21,17 @@ import { authenticate, authorize } from '../middleware/auth.js';
 const router = Router();
 
 router.get('/public/menu', publicMenu);
+router.get('/public/menu/:menuItemId/reviews', listMealReviews);
+router.post(
+  '/public/menu/:menuItemId/reviews',
+  [
+    body('customerName').notEmpty(),
+    body('customerPhone').notEmpty(),
+    body('rating').isInt({ min: 1, max: 5 }),
+    validate
+  ],
+  createMealReview
+);
 router.post('/public/customers/session', [body('name').notEmpty(), body('phone').notEmpty(), validate], upsertPublicCustomer);
 router.put('/public/customers/:id', updatePublicCustomer);
 router.get('/public/customers/:id/orders', listPublicCustomerOrders);

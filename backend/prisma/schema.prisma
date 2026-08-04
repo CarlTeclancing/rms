@@ -141,8 +141,24 @@ model MenuItem {
   recipeIngredients RecipeIngredient[]
   saleItems         SaleItem[]
   onlineOrderItems  OnlineOrderItem[]
+  reviews           MealReview[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+}
+
+model MealReview {
+  id            String   @id @default(cuid())
+  menuItemId    String
+  menuItem      MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  customerName  String
+  customerPhone String?
+  rating        Int
+  comment       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([menuItemId])
+  @@index([rating])
 }
 
 model Ingredient {

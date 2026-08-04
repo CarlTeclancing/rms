@@ -3,7 +3,14 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { applyStockDeductions, buildSaleRowsAndDeductions } from '../services/stock.service.js';
 
-const menuInclude = { category: true };
+const menuInclude = {
+  category: true,
+  reviews: {
+    orderBy: { createdAt: 'desc' },
+    take: 3
+  },
+  _count: { select: { reviews: true } }
+};
 const orderTransactionOptions = { maxWait: 10000, timeout: 20000 };
 const cleanPhone = (phone = '') => String(phone).replace(/\s+/g, '').trim();
 const cleanReferralCode = (code = '') => String(code).replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 24);
@@ -13,6 +20,28 @@ const serializeCustomer = (customer, orderCount = 0) => ({
   orderCount,
   referralCount: customer._count?.referrals || customer.referralCount || 0
 });
+
+const reviewSummary = (reviews = [], count = reviews.length) => {
+  const averageRating = reviews.length
+    ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
+    : 0;
+  return {
+    averageRating: Number(averageRating.toFixed(1)),
+    reviewCount: count
+  };
+};
+
+const serializeMenuItem = (item, summaryOverride) => {
+  const reviews = item.reviews || [];
+  const summary = summaryOverride || reviewSummary(reviews, item._count?.reviews || reviews.length);
+  return {
+    ...item,
+    reviews,
+    averageRating: summary.averageRating,
+    reviewCount: summary.reviewCount,
+    _count: undefined
+  };
+};
 
 const baseReferralCode = (name = '', phone = '') => {
   const base = `${name}${phone}`.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 8);
@@ -39,7 +68,66 @@ export const publicMenu = asyncHandler(async (_req, res) => {
     }),
     prisma.menuCategory.findMany({ orderBy: { name: 'asc' } })
   ]);
-  res.json({ items, categories });
+
+  const reviewStats = items.length
+    ? await prisma.mealReview.groupBy({
+        by: ['menuItemId'],
+        where: { menuItemId: { in: items.map((item) => item.id) } },
+        _avg: { rating: true },
+        _count: { _all: true }
+      })
+    : [];
+  const summaryByItemId = new Map(reviewStats.map((entry) => [
+    entry.menuItemId,
+    {
+      averageRating: Number(Number(entry._avg.rating || 0).toFixed(1)),
+      reviewCount: entry._count._all
+    }
+  ]));
+
+  res.json({ items: items.map((item) => serializeMenuItem(item, summaryByItemId.get(item.id))), categories });
+});
+
+export const listMealReviews = asyncHandler(async (req, res) => {
+  const reviews = await prisma.mealReview.findMany({
+    where: { menuItemId: req.params.menuItemId },
+    orderBy: { createdAt: 'desc' },
+    take: 100
+  });
+  res.json({ items: reviews, ...reviewSummary(reviews, reviews.length) });
+});
+
+export const createMealReview = asyncHandler(async (req, res) => {
+  const rating = Number(req.body.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new ApiError(422, 'Rating must be between 1 and 5');
+  }
+
+  const menuItem = await prisma.menuItem.findUnique({ where: { id: req.params.menuItemId } });
+  if (!menuItem) throw new ApiError(404, 'Menu item not found');
+
+  const reviewerPhone = cleanPhone(req.body.customerPhone || '');
+  if (!reviewerPhone) throw new ApiError(422, 'Phone number is required to review an ordered meal');
+
+  const orderedMeal = await prisma.onlineOrder.findFirst({
+    where: {
+      customerPhone: reviewerPhone,
+      items: { some: { menuItemId: req.params.menuItemId } }
+    },
+    select: { id: true }
+  });
+  if (!orderedMeal) throw new ApiError(403, 'Only customers who ordered this meal can review it');
+
+  const review = await prisma.mealReview.create({
+    data: {
+      menuItemId: req.params.menuItemId,
+      customerName: req.body.customerName,
+      customerPhone: reviewerPhone,
+      rating,
+      comment: req.body.comment || null
+    }
+  });
+  res.status(201).json(review);
 });
 
 export const createOnlineOrder = asyncHandler(async (req, res) => {
