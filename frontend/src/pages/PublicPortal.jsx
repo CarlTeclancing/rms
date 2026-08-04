@@ -251,6 +251,15 @@ const rewardRank = (points = 0) => {
 
 const customerFacingMarketingTypes = ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'];
 
+const fallbackPromotionSlide = {
+  id: 'default-home-offer',
+  businessName: 'ChopASAP',
+  title: 'Fresh meals, offers, and rewards will appear here',
+  description: 'Check back for active campaigns, flash deals, and featured restaurant offers.',
+  ctaLabel: 'Explore meals',
+  ctaUrl: '#menu'
+};
+
 function RedButton({ children, className, ...props }) {
   return (
     <button
@@ -289,6 +298,68 @@ function TabButton({ tab, active, onClick, desktop = false, language = 'en', bad
       </span>
       {textFor(tab.label, language)}
     </button>
+  );
+}
+
+function PromotionBanner({ promotion, slides, activeIndex, onPrevious, onNext, onSelect, onAction }) {
+  const hasMultiple = slides.length > 1;
+  return (
+    <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5" aria-label="Promotions">
+      <div className="relative min-h-[146px] bg-[#fff4d7] sm:min-h-[180px]">
+        <div className="grid min-h-[146px] grid-cols-[1.15fr_0.85fr] sm:min-h-[180px]">
+          <div className="flex flex-col justify-center p-4 sm:p-6">
+            <p className="text-[11px] font-black uppercase tracking-wide text-[#8b5f00]">
+              {promotion?.businessName || 'Featured campaign'}
+            </p>
+            <h2 className="mt-1 line-clamp-2 text-xl font-black leading-6 text-[#151923] sm:text-3xl sm:leading-9">{promotion?.title}</h2>
+            <p className="mt-2 line-clamp-2 max-w-xl text-xs font-semibold leading-5 text-[#6c6250] sm:text-sm">{promotion?.description}</p>
+            <button
+              className="mt-4 inline-flex h-9 w-fit items-center gap-2 rounded-full bg-[#151923] px-4 text-xs font-black text-white shadow-sm"
+              onClick={() => onAction(promotion)}
+            >
+              {promotion?.ctaLabel || 'View offer'} <ChevronRight size={15} />
+            </button>
+          </div>
+          <div className="relative overflow-hidden bg-[#ffe6a3]">
+            {promotion?.imageUrl ? (
+              <img className="h-full min-h-[146px] w-full object-cover sm:min-h-[180px]" src={promotion.imageUrl} alt={promotion.title} />
+            ) : (
+              <div className="grid h-full min-h-[146px] place-items-center sm:min-h-[180px]">
+                <div className="grid h-20 w-20 place-items-center rounded-2xl bg-white/80 text-[#d71920] shadow-sm">
+                  <ShoppingBag size={42} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {hasMultiple ? (
+          <>
+            <button className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-[#29384d] shadow-sm" onClick={onPrevious} aria-label="Previous promotion">
+              <ChevronLeft size={18} />
+            </button>
+            <button className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-[#29384d] shadow-sm" onClick={onNext} aria-label="Next promotion">
+              <ChevronRight size={18} />
+            </button>
+          </>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="flex gap-1.5" aria-label="Promotion slides">
+          {slides.map((slide, index) => (
+            <button
+              key={slide.id}
+              className={clsx('h-2 rounded-full transition-all', index === activeIndex ? 'w-6 bg-[#d71920]' : 'w-2 bg-[#d8dee2]')}
+              onClick={() => onSelect(index)}
+              aria-label={`Show promotion ${index + 1}`}
+              aria-current={index === activeIndex}
+            />
+          ))}
+        </div>
+        <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">{hasMultiple ? `${activeIndex + 1}/${slides.length}` : 'Featured'}</p>
+      </div>
+    </section>
   );
 }
 
@@ -1037,17 +1108,11 @@ export default function PublicPortal() {
   }));
   const promotionSlides = [
     ...marketingSlides,
-    ...(promotions.data?.items || []),
-    {
-      id: 'request-promotion',
-      title: 'Promote with us and reach more customers',
-      description: 'Submit your brand, service, or store for admin approval and placement on ChopASAP.',
-      ctaLabel: 'Request promotion',
-      requestSlide: true
-    }
+    ...(promotions.data?.items || [])
   ];
+  const visiblePromotionSlides = promotionSlides.length ? promotionSlides : [fallbackPromotionSlide];
   const [promotionIndex, setPromotionIndex] = useState(0);
-  const featuredPromotion = promotionSlides[promotionIndex] || promotionSlides[0];
+  const featuredPromotion = visiblePromotionSlides[promotionIndex] || visiblePromotionSlides[0];
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
   const deliveryFee = fulfillment === 'delivery' ? Number(settings.deliveryFee || 0) : 0;
   const serviceFee = 0;
@@ -1233,17 +1298,17 @@ export default function PublicPortal() {
   }, [featuredPromotion?.id]);
 
   useEffect(() => {
-    if (promotionIndex < promotionSlides.length) return;
+    if (promotionIndex < visiblePromotionSlides.length) return;
     setPromotionIndex(0);
-  }, [promotionIndex, promotionSlides.length]);
+  }, [promotionIndex, visiblePromotionSlides.length]);
 
   useEffect(() => {
-    if (promotionSlides.length <= 1) return undefined;
+    if (visiblePromotionSlides.length <= 1) return undefined;
     const timer = window.setInterval(() => {
-      setPromotionIndex((current) => (current + 1) % promotionSlides.length);
+      setPromotionIndex((current) => (current + 1) % visiblePromotionSlides.length);
     }, 6500);
     return () => window.clearInterval(timer);
-  }, [promotionSlides.length]);
+  }, [visiblePromotionSlides.length]);
 
   useEffect(() => {
     const mealId = new URLSearchParams(window.location.search).get('meal');
@@ -1630,6 +1695,10 @@ export default function PublicPortal() {
 
   const handlePromotionCta = (promotion = featuredPromotion) => {
     if (promotion?.ctaUrl && !promotion.requestSlide) {
+      if (promotion.ctaUrl.startsWith('#')) {
+        document.querySelector(promotion.ctaUrl)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       window.open(promotion.ctaUrl, '_blank', 'noopener,noreferrer');
       return;
     }
@@ -1735,72 +1804,17 @@ export default function PublicPortal() {
           <main className="min-w-0">
             {activeTab === 'home' ? (
               <>
-                <section className="overflow-hidden rounded-xl bg-white shadow-sm" aria-label="Promotions">
-                  <div className="relative min-h-[112px] bg-[#ffd071]">
-                    <div className="grid min-h-[112px] grid-cols-[1.35fr_0.65fr]">
-                      <div className="p-3 sm:p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8b5f00]">
-                          {featuredPromotion?.requestSlide ? 'Advertise on ChopASAP' : featuredPromotion?.businessName || 'Featured'}
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-sm font-bold leading-5 text-[#151923] sm:text-base">{featuredPromotion?.title}</p>
-                        <p className="mt-1 line-clamp-1 text-xs font-medium leading-4 text-[#6c6250]">{featuredPromotion?.description}</p>
-                        <button
-                          className="mt-2 inline-flex h-7 items-center gap-1 rounded-full bg-white px-3 text-xs font-semibold text-[#6c6250] shadow-sm"
-                          onClick={() => handlePromotionCta(featuredPromotion)}
-                        >
-                          {featuredPromotion?.ctaLabel || 'Contact our Team'} <ChevronRight size={14} />
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-center bg-[#ffe6a3] p-3">
-                        {featuredPromotion?.imageUrl ? (
-                          <img className="h-full max-h-24 w-full rounded-lg object-cover" src={featuredPromotion.imageUrl} alt={featuredPromotion.title} />
-                        ) : (
-                          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/70 text-[#d71920]">
-                            <ShoppingBag size={34} />
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                <PromotionBanner
+                  promotion={featuredPromotion}
+                  slides={visiblePromotionSlides}
+                  activeIndex={promotionIndex}
+                  onPrevious={() => setPromotionIndex((current) => (current - 1 + visiblePromotionSlides.length) % visiblePromotionSlides.length)}
+                  onNext={() => setPromotionIndex((current) => (current + 1) % visiblePromotionSlides.length)}
+                  onSelect={setPromotionIndex}
+                  onAction={handlePromotionCta}
+                />
 
-                    {promotionSlides.length > 1 ? (
-                      <>
-                        <button
-                          className="absolute left-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-[#29384d] shadow-sm"
-                          onClick={() => setPromotionIndex((current) => (current - 1 + promotionSlides.length) % promotionSlides.length)}
-                          aria-label="Previous promotion"
-                        >
-                          <ChevronLeft size={17} />
-                        </button>
-                        <button
-                          className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-[#29384d] shadow-sm"
-                          onClick={() => setPromotionIndex((current) => (current + 1) % promotionSlides.length)}
-                          aria-label="Next promotion"
-                        >
-                          <ChevronRight size={17} />
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 px-4 py-2">
-                    <div className="flex gap-1.5" aria-label="Promotion slides">
-                      {promotionSlides.map((slide, index) => (
-                        <button
-                          key={slide.id}
-                          className={clsx('h-2 rounded-full transition-all', index === promotionIndex ? 'w-5 bg-[#d71920]' : 'w-2 bg-[#e1e6e8]')}
-                          onClick={() => setPromotionIndex(index)}
-                          aria-label={`Show promotion ${index + 1}`}
-                          aria-current={index === promotionIndex}
-                        />
-                      ))}
-                    </div>
-                    <button className="text-xs font-semibold text-[#d71920]" onClick={() => setPromotionOpen(true)}>
-                      Promote here
-                    </button>
-                  </div>
-                </section>
-
-                <section className="mt-5">
+                <section id="menu" className="mt-5">
                   <div className="mb-2 flex items-center justify-between">
                     <h2 className="text-xl font-black tracking-normal text-[#151923]">Today's Menu</h2>
                     <ChevronRight size={22} className="text-[#29384d]" />

@@ -21,6 +21,7 @@ import {
   Text,
   TextInput,
   StatusBar as NativeStatusBar,
+  useWindowDimensions,
   View
 } from 'react-native';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
@@ -99,6 +100,12 @@ function RewardRank(points = 0) {
 }
 
 const customerFacingMarketingTypes = ['HOMEPAGE_BANNER', 'CAMPAIGN', 'FLASH_DEAL', 'FEATURED_RESTAURANT', 'ANNOUNCEMENT', 'COUPON'];
+const fallbackPromotionSlide = {
+  id: 'default-home-offer',
+  label: 'ChopASAP',
+  title: 'Fresh meals, offers, and rewards will appear here',
+  description: 'Check back for active campaigns, flash deals, and featured restaurant offers.'
+};
 
 function Loader({ label = 'Loading' }) {
   return (
@@ -1015,8 +1022,11 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
     ...marketingBanners.map((item) => ({ ...item, label: item.type?.replaceAll('_', ' ') || 'Campaign' })),
     ...promotions.map((item) => ({ ...item, label: item.businessName || 'Promotion', deepLink: item.ctaUrl }))
   ];
+  const visibleBannerSlides = bannerSlides.length ? bannerSlides : [fallbackPromotionSlide];
   return (
     <View>
+      <PromotionCarousel slides={visibleBannerSlides} />
+
       <View style={styles.categoryQuickAccess}>
         <View style={styles.categoryGridTop}>
           <CategoryTile label="All" variant="meal" active={selectedCategory === 'all'} onPress={() => setSelectedCategory('all')} featured />
@@ -1041,21 +1051,6 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
           </View>
           <Ionicons name="chevron-forward" size={20} color="#151923" />
         </Pressable>
-      ) : null}
-
-      {bannerSlides.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marketingHeroRail}>
-          {bannerSlides.map((slide) => (
-            <Pressable key={slide.id || slide.title} style={styles.marketingHero} onPress={slide.deepLink ? () => Linking.openURL(slide.deepLink) : undefined}>
-              {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.marketingHeroImage} /> : null}
-              <View style={styles.marketingHeroCopy}>
-                <Text style={styles.promoEyebrow}>{slide.label}</Text>
-                <Text style={styles.promoTitle} numberOfLines={2}>{slide.title}</Text>
-                {slide.description ? <Text style={styles.cardCopy} numberOfLines={2}>{slide.description}</Text> : null}
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
       ) : null}
 
       <View style={styles.sectionBlock}>
@@ -1108,6 +1103,60 @@ function variantForCategory(name = '', fallback = 0) {
   if (value.includes('grocery') || value.includes('store')) return 'basket';
   if (value.includes('african') || value.includes('main') || value.includes('meal') || value.includes('food')) return 'meal';
   return ['meal', 'basket', 'drinks', 'bottles', 'icecream'][fallback % 5];
+}
+
+function PromotionCarousel({ slides }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const { width } = useWindowDimensions();
+  const cardWidth = Math.min(width - 32, 430);
+  const activeSlide = slides[activeIndex] || slides[0];
+  const openSlide = (slide) => {
+    if (!slide.deepLink) return;
+    const url = slide.deepLink.startsWith('http') ? slide.deepLink : `${portalUrl}${slide.deepLink.startsWith('/') ? slide.deepLink : `/${slide.deepLink}`}`;
+    Linking.openURL(url);
+  };
+  useEffect(() => {
+    if (activeIndex < slides.length) return;
+    setActiveIndex(0);
+  }, [activeIndex, slides.length]);
+
+  return (
+    <View style={styles.promotionHeroBlock}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.promotionHeroRail}
+        onMomentumScrollEnd={({ nativeEvent }) => {
+          const width = nativeEvent.layoutMeasurement.width || 1;
+          setActiveIndex(Math.round(nativeEvent.contentOffset.x / width));
+        }}
+      >
+        {slides.map((slide) => (
+          <Pressable key={slide.id || slide.title} style={[styles.promotionHeroCard, { width: cardWidth }]} onPress={slide.deepLink ? () => openSlide(slide) : undefined}>
+            <View style={styles.promotionHeroText}>
+              <Text style={styles.promoEyebrow}>{slide.label || 'Featured'}</Text>
+              <Text style={styles.promotionHeroTitle} numberOfLines={2}>{slide.title}</Text>
+              {slide.description ? <Text style={styles.promotionHeroCopy} numberOfLines={2}>{slide.description}</Text> : null}
+              <View style={styles.promotionHeroCta}>
+                <Text style={styles.promotionHeroCtaText}>{slide.ctaLabel || 'View offer'}</Text>
+                <Ionicons name="chevron-forward" size={15} color="#fff" />
+              </View>
+            </View>
+            <View style={styles.promotionHeroMedia}>
+              {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.promotionHeroImage} /> : <Ionicons name="bag-handle-outline" size={44} color={brandRed} />}
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <View style={styles.promotionHeroDots}>
+        {slides.map((slide, index) => (
+          <View key={`${slide.id || slide.title}-dot`} style={[styles.promotionHeroDot, index === activeIndex && styles.promotionHeroDotActive]} />
+        ))}
+      </View>
+      {activeSlide?.title ? <Text style={styles.promotionHeroStatus} numberOfLines={1}>{activeIndex + 1}/{slides.length} active offer{slides.length === 1 ? '' : 's'}</Text> : null}
+    </View>
+  );
 }
 
 function CategoryTile({ label, variant, active, onPress, featured = false, badge = '' }) {
@@ -1855,6 +1904,20 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentBody: { padding: 16, paddingBottom: 100 },
   pageTitle: { fontSize: 24, fontWeight: '900', color: '#151923', marginBottom: 14 },
+  promotionHeroBlock: { marginBottom: 14 },
+  promotionHeroRail: { gap: 10 },
+  promotionHeroCard: { minHeight: 156, borderRadius: 18, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#ffd08a', overflow: 'hidden', flexDirection: 'row' },
+  promotionHeroText: { flex: 1, padding: 14, justifyContent: 'center' },
+  promotionHeroTitle: { color: '#151923', fontSize: 20, lineHeight: 24, fontWeight: '900' },
+  promotionHeroCopy: { marginTop: 5, color: '#6c6250', fontSize: 12, lineHeight: 17, fontWeight: '700' },
+  promotionHeroCta: { marginTop: 12, alignSelf: 'flex-start', height: 32, borderRadius: 16, backgroundColor: '#151923', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  promotionHeroCtaText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  promotionHeroMedia: { width: 118, backgroundColor: '#ffe6a3', alignItems: 'center', justifyContent: 'center' },
+  promotionHeroImage: { width: '100%', height: '100%' },
+  promotionHeroDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  promotionHeroDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#d8dee2' },
+  promotionHeroDotActive: { width: 22, backgroundColor: brandRed },
+  promotionHeroStatus: { position: 'absolute', right: 2, bottom: 0, color: brandRed, fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
   categoryQuickAccess: { marginBottom: 10, gap: 6 },
   categoryGridTop: { flexDirection: 'row', gap: 8 },
   categoryGridBottom: { flexDirection: 'row', gap: 7 },

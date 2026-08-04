@@ -124,7 +124,11 @@ export const deleteMarketingItem = asyncHandler(async (req, res) => {
 export const publicMarketingItems = asyncHandler(async (_req, res) => {
   const now = new Date();
   const items = await prisma.marketingItem.findMany({
-    where: activeMarketingWhere(now),
+    where: {
+      status: { in: ['ACTIVE', 'SCHEDULED'] },
+      OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+      AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }]
+    },
     orderBy: [{ priority: 'desc' }, { startsAt: 'asc' }],
     take: 20,
     select: marketingItemSelect
