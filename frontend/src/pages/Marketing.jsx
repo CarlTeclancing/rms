@@ -1,4 +1,4 @@
-import { BarChart3, CalendarClock, Download, Gift, Megaphone, Plus, Send, Sparkles, Target, TicketPercent, Trophy, Users } from 'lucide-react';
+import { BarChart3, CalendarClock, Download, Gift, ImagePlus, Megaphone, Plus, Send, Sparkles, Target, TicketPercent, Trophy, Users, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { EmptyState } from '../components/EmptyState.jsx';
@@ -47,10 +47,30 @@ const moduleGroups = [
 ];
 
 const optionSections = [
-  { title: 'Campaign Types', items: campaignTypes, tone: 'bg-[#fff4d7] text-[#8b5f00]' },
-  { title: 'Reward Types', items: rewardTypes, tone: 'bg-[#e7f8ef] text-[#0b8f4f]' },
-  { title: 'Coupon Types', items: couponTypes, tone: 'bg-[#eef8fa] text-[#29384d]' },
-  { title: 'Target Audiences', items: audienceOptions, tone: 'bg-[#fff4f4] text-[#d71920]' }
+  {
+    title: 'Campaign Types',
+    helper: 'Use these when the goal is to lift orders, move stock, or promote a restaurant/product.',
+    items: campaignTypes,
+    tone: 'bg-[#fff4d7] text-[#8b5f00]'
+  },
+  {
+    title: 'Reward Types',
+    helper: 'Use these to increase daily activity, repeat orders, streaks, and loyalty engagement.',
+    items: rewardTypes,
+    tone: 'bg-[#e7f8ef] text-[#0b8f4f]'
+  },
+  {
+    title: 'Coupon Types',
+    helper: 'Use these when marketers need a clear discount rule with eligibility and limits.',
+    items: couponTypes,
+    tone: 'bg-[#eef8fa] text-[#29384d]'
+  },
+  {
+    title: 'Target Audiences',
+    helper: 'Choose who should see the campaign so the customer experience stays clean.',
+    items: audienceOptions,
+    tone: 'bg-[#fff4f4] text-[#d71920]'
+  }
 ];
 
 const emptyForm = {
@@ -108,15 +128,37 @@ function CompactList({ title, items }) {
   );
 }
 
-function OptionSection({ title, items, tone }) {
+function OptionDirectory({ sections }) {
   return (
     <section className="rounded-3xl bg-white p-5 shadow-sm">
-      <h2 className="font-black text-[#151923]">{title}</h2>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {items.map((item) => (
-          <span key={item} className={`rounded-full px-3 py-2 text-xs font-black ${tone}`}>
-            {item}
-          </span>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-black text-[#151923]">Campaign option directory</h2>
+          <p className="mt-1 max-w-2xl text-sm font-semibold leading-6 text-stone-500">
+            Marketers can pick the right strategy without scanning a crowded wall of options. Expand only the category they need.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {sections.map((section, index) => (
+          <details key={section.title} className="rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4" open={index === 0}>
+            <summary className="cursor-pointer list-none">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-black text-[#151923]">{section.title}</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-stone-500">{section.helper}</p>
+                </div>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-black text-stone-500">{section.items.length}</span>
+              </div>
+            </summary>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {section.items.map((item) => (
+                <span key={item} className={`rounded-full px-3 py-2 text-xs font-black ${section.tone}`}>
+                  {item}
+                </span>
+              ))}
+            </div>
+          </details>
         ))}
       </div>
     </section>
@@ -131,6 +173,7 @@ export default function Marketing() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
 
   const activeItems = useMemo(() => items.filter((item) => item.type === activeType), [items, activeType]);
   const activeModule = modules.find((module) => module.id === activeType) || modules[0];
@@ -195,6 +238,23 @@ export default function Marketing() {
     await load();
   };
 
+  const uploadMarketingImage = async (file) => {
+    if (!file) return;
+    const data = new FormData();
+    data.append('image', file);
+    data.append('folder', 'restaurant-system/marketing');
+    setImageUploading(true);
+    try {
+      const response = await endpoints.uploadImage(data);
+      setForm((current) => ({ ...current, imageUrl: response.data.url }));
+      toast.success('Marketing image uploaded');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Image upload failed');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const exportReport = async () => {
     const response = await endpoints.exportMarketingReport();
     const url = URL.createObjectURL(response.data);
@@ -233,11 +293,7 @@ export default function Marketing() {
         <CompactList title="Scheduled Notifications" items={dashboard.scheduledNotifications} />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        {optionSections.map((section) => (
-          <OptionSection key={section.title} {...section} />
-        ))}
-      </div>
+      <OptionDirectory sections={optionSections} />
 
       <div className="grid gap-5 xl:grid-cols-[280px_1fr]">
         <aside className="rounded-3xl bg-white p-3 shadow-sm">
@@ -273,7 +329,7 @@ export default function Marketing() {
           </div>
         </aside>
 
-        <section className="grid gap-5 xl:grid-cols-[1fr_380px]">
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_460px]">
           <div className="rounded-3xl bg-white p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -303,34 +359,155 @@ export default function Marketing() {
           </div>
 
           <form className="rounded-3xl bg-white p-5 shadow-sm" onSubmit={submit}>
-            <h2 className="text-lg font-black">{editingId ? 'Edit marketing item' : 'Create marketing item'}</h2>
-            <div className="mt-4 grid gap-3">
-              <label><span className="label">Module</span><select className={inputClass} value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>{modules.map((module) => <option key={module.id} value={module.id}>{module.label}</option>)}</select></label>
-              <label><span className="label">Name</span><input className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required /></label>
-              <label><span className="label">Description</span><textarea className={inputClass} value={form.description || ''} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+            <div>
+              <h2 className="text-lg font-black">{editingId ? 'Edit marketing item' : 'Create marketing item'}</h2>
+              <p className="mt-1 text-sm font-semibold leading-6 text-stone-500">Fill this once and the system handles scheduling, placement, and customer visibility.</p>
+            </div>
+            <div className="mt-5 grid gap-5">
+              <section className="grid gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">1. Campaign identity</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">These details help staff identify the campaign internally and help customers understand it externally.</p>
+                </div>
+                <label>
+                  <span className="label">Marketing module</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Choose where this item belongs: campaign, reward, coupon, banner, notification, or challenge.</p>
+                  <select className={inputClass} value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>{modules.map((module) => <option key={module.id} value={module.id}>{module.label}</option>)}</select>
+                </label>
+                <label>
+                  <span className="label">Campaign name shown to staff</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Use a clear name like “Weekend Free Delivery” or “Lunch Happy Hour”.</p>
+                  <input className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required />
+                </label>
+                <label>
+                  <span className="label">Customer-facing message</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Short copy customers will see on banners, reward cards, notifications, or deal previews.</p>
+                  <textarea className={inputClass} value={form.description || ''} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+                </label>
+              </section>
+
+              <section className="grid gap-3 border-t border-[#edf0f2] pt-5">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">2. Schedule and priority</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Control when the campaign appears and how strongly it competes for customer attention.</p>
+                </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="label">Status</span><select className={inputClass} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{['DRAFT', 'SCHEDULED', 'ACTIVE', 'PAUSED', 'ARCHIVED'].map((status) => <option key={status}>{status}</option>)}</select></label>
-                <label><span className="label">Priority</span><input className={inputClass} type="number" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} /></label>
+                <label>
+                  <span className="label">Publication status</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Draft stays hidden. Scheduled and Active can appear when dates match. Paused hides it.</p>
+                  <select className={inputClass} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>{['DRAFT', 'SCHEDULED', 'ACTIVE', 'PAUSED', 'ARCHIVED'].map((status) => <option key={status}>{status}</option>)}</select>
+                </label>
+                <label>
+                  <span className="label">Display priority</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Higher numbers appear first when multiple promotions are active.</p>
+                  <input className={inputClass} type="number" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })} />
+                </label>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="label">Start</span><input className={inputClass} type="datetime-local" value={form.startsAt || ''} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} /></label>
-                <label><span className="label">End</span><input className={inputClass} type="datetime-local" value={form.endsAt || ''} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} /></label>
+                <label>
+                  <span className="label">Start date and time</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">When customers should start seeing this campaign.</p>
+                  <input className={inputClass} type="datetime-local" value={form.startsAt || ''} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} />
+                </label>
+                <label>
+                  <span className="label">End date and time</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">When the campaign should automatically stop showing.</p>
+                  <input className={inputClass} type="datetime-local" value={form.endsAt || ''} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} />
+                </label>
               </div>
-              <label><span className="label">Image or banner URL</span><input className={inputClass} value={form.imageUrl || ''} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} /></label>
+              </section>
+
+              <section className="grid gap-3 border-t border-[#edf0f2] pt-5">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">3. Creative and action</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Add the visual and the tap target customers will see.</p>
+                </div>
+              <div>
+                <span className="label">Campaign image, banner, or prize image</span>
+                <p className="mt-1 text-xs font-semibold text-stone-500">Upload the image used for homepage banners, campaign cards, flash deals, or spin-wheel prizes.</p>
+                <div className="mt-1 rounded-2xl border border-dashed border-[#dbe5e8] bg-[#f7fbfc] p-3">
+                  {form.imageUrl ? (
+                    <div className="relative overflow-hidden rounded-xl">
+                      <img className="h-36 w-full object-cover" src={form.imageUrl} alt="Marketing creative preview" />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white text-[#d71920] shadow-sm"
+                        onClick={() => setForm({ ...form, imageUrl: '' })}
+                        aria-label="Remove uploaded image"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl bg-white px-4 py-6 text-center">
+                      <ImagePlus className="text-[#d71920]" size={28} />
+                      <span className="mt-2 text-sm font-black text-[#151923]">{imageUploading ? 'Uploading image...' : 'Upload image'}</span>
+                      <span className="mt-1 text-xs font-semibold text-stone-500">Use this for banners, prize images, and campaign creatives.</span>
+                      <input className="hidden" type="file" accept="image/*" disabled={imageUploading} onChange={(event) => uploadMarketingImage(event.target.files?.[0])} />
+                    </label>
+                  )}
+                  {form.imageUrl ? (
+                    <label className="mt-3 flex h-10 cursor-pointer items-center justify-center rounded-xl bg-white text-xs font-black text-[#d71920]">
+                      {imageUploading ? 'Uploading image...' : 'Replace image'}
+                      <input className="hidden" type="file" accept="image/*" disabled={imageUploading} onChange={(event) => uploadMarketingImage(event.target.files?.[0])} />
+                    </label>
+                  ) : null}
+                </div>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="label">CTA label</span><input className={inputClass} value={form.ctaLabel || ''} onChange={(event) => setForm({ ...form, ctaLabel: event.target.value })} /></label>
-                <label><span className="label">Deep link</span><input className={inputClass} value={form.deepLink || ''} onChange={(event) => setForm({ ...form, deepLink: event.target.value })} /></label>
+                <label>
+                  <span className="label">Button text</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Text on the customer action button, for example “Order now” or “Claim reward”.</p>
+                  <input className={inputClass} value={form.ctaLabel || ''} onChange={(event) => setForm({ ...form, ctaLabel: event.target.value })} />
+                </label>
+                <label>
+                  <span className="label">Destination link</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Where the button should send the customer, such as meals, a category, a restaurant, or checkout.</p>
+                  <input className={inputClass} value={form.deepLink || ''} onChange={(event) => setForm({ ...form, deepLink: event.target.value })} />
+                </label>
               </div>
-              <label><span className="label">Target audience</span><select className={inputClass} value={form.audience || audienceOptions[0]} onChange={(event) => setForm({ ...form, audience: event.target.value })}>{audienceOptions.map((audience) => <option key={audience}>{audience}</option>)}</select></label>
+              </section>
+
+              <section className="grid gap-3 border-t border-[#edf0f2] pt-5">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">4. Targeting and offer rules</p>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Define who gets the offer and what type of campaign, reward, or coupon it is.</p>
+                </div>
+              <label>
+                <span className="label">Customer group</span>
+                <p className="mt-1 text-xs font-semibold text-stone-500">Select the group that should see or receive this campaign.</p>
+                <select className={inputClass} value={form.audience || audienceOptions[0]} onChange={(event) => setForm({ ...form, audience: event.target.value })}>{audienceOptions.map((audience) => <option key={audience}>{audience}</option>)}</select>
+              </label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="label">Campaign type</span><select className={inputClass} value={form.config?.campaignType || campaignTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, campaignType: event.target.value } })}>{campaignTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
-                <label><span className="label">Reward type</span><select className={inputClass} value={form.config?.rewardType || rewardTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, rewardType: event.target.value } })}>{rewardTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
+                <label>
+                  <span className="label">Campaign strategy</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">The business goal of the promotion, such as flash sale or free delivery.</p>
+                  <select className={inputClass} value={form.config?.campaignType || campaignTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, campaignType: event.target.value } })}>{campaignTypes.map((type) => <option key={type}>{type}</option>)}</select>
+                </label>
+                <label>
+                  <span className="label">Reward issued to customer</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">What the customer receives after claiming, spinning, ordering, or completing a challenge.</p>
+                  <select className={inputClass} value={form.config?.rewardType || rewardTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, rewardType: event.target.value } })}>{rewardTypes.map((type) => <option key={type}>{type}</option>)}</select>
+                </label>
               </div>
-              <label><span className="label">Coupon type</span><select className={inputClass} value={form.config?.couponType || couponTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, couponType: event.target.value } })}>{couponTypes.map((type) => <option key={type}>{type}</option>)}</select></label>
+              <label>
+                <span className="label">Coupon rule</span>
+                <p className="mt-1 text-xs font-semibold text-stone-500">Choose how the discount should behave if this item includes a coupon.</p>
+                <select className={inputClass} value={form.config?.couponType || couponTypes[0]} onChange={(event) => setForm({ ...form, config: { ...form.config, couponType: event.target.value } })}>{couponTypes.map((type) => <option key={type}>{type}</option>)}</select>
+              </label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="label">Usage / stock limit</span><input className={inputClass} type="number" value={form.config?.maxClaims || ''} onChange={(event) => setForm({ ...form, config: { ...form.config, maxClaims: event.target.value } })} /></label>
-                <label><span className="label">Minimum order</span><input className={inputClass} type="number" value={form.config?.minimumOrder || ''} onChange={(event) => setForm({ ...form, config: { ...form.config, minimumOrder: event.target.value } })} /></label>
+                <label>
+                  <span className="label">Maximum claims or stock</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Optional cap for reward claims, coupon uses, spin-wheel winners, or prize stock.</p>
+                  <input className={inputClass} type="number" value={form.config?.maxClaims || ''} onChange={(event) => setForm({ ...form, config: { ...form.config, maxClaims: event.target.value } })} />
+                </label>
+                <label>
+                  <span className="label">Minimum order amount</span>
+                  <p className="mt-1 text-xs font-semibold text-stone-500">Optional basket value required before customers can use the offer.</p>
+                  <input className={inputClass} type="number" value={form.config?.minimumOrder || ''} onChange={(event) => setForm({ ...form, config: { ...form.config, minimumOrder: event.target.value } })} />
+                </label>
               </div>
+              </section>
               <button className="btn-primary justify-center" disabled={saving}>{saving ? 'Saving...' : editingId ? 'Save changes' : 'Create item'}</button>
             </div>
           </form>
