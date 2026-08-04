@@ -2,17 +2,25 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import {
   createOnlineOrder,
+  createDeliveryAgent,
   createMealReview,
   createReservation,
   getPublicOnlineOrder,
+  listDeliveryAgents,
+  listDriverDeliveryRequests,
   listMealReviews,
   listPublicCustomerOrders,
   listOnlineOrders,
+  assignDeliveryAgentToOrder,
+  acceptDriverDelivery,
+  completeDriverDelivery,
   listReservations,
   publicMenu,
+  updateDriverLocation,
   updatePublicCustomer,
   upsertPublicCustomer,
   updateOnlineOrderStatus,
+  updateOnlineOrderTracking,
   updateReservationStatus
 } from '../controllers/public.controller.js';
 import { validate } from '../middleware/errorHandler.js';
@@ -36,6 +44,10 @@ router.post('/public/customers/session', [body('name').notEmpty(), body('phone')
 router.put('/public/customers/:id', updatePublicCustomer);
 router.get('/public/customers/:id/orders', listPublicCustomerOrders);
 router.get('/public/orders/:id', getPublicOnlineOrder);
+router.get('/public/drivers/:code/requests', listDriverDeliveryRequests);
+router.post('/public/drivers/:code/orders/:id/accept', acceptDriverDelivery);
+router.post('/public/drivers/:code/orders/:id/deliver', completeDriverDelivery);
+router.put('/public/drivers/:code/orders/:id/location', updateDriverLocation);
 router.post(
   '/public/orders',
   [
@@ -61,6 +73,10 @@ router.post(
 
 router.get('/online-orders', authenticate, authorize('sales:read'), listOnlineOrders);
 router.put('/online-orders/:id/status', authenticate, authorize('sales:write'), body('status').notEmpty(), validate, updateOnlineOrderStatus);
+router.put('/online-orders/:id/tracking', authenticate, authorize('sales:write'), updateOnlineOrderTracking);
+router.get('/delivery-agents', authenticate, authorize('sales:read'), listDeliveryAgents);
+router.post('/delivery-agents', authenticate, authorize('sales:write'), [body('name').notEmpty(), body('code').notEmpty(), validate], createDeliveryAgent);
+router.put('/online-orders/:id/driver', authenticate, authorize('sales:write'), assignDeliveryAgentToOrder);
 router.get('/reservations', authenticate, authorize('sales:read'), listReservations);
 router.put('/reservations/:id/status', authenticate, authorize('sales:write'), body('status').notEmpty(), validate, updateReservationStatus);
 

@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { io } from 'socket.io-client';
 import {
   ActivityIndicator,
   Alert,
@@ -25,7 +26,7 @@ import {
   View
 } from 'react-native';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
-import { api, uploadCustomerAvatar, uploadPromotionImage } from './src/api';
+import { API_URL, api, uploadCustomerAvatar, uploadPromotionImage } from './src/api';
 import { t } from './src/i18n';
 
 const logo = require('./assets/chopasap-logo.png');
@@ -37,6 +38,8 @@ const favoritesKey = 'chopasap_mobile_favorites';
 const languageKey = 'chopasap_mobile_language';
 const activeOrdersKey = 'chopasap_mobile_active_orders';
 const flashSaleDismissedKey = 'chopasap_mobile_flash_sale_dismissed';
+const driverCodeKey = 'chopasap_mobile_driver_code';
+const appModeKey = 'chopasap_mobile_mode';
 
 const emptyReservationForm = {
   customerName: '',
@@ -91,6 +94,21 @@ const mealPrice = (item, variationName) => Number(mealVariations(item).find((ent
 const cartKeyFor = (id, variationName) => `${id}:${variationName || 'base'}`;
 const orderItemTotal = (item) => Number(item.total ?? Number(item.price || item.unitPrice || 0) * Number(item.quantity || 0));
 const orderItemName = (item) => item.menuItem?.name || item.name || 'Menu item';
+const deliveryStatusLabels = {
+  PENDING: 'Order received',
+  ACCEPTED: 'Restaurant accepted',
+  PREPARING: 'Preparing',
+  READY: 'Meal ready',
+  DRIVER_ASSIGNED: 'Driver assigned',
+  DRIVER_TO_RESTAURANT: 'Driver to restaurant',
+  DRIVER_ARRIVED: 'Driver arrived',
+  PICKED_UP: 'Picked up',
+  OUT_FOR_DELIVERY: 'On the way',
+  DRIVER_NEARBY: 'Driver nearby',
+  DELIVERED: 'Delivered',
+  CANCELLED: 'Cancelled'
+};
+const deliveryMilestones = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'DRIVER_ASSIGNED', 'DRIVER_TO_RESTAURANT', 'DRIVER_ARRIVED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DRIVER_NEARBY', 'DELIVERED'];
 
 function RewardRank(points = 0) {
   const value = Number(points || 0);
@@ -106,6 +124,7 @@ const fallbackPromotionSlide = {
   title: 'Fresh meals, offers, and rewards will appear here',
   description: 'Check back for active campaigns, flash deals, and featured restaurant offers.'
 };
+const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 const rewardClaimTypes = ['DAILY_REWARD', 'DAILY_STREAK', 'LOYALTY_PROGRAM', 'CHALLENGE', 'REFERRAL_PROGRAM'];
 
@@ -115,6 +134,13 @@ function campaignActionFor(slide = {}) {
   if (slide.type === 'FLASH_DEAL' || text.includes('flash') || text.includes('deal') || text.includes('offer')) return 'flash';
   if (text.includes('support') || text.includes('promote')) return 'support';
   return 'meals';
+}
+
+function trackingMapUrl(order = {}) {
+  if (!googleMapsApiKey || !order.driverLatitude || !order.driverLongitude || !order.latitude || !order.longitude) return '';
+  const driver = `${order.driverLatitude},${order.driverLongitude}`;
+  const customer = `${order.latitude},${order.longitude}`;
+  return `https://maps.googleapis.com/maps/api/staticmap?size=640x320&scale=2&maptype=roadmap&markers=color:red%7Clabel:D%7C${driver}&markers=color:green%7Clabel:H%7C${customer}&path=color:0xd71920ff%7Cweight:5%7C${driver}%7C${customer}&key=${googleMapsApiKey}`;
 }
 
 function Loader({ label = 'Loading' }) {
@@ -156,7 +182,7 @@ function LanguagePrompt({ visible, language, onChoose }) {
   );
 }
 
-function CustomerGate({ language, form, setForm, saving, onSubmit }) {
+function CustomerGate({ language, form, setForm, saving, onSubmit, onDriverMode }) {
   const complete = form.name.trim().length >= 2 && form.phone.trim().length >= 6;
   return (
     <View style={styles.gate}>
@@ -173,6 +199,10 @@ function CustomerGate({ language, form, setForm, saving, onSubmit }) {
           {form.referralCode ? <Text style={styles.referralBadge}>{t(language, 'referralActive')}</Text> : null}
           <Pressable style={[styles.primaryButton, (!complete || saving) && styles.disabled]} disabled={!complete || saving} onPress={onSubmit}>
             <Text style={styles.primaryButtonText}>{saving ? t(language, 'checking') : t(language, 'continue')}</Text>
+          </Pressable>
+          <Pressable style={styles.driverModeButton} onPress={onDriverMode}>
+            <Ionicons name="bicycle-outline" size={18} color={brandRed} />
+            <Text style={styles.driverModeText}>Delivery agent mode</Text>
           </Pressable>
         </View>
       </View>
@@ -325,9 +355,123 @@ function StatPill({ icon, label, value }) {
   );
 }
 
+function DriverGate({ code, setCode, saving, onSubmit, onCustomerMode }) {
+  return (
+    <View style={styles.gate}>
+      <View style={styles.gateCard}>
+        <View style={styles.driverGateHeader}>
+          <Ionicons name="bicycle-outline" size={42} color="#fff" />
+          <Text style={styles.gateTitle}>Delivery agent</Text>
+          <Text style={styles.gateCopy}>Enter your driver code to see delivery requests assigned to you.</Text>
+        </View>
+        <View style={styles.formBody}>
+          <Field label="Driver code" value={code} onChangeText={setCode} placeholder="DRV001" autoCapitalize="characters" />
+          <Pressable style={[styles.primaryButton, (!code.trim() || saving) && styles.disabled]} disabled={!code.trim() || saving} onPress={onSubmit}>
+            <Text style={styles.primaryButtonText}>{saving ? 'Checking...' : 'Open delivery requests'}</Text>
+          </Pressable>
+          <Pressable style={styles.driverModeButton} onPress={onCustomerMode}>
+            <Ionicons name="person-outline" size={18} color={brandRed} />
+            <Text style={styles.driverModeText}>Customer mode</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function DriverDashboard({ agent, requests, code, refreshing, savingId, onRefresh, onAccept, onDeliver, onLogout }) {
+  const activeCount = requests.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status)).length;
+  const earned = requests.reduce((sum, order) => sum + Number(order.driverCommission || 0), 0);
+  return (
+    <SafeAreaView style={styles.appSafe}>
+      <StatusBar style="dark" />
+      <View style={styles.driverHeader}>
+        <View>
+          <Text style={styles.brand}>CHOP ASAP</Text>
+          <Text style={styles.driverHeaderTitle}>{agent?.name || 'Delivery agent'}</Text>
+          <Text style={styles.driverHeaderMeta}>Code {agent?.code || code}</Text>
+        </View>
+        <Pressable style={styles.headerIconButton} onPress={onLogout}>
+          <Ionicons name="swap-horizontal-outline" size={22} color="#29384d" />
+        </Pressable>
+      </View>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentBody}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brandRed]} tintColor={brandRed} />}
+      >
+        <View style={styles.driverStatsRow}>
+          <View style={styles.driverStatCard}>
+            <Text style={styles.driverStatValue}>{activeCount}</Text>
+            <Text style={styles.driverStatLabel}>Active requests</Text>
+          </View>
+          <View style={styles.driverStatCard}>
+            <Text style={styles.driverStatValue}>{formatMoney(earned)}</Text>
+            <Text style={styles.driverStatLabel}>Commission earned</Text>
+          </View>
+        </View>
+        <Text style={styles.pageTitle}>Delivery requests</Text>
+        {requests.length ? requests.map((order) => {
+          const status = order.status || 'PENDING';
+          const canAccept = status === 'DRIVER_ASSIGNED';
+          const canDeliver = ['DRIVER_TO_RESTAURANT', 'DRIVER_ARRIVED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DRIVER_NEARBY'].includes(status);
+          const commission = Number(order.driverCommission || Number(order.deliveryFee || 0) * 0.5);
+          return (
+            <View key={order.id} style={styles.driverOrderCard}>
+              <View style={styles.orderCardTop}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.orderNo}>{order.orderNo}</Text>
+                  <Text style={styles.status}>{status.replaceAll('_', ' ')}</Text>
+                </View>
+                <Text style={styles.driverCommission}>{formatMoney(commission)}</Text>
+              </View>
+              <Text style={styles.orderMeta}>{order.customerName} - {order.customerPhone}</Text>
+              <Text style={styles.orderMeta}>{order.deliveryAddress}</Text>
+              <View style={styles.driverItemsBox}>
+                {(order.items || []).slice(0, 3).map((item) => (
+                  <View key={item.id} style={styles.driverItemRow}>
+                    <Image source={{ uri: item.menuItem?.imageUrl || fallbackImage }} style={styles.driverItemImage} />
+                    <Text style={styles.driverItemName} numberOfLines={1}>{item.quantity} x {orderItemName(item)}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.driverActionRow}>
+                {canAccept ? (
+                  <Pressable style={[styles.primaryButton, savingId === order.id && styles.disabled]} disabled={savingId === order.id} onPress={() => onAccept(order.id)}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                    <Text style={styles.primaryButtonText}>Accept delivery</Text>
+                  </Pressable>
+                ) : null}
+                {canDeliver ? (
+                  <Pressable style={[styles.primaryButton, savingId === order.id && styles.disabled]} disabled={savingId === order.id} onPress={() => onDeliver(order.id)}>
+                    <Ionicons name="flag-outline" size={18} color="#fff" />
+                    <Text style={styles.primaryButtonText}>Mark delivered</Text>
+                  </Pressable>
+                ) : null}
+                {!canAccept && !canDeliver ? <Text style={styles.driverHint}>Waiting for the next delivery action.</Text> : null}
+              </View>
+            </View>
+          );
+        }) : (
+          <View style={styles.supportCard}>
+            <Ionicons name="receipt-outline" size={32} color={brandRed} />
+            <Text style={styles.supportTitle}>No assigned deliveries</Text>
+            <Text style={styles.supportText}>Pull down to refresh when a staff member assigns an order to your code.</Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 export default function App() {
   const [language, setLanguage] = useState('en');
   const [languagePrompt, setLanguagePrompt] = useState(false);
+  const [appMode, setAppMode] = useState('customer');
+  const [driverCode, setDriverCode] = useState('');
+  const [driverAgent, setDriverAgent] = useState(null);
+  const [driverRequests, setDriverRequests] = useState([]);
+  const [driverSavingId, setDriverSavingId] = useState('');
   const [tab, setTab] = useState('home');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -366,6 +510,9 @@ export default function App() {
   const [rewardClaim, setRewardClaim] = useState(null);
   const activeOrderPulse = useRef(new Animated.Value(1)).current;
   const rewardBurst = useRef(new Animated.Value(0)).current;
+  const socketRef = useRef(null);
+  const driverCodeRef = useRef('');
+  const driverAgentRef = useRef(null);
 
   const filteredItems = useMemo(() => items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase())), [items, search]);
   const favoriteItems = useMemo(() => items.filter((item) => favorites.includes(item.id)), [items, favorites]);
@@ -380,6 +527,56 @@ export default function App() {
   useEffect(() => {
     bootstrap();
   }, []);
+
+  useEffect(() => {
+    driverCodeRef.current = driverCode;
+  }, [driverCode]);
+
+  useEffect(() => {
+    driverAgentRef.current = driverAgent;
+  }, [driverAgent]);
+
+  useEffect(() => {
+    const socketUrl = API_URL.replace(/\/api\/?$/, '');
+    const socket = io(socketUrl, { transports: ['websocket'], reconnection: true, reconnectionAttempts: Infinity });
+    socketRef.current = socket;
+    socket.on('order:updated', (order) => {
+      setSelectedOrder((current) => (current?.id === order.id ? { ...current, ...order } : current));
+      setOrders((current) => current.map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry)));
+      setDriverRequests((current) => {
+        if (!current.some((entry) => entry.id === order.id)) return current;
+        return current.map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry));
+      });
+      setActiveOrders((current) => {
+        const next = current.map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry));
+        if (next.some((entry) => entry.id === order.id)) return next;
+        return ['DELIVERED', 'CANCELLED'].includes(order.status) ? next : [order, ...next].slice(0, 10);
+      });
+    });
+    socket.on('dispatch:order-updated', (order) => {
+      setDriverRequests((current) => {
+        const currentDriverCode = driverCodeRef.current;
+        const currentAgent = driverAgentRef.current;
+        const belongsToDriver = order.deliveryAgent?.code === currentDriverCode || order.deliveryAgent?.id === currentAgent?.id || order.deliveryAgentId === currentAgent?.id;
+        const isClosed = ['DELIVERED', 'CANCELLED'].includes(order.status);
+        const exists = current.some((entry) => entry.id === order.id);
+        if (!belongsToDriver) return exists ? current.filter((entry) => entry.id !== order.id) : current;
+        if (isClosed) return current.map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry));
+        return exists ? current.map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry)) : [order, ...current];
+      });
+    });
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !selectedOrder?.id) return undefined;
+    socket.emit('order:join', selectedOrder.id);
+    return () => socket.emit('order:leave', selectedOrder.id);
+  }, [selectedOrder?.id]);
 
   useEffect(() => {
     if (!activeOrderCount) return undefined;
@@ -416,17 +613,26 @@ export default function App() {
 
   const bootstrap = async () => {
     try {
-      const [savedCustomer, savedFavorites, savedLanguage, savedActiveOrders, dismissedFlashSale, initialUrl] = await Promise.all([
+      const [savedCustomer, savedFavorites, savedLanguage, savedActiveOrders, dismissedFlashSale, savedMode, savedDriverCode, initialUrl] = await Promise.all([
         AsyncStorage.getItem(customerKey),
         AsyncStorage.getItem(favoritesKey),
         AsyncStorage.getItem(languageKey),
         AsyncStorage.getItem(activeOrdersKey),
         AsyncStorage.getItem(flashSaleDismissedKey),
+        AsyncStorage.getItem(appModeKey),
+        AsyncStorage.getItem(driverCodeKey),
         Linking.getInitialURL()
       ]);
       const nextLanguage = savedLanguage || 'en';
       setLanguage(nextLanguage);
       setLanguagePrompt(!savedLanguage);
+      if (savedMode === 'driver') setAppMode('driver');
+      if (savedDriverCode) {
+        setDriverCode(savedDriverCode);
+        if (savedMode === 'driver') {
+          loadDriverRequests(savedDriverCode).catch(() => {});
+        }
+      }
       if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
       if (savedActiveOrders) setActiveOrders(JSON.parse(savedActiveOrders));
       if (savedCustomer) {
@@ -525,9 +731,82 @@ export default function App() {
     }
   };
 
+  const loadDriverRequests = async (code = driverCode) => {
+    const normalized = String(code || '').trim();
+    if (!normalized) return;
+    const response = await api.driverRequests(normalized);
+    setDriverAgent(response.agent || null);
+    setDriverRequests(response.items || []);
+  };
+
+  const openDriverMode = async () => {
+    setAppMode('driver');
+    await AsyncStorage.setItem(appModeKey, 'driver');
+    if (driverCode) {
+      await loadDriverRequests(driverCode).catch((error) => Alert.alert('ChopASAP', error.message));
+    }
+  };
+
+  const openCustomerMode = async () => {
+    setAppMode('customer');
+    await AsyncStorage.setItem(appModeKey, 'customer');
+  };
+
+  const submitDriverCode = async () => {
+    setSaving(true);
+    try {
+      await AsyncStorage.setItem(driverCodeKey, driverCode.trim());
+      await AsyncStorage.setItem(appModeKey, 'driver');
+      await loadDriverRequests(driverCode);
+    } catch (error) {
+      Alert.alert('ChopASAP', error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const acceptDelivery = async (orderId) => {
+    setDriverSavingId(orderId);
+    try {
+      const updated = await api.acceptDelivery(driverCode, orderId);
+      setDriverRequests((current) => current.map((order) => (order.id === updated.id ? updated : order)));
+      Alert.alert('ChopASAP', 'Delivery accepted.');
+    } catch (error) {
+      Alert.alert('ChopASAP', error.message);
+    } finally {
+      setDriverSavingId('');
+    }
+  };
+
+  const completeDelivery = async (orderId) => {
+    setDriverSavingId(orderId);
+    try {
+      const updated = await api.completeDelivery(driverCode, orderId);
+      setDriverRequests((current) => current.map((order) => (order.id === updated.id ? updated : order)));
+      Alert.alert('ChopASAP', `Delivered. Commission earned: ${formatMoney(updated.driverCommission || Number(updated.deliveryFee || 0) * 0.5)}`);
+    } catch (error) {
+      Alert.alert('ChopASAP', error.message);
+    } finally {
+      setDriverSavingId('');
+    }
+  };
+
+  const logoutDriver = async () => {
+    await AsyncStorage.removeItem(driverCodeKey);
+    await AsyncStorage.setItem(appModeKey, 'customer');
+    setDriverCode('');
+    setDriverAgent(null);
+    setDriverRequests([]);
+    setAppMode('customer');
+  };
+
   const refreshApp = async () => {
     setRefreshing(true);
     try {
+      if (appMode === 'driver') {
+        await loadDriverRequests(driverCode);
+        return;
+      }
       const [menuData, settingsData, promotionData, marketingData, flashSaleData] = await Promise.all([
         api.menu(),
         api.settings().catch(() => settings),
@@ -781,13 +1060,35 @@ export default function App() {
 
   if (loading) return <Loader label="Loading ChopASAP" />;
 
+  if (appMode === 'driver') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        {!driverAgent ? (
+          <DriverGate code={driverCode} setCode={setDriverCode} saving={saving} onSubmit={submitDriverCode} onCustomerMode={openCustomerMode} />
+        ) : (
+          <DriverDashboard
+            agent={driverAgent}
+            requests={driverRequests}
+            code={driverCode}
+            refreshing={refreshing}
+            savingId={driverSavingId}
+            onRefresh={refreshApp}
+            onAccept={acceptDelivery}
+            onDeliver={completeDelivery}
+            onLogout={logoutDriver}
+          />
+        )}
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <SafeAreaView style={styles.appSafe}>
         <StatusBar style="dark" />
         <LanguagePrompt visible={languagePrompt} language={language} onChoose={chooseLanguage} />
         {!customer ? (
-          <CustomerGate language={language} form={customerForm} setForm={setCustomerForm} saving={saving} onSubmit={submitCustomer} />
+          <CustomerGate language={language} form={customerForm} setForm={setCustomerForm} saving={saving} onSubmit={submitCustomer} onDriverMode={openDriverMode} />
         ) : (
           <>
           <View style={styles.header}>
@@ -1409,6 +1710,68 @@ function OrderReviewItem({ item, order, language }) {
   );
 }
 
+function OrderTrackingCard({ order }) {
+  const events = order.trackingEvents || [];
+  const currentStatus = order.status || 'PENDING';
+  const currentIndex = Math.max(0, deliveryMilestones.indexOf(currentStatus));
+  const progress = currentStatus === 'CANCELLED' ? 0 : Math.min(100, ((currentIndex + 1) / deliveryMilestones.length) * 100);
+  const mapUrl = trackingMapUrl(order);
+  return (
+    <View style={styles.trackingCard}>
+      <View style={styles.trackingHeader}>
+        <View>
+          <Text style={styles.trackingEyebrow}>Live tracking</Text>
+          <Text style={styles.trackingTitle}>{deliveryStatusLabels[currentStatus] || currentStatus.replaceAll('_', ' ')}</Text>
+        </View>
+        <View style={styles.etaPill}>
+          <Ionicons name="time-outline" size={15} color={brandRed} />
+          <Text style={styles.etaText}>{order.etaMinutes ? `${order.etaMinutes} min` : 'ETA soon'}</Text>
+        </View>
+      </View>
+
+      {mapUrl ? (
+        <Image source={{ uri: mapUrl }} style={styles.mapPreview} />
+      ) : (
+        <View style={styles.mapPreview}>
+          <View style={styles.routeLine} />
+          <View style={[styles.mapMarker, styles.restaurantMarker]}><Ionicons name="restaurant" size={14} color="#fff" /></View>
+          <View style={[styles.mapMarker, styles.driverMarker]}><Ionicons name="bicycle" size={16} color="#fff" /></View>
+          <View style={[styles.mapMarker, styles.customerMarker]}><Ionicons name="home" size={14} color="#fff" /></View>
+        </View>
+      )}
+
+      <View style={styles.trackingStats}>
+        <Text style={styles.trackingStat}>{order.distanceKm ? `${Number(order.distanceKm).toFixed(1)} km left` : 'Distance updating'}</Text>
+        <Text style={styles.trackingStat}>{order.driverSpeedKph ? `${Number(order.driverSpeedKph).toFixed(0)} km/h` : 'Speed updating'}</Text>
+        <Text style={styles.trackingStat}>{order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Waiting for driver'}</Text>
+      </View>
+
+      <View style={styles.driverBox}>
+        {order.driverPhotoUrl ? <Image source={{ uri: order.driverPhotoUrl }} style={styles.driverPhoto} /> : <View style={styles.driverPhotoFallback}><Ionicons name="person" size={18} color="#29384d" /></View>}
+        <View style={styles.driverInfo}>
+          <Text style={styles.driverName}>{order.driverName || 'Driver not assigned yet'}</Text>
+          <Text style={styles.driverMeta}>{order.vehicleInfo || 'Vehicle details will appear here'}</Text>
+        </View>
+        <Ionicons name="call-outline" size={20} color={brandRed} />
+      </View>
+
+      <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
+      <View style={styles.timelineList}>
+        {(events.length ? events : [{ status: currentStatus, title: deliveryStatusLabels[currentStatus], createdAt: order.createdAt }]).map((event, index) => (
+          <View key={event.id || `${event.status}-${index}`} style={styles.timelineRow}>
+            <View style={styles.timelineDot} />
+            <View style={styles.timelineCopy}>
+              <Text style={styles.timelineTitle}>{event.title || deliveryStatusLabels[event.status] || event.status?.replaceAll('_', ' ')}</Text>
+              <Text style={styles.timelineTime}>{event.createdAt ? new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}</Text>
+              {event.message ? <Text style={styles.timelineMessage}>{event.message}</Text> : null}
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function OrderDetailModal({ visible, order, language, onClose }) {
   if (!order) return null;
   const items = order.items || [];
@@ -1432,6 +1795,7 @@ function OrderDetailModal({ visible, order, language, onClose }) {
             <Text style={styles.orderMeta}>{order.customerPhone}</Text>
             <Text style={styles.orderMeta}>{order.deliveryAddress || 'Not provided'}</Text>
           </View>
+          <OrderTrackingCard order={order} />
           <View style={styles.checkoutList}>
             {items.length ? items.map((item, index) => (
               <View key={item.id || `${item.menuItemId || item.name}-${index}`} style={styles.orderDetailItemBlock}>
@@ -1964,6 +2328,24 @@ const styles = StyleSheet.create({
   referralBadge: { backgroundColor: '#fff4d7', color: '#8b5f00', padding: 12, borderRadius: 16, textAlign: 'center', fontWeight: '900' },
   primaryButton: { minHeight: 48, borderRadius: 16, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
   primaryButtonText: { color: '#fff', fontWeight: '900' },
+  driverModeButton: { minHeight: 44, borderRadius: 14, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff8f8', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
+  driverModeText: { color: brandRed, fontWeight: '900' },
+  driverGateHeader: { alignItems: 'center', backgroundColor: brandRed, padding: 24 },
+  driverHeader: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  driverHeaderTitle: { color: '#151923', fontWeight: '900', fontSize: 20, marginTop: 2 },
+  driverHeaderMeta: { color: '#6d6f76', fontWeight: '800', marginTop: 2 },
+  driverStatsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  driverStatCard: { flex: 1, borderRadius: 18, backgroundColor: '#fff', padding: 14, borderWidth: 1, borderColor: '#edf0f2' },
+  driverStatValue: { color: '#151923', fontSize: 20, fontWeight: '900' },
+  driverStatLabel: { marginTop: 4, color: '#6d6f76', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  driverOrderCard: { backgroundColor: '#fff', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#edf0f2', gap: 10 },
+  driverCommission: { color: brandRed, fontWeight: '900' },
+  driverItemsBox: { gap: 8, borderRadius: 16, backgroundColor: '#f7fbfc', padding: 10 },
+  driverItemRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  driverItemImage: { width: 34, height: 34, borderRadius: 10 },
+  driverItemName: { flex: 1, color: '#151923', fontSize: 12, fontWeight: '800' },
+  driverActionRow: { gap: 8 },
+  driverHint: { color: '#6d6f76', fontSize: 12, fontWeight: '800' },
   detailAddButton: { flex: 1 },
   disabled: { opacity: 0.55 },
   header: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
@@ -2176,6 +2558,35 @@ const styles = StyleSheet.create({
   promotionTileFallback: { height: 106, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },
   orderDetailSummary: { backgroundColor: '#151923', borderRadius: 22, padding: 18, gap: 6 },
   orderDetailNo: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  trackingCard: { borderRadius: 22, backgroundColor: '#fff', padding: 14, gap: 12, borderWidth: 1, borderColor: '#e2edf0' },
+  trackingHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  trackingEyebrow: { color: brandRed, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  trackingTitle: { color: '#151923', fontSize: 18, fontWeight: '900', marginTop: 2 },
+  etaPill: { height: 30, borderRadius: 15, backgroundColor: '#fff4f4', paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  etaText: { color: brandRed, fontSize: 12, fontWeight: '900' },
+  mapPreview: { height: 150, borderRadius: 18, backgroundColor: '#eaf5f8', overflow: 'hidden', justifyContent: 'center' },
+  routeLine: { position: 'absolute', left: 44, right: 44, height: 4, borderRadius: 4, backgroundColor: '#2fbf71', transform: [{ rotate: '-14deg' }] },
+  mapMarker: { position: 'absolute', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
+  restaurantMarker: { left: 22, top: 82, backgroundColor: '#151923' },
+  driverMarker: { left: '48%', top: 58, backgroundColor: brandRed },
+  customerMarker: { right: 24, top: 42, backgroundColor: '#2fbf71' },
+  trackingStats: { flexDirection: 'row', gap: 8 },
+  trackingStat: { flex: 1, borderRadius: 12, backgroundColor: '#f7fbfc', padding: 8, color: '#42495a', fontSize: 11, fontWeight: '900', textAlign: 'center' },
+  driverBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, backgroundColor: '#fff8e8', padding: 10 },
+  driverPhoto: { width: 38, height: 38, borderRadius: 19 },
+  driverPhotoFallback: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  driverInfo: { flex: 1 },
+  driverName: { color: '#151923', fontSize: 13, fontWeight: '900' },
+  driverMeta: { color: '#6d6f76', fontSize: 11, fontWeight: '800', marginTop: 2 },
+  progressTrack: { height: 8, borderRadius: 8, backgroundColor: '#edf0f2', overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 8, backgroundColor: brandRed },
+  timelineList: { gap: 10 },
+  timelineRow: { flexDirection: 'row', gap: 10 },
+  timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: brandRed, marginTop: 4 },
+  timelineCopy: { flex: 1 },
+  timelineTitle: { color: '#151923', fontSize: 12, fontWeight: '900' },
+  timelineTime: { color: '#6d6f76', fontSize: 11, fontWeight: '800', marginTop: 1 },
+  timelineMessage: { color: '#42495a', fontSize: 11, fontWeight: '700', marginTop: 2 },
   orderDetailItem: { minHeight: 76, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   orderDetailImage: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#fff' },
   secondaryButton: { minHeight: 42, borderRadius: 14, backgroundColor: '#fff1ca', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },

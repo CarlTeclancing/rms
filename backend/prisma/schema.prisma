@@ -36,9 +36,41 @@ enum OnlineOrderStatus {
   PENDING
   ACCEPTED
   PREPARING
+  READY
+  DRIVER_ASSIGNED
+  DRIVER_TO_RESTAURANT
+  DRIVER_ARRIVED
+  PICKED_UP
   OUT_FOR_DELIVERY
+  DRIVER_NEARBY
   DELIVERED
   CANCELLED
+}
+
+enum NotificationChannel {
+  IN_APP
+  PUSH
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationCategory {
+  ORDERS
+  REWARDS
+  COUPONS
+  MARKETING
+  SUPPORT
+  PAYMENTS
+  SYSTEM
+}
+
+enum DeliveryAgentStatus {
+  OFFLINE
+  ONLINE
+  BUSY
+  DELIVERING
+  TAKING_BREAK
 }
 
 enum ReservationStatus {
@@ -335,15 +367,97 @@ model OnlineOrder {
   latitude        Decimal?          @db.Decimal(10, 7)
   longitude       Decimal?          @db.Decimal(10, 7)
   status          OnlineOrderStatus @default(PENDING)
+  deliveryAgentId String?
+  deliveryAgent   DeliveryAgent?    @relation(fields: [deliveryAgentId], references: [id], onDelete: SetNull)
+  driverName      String?
+  driverPhone     String?
+  driverPhotoUrl  String?
+  vehicleInfo     String?
+  driverLatitude  Decimal?          @db.Decimal(10, 7)
+  driverLongitude Decimal?          @db.Decimal(10, 7)
+  driverHeading   Decimal?          @db.Decimal(6, 2)
+  driverSpeedKph  Decimal?          @db.Decimal(8, 2)
+  trackingUpdatedAt DateTime?
+  etaMinutes      Int?
+  distanceKm      Decimal?          @db.Decimal(8, 2)
+  driverAcceptedAt DateTime?
+  driverDeliveredAt DateTime?
+  driverCommission Decimal?         @db.Decimal(10, 2)
   subtotal        Decimal           @db.Decimal(10, 2)
   deliveryFee     Decimal           @default(0) @db.Decimal(10, 2)
   total           Decimal           @db.Decimal(10, 2)
   items           OnlineOrderItem[]
+  trackingEvents  DeliveryTrackingEvent[]
+  notifications   Notification[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
   @@index([customerId])
   @@index([customerPhone])
+  @@index([deliveryAgentId])
+}
+
+model DeliveryAgent {
+  id             String              @id @default(cuid())
+  code           String              @unique
+  name           String
+  phone          String?
+  photoUrl       String?
+  vehicleInfo    String?
+  status         DeliveryAgentStatus @default(OFFLINE)
+  latitude       Decimal?            @db.Decimal(10, 7)
+  longitude      Decimal?            @db.Decimal(10, 7)
+  heading        Decimal?            @db.Decimal(6, 2)
+  speedKph       Decimal?            @db.Decimal(8, 2)
+  lastSeenAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  orders         OnlineOrder[]
+
+  @@index([name])
+  @@index([status])
+}
+
+model DeliveryTrackingEvent {
+  id              String            @id @default(cuid())
+  onlineOrderId   String
+  onlineOrder     OnlineOrder       @relation(fields: [onlineOrderId], references: [id], onDelete: Cascade)
+  status          OnlineOrderStatus
+  title           String
+  message         String?
+  latitude        Decimal?          @db.Decimal(10, 7)
+  longitude       Decimal?          @db.Decimal(10, 7)
+  etaMinutes      Int?
+  distanceKm      Decimal?          @db.Decimal(8, 2)
+  metadata        Json              @default("{}")
+  createdAt       DateTime          @default(now())
+
+  @@index([onlineOrderId, createdAt])
+  @@index([status])
+}
+
+model Notification {
+  id              String               @id @default(cuid())
+  onlineOrderId   String?
+  onlineOrder     OnlineOrder?         @relation(fields: [onlineOrderId], references: [id], onDelete: Cascade)
+  customerId      String?
+  category        NotificationCategory @default(SYSTEM)
+  channel         NotificationChannel  @default(IN_APP)
+  title           String
+  body            String
+  deepLink        String?
+  readAt          DateTime?
+  deliveredAt     DateTime?
+  openedAt        DateTime?
+  clickedAt       DateTime?
+  dismissedAt     DateTime?
+  metadata        Json                 @default("{}")
+  createdAt       DateTime             @default(now())
+
+  @@index([customerId, readAt])
+  @@index([onlineOrderId])
+  @@index([category])
+  @@index([createdAt])
 }
 
 model OnlineOrderItem {

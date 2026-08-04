@@ -1,4 +1,4 @@
-import { ClipboardList, MapPin, Phone, RefreshCw, Truck } from 'lucide-react';
+import { ClipboardList, MapPin, Phone, RefreshCw, Truck, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
@@ -31,9 +31,13 @@ const formatStatus = (status = 'PENDING') => status.replaceAll('_', ' ');
 
 export default function OnlineOrders() {
   const { data, loading, error, refetch, setData } = useApi(() => endpoints.onlineOrders(), []);
+  const { data: agentData, refetch: refetchAgents } = useApi(() => endpoints.deliveryAgents(), []);
   const [updatingId, setUpdatingId] = useState('');
   const [trackingDrafts, setTrackingDrafts] = useState({});
+  const [driverDrafts, setDriverDrafts] = useState({});
+  const [agentForm, setAgentForm] = useState({ code: '', name: '', phone: '', vehicleInfo: '', photoUrl: '' });
   const orders = data?.items || [];
+  const agents = agentData?.items || [];
   const activeOrders = orders.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status));
   const totalRevenue = orders.filter((order) => order.status === 'DELIVERED').reduce((sum, order) => sum + Number(order.total || 0), 0);
 
@@ -92,6 +96,38 @@ export default function OnlineOrders() {
     }
   };
 
+  const createAgent = async (event) => {
+    event.preventDefault();
+    setUpdatingId('agent');
+    try {
+      await endpoints.createDeliveryAgent(agentForm);
+      toast.success('Delivery agent added');
+      setAgentForm({ code: '', name: '', phone: '', vehicleInfo: '', photoUrl: '' });
+      refetchAgents();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not add delivery agent');
+    } finally {
+      setUpdatingId('');
+    }
+  };
+
+  const assignDriver = async (order) => {
+    const lookup = (driverDrafts[order.id] || '').trim();
+    if (!lookup) return toast.error('Enter a driver code or name');
+    setUpdatingId(order.id);
+    try {
+      await endpoints.assignDeliveryAgent(order.id, { lookup });
+      toast.success('Driver assigned');
+      setDriverDrafts((current) => ({ ...current, [order.id]: '' }));
+      refetch();
+      refetchAgents();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not assign driver');
+    } finally {
+      setUpdatingId('');
+    }
+  };
+
   if (loading) return <Loading label="Loading online orders" />;
   if (error || !data) return <EmptyState title="Online orders unavailable" message="Online delivery orders could not be loaded." onRetry={refetch} />;
 
@@ -112,6 +148,32 @@ export default function OnlineOrders() {
         <StatCard title="Active orders" value={activeOrders.length} icon={Truck} tone="blue" detail="Not delivered or cancelled" />
         <StatCard title="Online revenue" value={currency(totalRevenue)} icon={ClipboardList} tone="amber" detail="Delivered orders only" />
       </div>
+
+      <section className="card mb-5 p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-black text-[#151923]">Delivery agents</p>
+            <p className="text-xs font-semibold text-stone-500">Create drivers once, then assign orders with their unique code or name.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {agents.length ? agents.slice(0, 8).map((agent) => (
+                <span key={agent.id} className="rounded-full bg-[#f7fbfc] px-3 py-1 text-xs font-black text-stone-700">
+                  {agent.code} - {agent.name}
+                </span>
+              )) : <span className="text-xs font-semibold text-stone-500">No delivery agents added yet.</span>}
+            </div>
+          </div>
+          <form className="grid gap-2 sm:grid-cols-2 lg:min-w-[560px]" onSubmit={createAgent}>
+            <input className="input h-10" placeholder="Unique driver code e.g. DRV001" value={agentForm.code} onChange={(e) => setAgentForm((current) => ({ ...current, code: e.target.value }))} />
+            <input className="input h-10" placeholder="Driver full name" value={agentForm.name} onChange={(e) => setAgentForm((current) => ({ ...current, name: e.target.value }))} />
+            <input className="input h-10" placeholder="Driver phone number" value={agentForm.phone} onChange={(e) => setAgentForm((current) => ({ ...current, phone: e.target.value }))} />
+            <input className="input h-10" placeholder="Vehicle e.g. Bike CM-123" value={agentForm.vehicleInfo} onChange={(e) => setAgentForm((current) => ({ ...current, vehicleInfo: e.target.value }))} />
+            <input className="input h-10 sm:col-span-2" placeholder="Profile photo URL (optional)" value={agentForm.photoUrl} onChange={(e) => setAgentForm((current) => ({ ...current, photoUrl: e.target.value }))} />
+            <button className="btn-primary h-10 sm:col-span-2" disabled={updatingId === 'agent'}>
+              <UserPlus size={16} /> Add delivery agent
+            </button>
+          </form>
+        </div>
+      </section>
 
       {orders.length ? (
         <div className="grid gap-4">
@@ -183,6 +245,31 @@ export default function OnlineOrders() {
                   <button className="btn-secondary h-9" disabled={updatingId === order.id} onClick={() => saveTracking(order)}>
                     <Truck size={16} /> Save tracking
                   </button>
+                </div>
+                <div className="mt-3 rounded-xl border border-[#e2edf0] bg-white p-3">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_220px] lg:items-end">
+                    <div>
+                      <label className="text-xs font-black uppercase text-stone-500">Assign delivery agent by code or name</label>
+                      <input
+                        className="input mt-1 h-10"
+                        list={`agents-${order.id}`}
+                        placeholder={order.deliveryAgent ? `${order.deliveryAgent.code} - ${order.deliveryAgent.name}` : 'Type DRV001 or driver name'}
+                        value={driverDrafts[order.id] || ''}
+                        onChange={(e) => setDriverDrafts((current) => ({ ...current, [order.id]: e.target.value }))}
+                      />
+                      <datalist id={`agents-${order.id}`}>
+                        {agents.map((agent) => <option key={agent.id} value={agent.code}>{agent.name} - {agent.vehicleInfo || 'No vehicle'}</option>)}
+                      </datalist>
+                    </div>
+                    <button className="btn-secondary h-10" disabled={updatingId === order.id} onClick={() => assignDriver(order)}>
+                      <Truck size={16} /> Assign driver
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-stone-500">
+                    Assigned: {order.driverName || order.deliveryAgent?.name || 'No driver yet'}
+                    {order.vehicleInfo ? ` - ${order.vehicleInfo}` : ''}
+                    {order.driverCommission ? ` - Commission ${currency(order.driverCommission)}` : ''}
+                  </p>
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-4">
                   <input className="input h-10" placeholder="Driver name" value={trackingDrafts[order.id]?.driverName ?? order.driverName ?? ''} onChange={(e) => updateTrackingDraft(order.id, { driverName: e.target.value })} />

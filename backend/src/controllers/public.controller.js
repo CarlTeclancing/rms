@@ -2,6 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
 import { applyStockDeductions, buildSaleRowsAndDeductions } from '../services/stock.service.js';
+import { emitOrderUpdate } from '../services/realtime.service.js';
 
 const menuInclude = {
   category: true,
@@ -14,6 +15,96 @@ const menuInclude = {
 const orderTransactionOptions = { maxWait: 10000, timeout: 20000 };
 const cleanPhone = (phone = '') => String(phone).replace(/\s+/g, '').trim();
 const cleanReferralCode = (code = '') => String(code).replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 24);
+const cleanAgentCode = (code = '') => String(code).replace(/[^a-z0-9-]/gi, '').toUpperCase().slice(0, 24);
+const deliveryStatusCopy = {
+  PENDING: ['Order received', 'Your order has been received.'],
+  ACCEPTED: ['Restaurant accepted', 'The restaurant accepted your order.'],
+  PREPARING: ['Restaurant preparing', 'Your meal is being prepared.'],
+  READY: ['Meal ready', 'Your meal is ready for pickup.'],
+  DRIVER_ASSIGNED: ['Driver assigned', 'A driver has been assigned to your order.'],
+  DRIVER_TO_RESTAURANT: ['Driver going to restaurant', 'Your driver is heading to the restaurant.'],
+  DRIVER_ARRIVED: ['Driver arrived', 'Your driver has arrived at the restaurant.'],
+  PICKED_UP: ['Meal picked up', 'Your driver picked up the meal.'],
+  OUT_FOR_DELIVERY: ['Driver on the way', 'Your order is on the way.'],
+  DRIVER_NEARBY: ['Driver nearby', 'Your driver is nearby.'],
+  DELIVERED: ['Delivered', 'Your order has been delivered.'],
+  CANCELLED: ['Order cancelled', 'Your order was cancelled.']
+};
+
+const trackingInclude = {
+  items: { include: { menuItem: true } },
+  deliveryAgent: true,
+  trackingEvents: { orderBy: { createdAt: 'asc' } },
+  notifications: { orderBy: { createdAt: 'desc' }, take: 20 }
+};
+
+const statusCopy = (status) => deliveryStatusCopy[status] || [String(status || 'PENDING').replaceAll('_', ' '), 'Order status updated.'];
+
+const createOrderTrackingEvent = async (tx, order, status, options = {}) => {
+  const [title, defaultMessage] = statusCopy(status);
+  await tx.deliveryTrackingEvent.create({
+    data: {
+      onlineOrderId: order.id,
+      status,
+      title,
+      message: options.message || defaultMessage,
+      latitude: options.latitude === undefined || options.latitude === '' ? null : Number(options.latitude),
+      longitude: options.longitude === undefined || options.longitude === '' ? null : Number(options.longitude),
+      etaMinutes: options.etaMinutes === undefined || options.etaMinutes === '' ? null : Number(options.etaMinutes),
+      distanceKm: options.distanceKm === undefined || options.distanceKm === '' ? null : Number(options.distanceKm),
+      metadata: options.metadata || {}
+    }
+  });
+  await tx.notification.create({
+    data: {
+      onlineOrderId: order.id,
+      customerId: order.customerId || null,
+      category: 'ORDERS',
+      channel: 'IN_APP',
+      title,
+      body: options.message || defaultMessage,
+      deepLink: `order:${order.id}`,
+      deliveredAt: new Date(),
+      metadata: { status, orderNo: order.orderNo }
+    }
+  });
+};
+
+const orderWithTracking = (tx, id) => tx.onlineOrder.findUnique({ where: { id }, include: trackingInclude });
+
+const driverAssignmentStatuses = new Set(['PENDING', 'ACCEPTED', 'PREPARING', 'READY']);
+
+const findDeliveryAgent = async (tx, lookup) => {
+  const value = String(lookup || '').trim();
+  if (!value) return null;
+  const normalizedCode = cleanAgentCode(value);
+  return tx.deliveryAgent.findFirst({
+    where: {
+      OR: [
+        { id: value },
+        ...(normalizedCode ? [{ code: normalizedCode }] : []),
+        { name: { contains: value, mode: 'insensitive' } },
+        { phone: { contains: value, mode: 'insensitive' } }
+      ]
+    },
+    orderBy: [{ status: 'asc' }, { name: 'asc' }]
+  });
+};
+
+const driverSnapshot = (agent) => ({
+  deliveryAgentId: agent.id,
+  driverName: agent.name,
+  driverPhone: agent.phone || null,
+  driverPhotoUrl: agent.photoUrl || null,
+  vehicleInfo: agent.vehicleInfo || null,
+  driverLatitude: agent.latitude || null,
+  driverLongitude: agent.longitude || null,
+  driverHeading: agent.heading || null,
+  driverSpeedKph: agent.speedKph || null,
+  trackingUpdatedAt: new Date()
+});
+
+const driverCommissionFor = (order) => Number((Number(order.deliveryFee || 0) * 0.5).toFixed(2));
 
 const serializeCustomer = (customer, orderCount = 0) => ({
   ...customer,
@@ -191,6 +282,7 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
       });
 
       await applyStockDeductions(tx, deductions, `Online order ${created.orderNo}`);
+      await createOrderTrackingEvent(tx, created, 'PENDING');
       if (pointsEarned > 0) {
         await tx.customer.update({
           where: { id: orderCustomer.id },
@@ -209,7 +301,9 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
     orderTransactionOptions
   );
 
-  res.status(201).json({ ...order.order, pointsEarned, customer: order.customer });
+  const responseOrder = { ...order.order, pointsEarned, customer: order.customer };
+  emitOrderUpdate(responseOrder);
+  res.status(201).json(responseOrder);
 });
 
 export const upsertPublicCustomer = asyncHandler(async (req, res) => {
@@ -287,7 +381,7 @@ export const listPublicCustomerOrders = asyncHandler(async (req, res) => {
 
   const orders = await prisma.onlineOrder.findMany({
     where: { OR: [{ customerId: customer.id }, { customerPhone: customer.phone }] },
-    include: { items: { include: { menuItem: true } } },
+    include: trackingInclude,
     orderBy: { createdAt: 'desc' },
     take: 100
   });
@@ -312,7 +406,7 @@ export const createReservation = asyncHandler(async (req, res) => {
 
 export const listOnlineOrders = asyncHandler(async (_req, res) => {
   const orders = await prisma.onlineOrder.findMany({
-    include: { items: { include: { menuItem: true } } },
+    include: trackingInclude,
     orderBy: { createdAt: 'desc' },
     take: 100
   });
@@ -322,7 +416,7 @@ export const listOnlineOrders = asyncHandler(async (_req, res) => {
 export const getPublicOnlineOrder = asyncHandler(async (req, res) => {
   const order = await prisma.onlineOrder.findUnique({
     where: { id: req.params.id },
-    include: { items: { include: { menuItem: true } } }
+    include: trackingInclude
   });
 
   if (!order) throw new ApiError(404, 'Order not found');
@@ -330,11 +424,260 @@ export const getPublicOnlineOrder = asyncHandler(async (req, res) => {
 });
 
 export const updateOnlineOrderStatus = asyncHandler(async (req, res) => {
-  const order = await prisma.onlineOrder.update({
-    where: { id: req.params.id },
-    data: { status: req.body.status },
-    include: { items: { include: { menuItem: true } } }
+  const order = await prisma.$transaction(async (tx) => {
+    const updated = await tx.onlineOrder.update({
+      where: { id: req.params.id },
+      data: { status: req.body.status },
+      include: trackingInclude
+    });
+    await createOrderTrackingEvent(tx, updated, req.body.status, {
+      message: req.body.message,
+      etaMinutes: req.body.etaMinutes,
+      distanceKm: req.body.distanceKm
+    });
+    return tx.onlineOrder.findUnique({ where: { id: req.params.id }, include: trackingInclude });
   });
+  emitOrderUpdate(order);
+  res.json(order);
+});
+
+export const updateOnlineOrderTracking = asyncHandler(async (req, res) => {
+  const data = {
+    ...(req.body.driverName !== undefined ? { driverName: req.body.driverName || null } : {}),
+    ...(req.body.driverPhone !== undefined ? { driverPhone: req.body.driverPhone || null } : {}),
+    ...(req.body.driverPhotoUrl !== undefined ? { driverPhotoUrl: req.body.driverPhotoUrl || null } : {}),
+    ...(req.body.vehicleInfo !== undefined ? { vehicleInfo: req.body.vehicleInfo || null } : {}),
+    ...(req.body.latitude !== undefined ? { driverLatitude: req.body.latitude === '' ? null : Number(req.body.latitude) } : {}),
+    ...(req.body.longitude !== undefined ? { driverLongitude: req.body.longitude === '' ? null : Number(req.body.longitude) } : {}),
+    ...(req.body.heading !== undefined ? { driverHeading: req.body.heading === '' ? null : Number(req.body.heading) } : {}),
+    ...(req.body.speedKph !== undefined ? { driverSpeedKph: req.body.speedKph === '' ? null : Number(req.body.speedKph) } : {}),
+    ...(req.body.etaMinutes !== undefined ? { etaMinutes: req.body.etaMinutes === '' ? null : Number(req.body.etaMinutes) } : {}),
+    ...(req.body.distanceKm !== undefined ? { distanceKm: req.body.distanceKm === '' ? null : Number(req.body.distanceKm) } : {}),
+    trackingUpdatedAt: new Date()
+  };
+  const order = await prisma.$transaction(async (tx) => {
+    const updated = await tx.onlineOrder.update({
+      where: { id: req.params.id },
+      data,
+      include: trackingInclude
+    });
+    await createOrderTrackingEvent(tx, updated, updated.status, {
+      message: req.body.message || 'Driver location updated.',
+      latitude: req.body.latitude,
+      longitude: req.body.longitude,
+      etaMinutes: req.body.etaMinutes,
+      distanceKm: req.body.distanceKm,
+      metadata: { tracking: true, speedKph: req.body.speedKph, heading: req.body.heading }
+    });
+    return tx.onlineOrder.findUnique({ where: { id: req.params.id }, include: trackingInclude });
+  });
+  emitOrderUpdate(order);
+  res.json(order);
+});
+
+export const listDeliveryAgents = asyncHandler(async (req, res) => {
+  const search = String(req.query.search || '').trim();
+  const agents = await prisma.deliveryAgent.findMany({
+    where: search
+      ? {
+          OR: [
+            { code: { contains: cleanAgentCode(search), mode: 'insensitive' } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { phone: { contains: search, mode: 'insensitive' } }
+          ]
+        }
+      : undefined,
+    orderBy: [{ status: 'asc' }, { name: 'asc' }],
+    take: 100
+  });
+  res.json({ items: agents });
+});
+
+export const createDeliveryAgent = asyncHandler(async (req, res) => {
+  const code = cleanAgentCode(req.body.code || req.body.name);
+  if (!code) throw new ApiError(422, 'Delivery agent code is required');
+
+  const agent = await prisma.deliveryAgent.create({
+    data: {
+      code,
+      name: req.body.name,
+      phone: req.body.phone || null,
+      photoUrl: req.body.photoUrl || null,
+      vehicleInfo: req.body.vehicleInfo || null,
+      status: req.body.status || 'ONLINE'
+    }
+  });
+  res.status(201).json(agent);
+});
+
+export const assignDeliveryAgentToOrder = asyncHandler(async (req, res) => {
+  const lookup = req.body.deliveryAgentId || req.body.code || req.body.lookup || req.body.name;
+  const order = await prisma.$transaction(async (tx) => {
+    const existing = await tx.onlineOrder.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new ApiError(404, 'Order not found');
+    if (['DELIVERED', 'CANCELLED'].includes(existing.status)) {
+      throw new ApiError(422, 'Delivered or cancelled orders cannot be assigned to a driver');
+    }
+
+    const agent = await findDeliveryAgent(tx, lookup);
+    if (!agent) throw new ApiError(404, 'Delivery agent not found. Use the exact driver code or search by name.');
+
+    const nextStatus = driverAssignmentStatuses.has(existing.status) ? 'DRIVER_ASSIGNED' : existing.status;
+    const updated = await tx.onlineOrder.update({
+      where: { id: existing.id },
+      data: {
+        ...driverSnapshot(agent),
+        status: nextStatus
+      },
+      include: trackingInclude
+    });
+    await tx.deliveryAgent.update({
+      where: { id: agent.id },
+      data: { status: 'BUSY', lastSeenAt: new Date() }
+    });
+    await createOrderTrackingEvent(tx, updated, nextStatus, {
+      message: `${agent.name} has been assigned to deliver this order.`,
+      metadata: { deliveryAgentId: agent.id, deliveryAgentCode: agent.code }
+    });
+    return orderWithTracking(tx, existing.id);
+  }, orderTransactionOptions);
+
+  emitOrderUpdate(order);
+  res.json(order);
+});
+
+export const listDriverDeliveryRequests = asyncHandler(async (req, res) => {
+  const code = cleanAgentCode(req.params.code);
+  const agent = await prisma.deliveryAgent.findUnique({ where: { code } });
+  if (!agent) throw new ApiError(404, 'Delivery agent not found');
+
+  await prisma.deliveryAgent.update({
+    where: { id: agent.id },
+    data: { status: agent.status === 'OFFLINE' ? 'ONLINE' : agent.status, lastSeenAt: new Date() }
+  });
+
+  const orders = await prisma.onlineOrder.findMany({
+    where: {
+      deliveryAgentId: agent.id,
+      status: { notIn: ['DELIVERED', 'CANCELLED'] }
+    },
+    include: trackingInclude,
+    orderBy: { createdAt: 'desc' },
+    take: 50
+  });
+
+  res.json({ agent: { ...agent, status: agent.status === 'OFFLINE' ? 'ONLINE' : agent.status }, items: orders });
+});
+
+export const acceptDriverDelivery = asyncHandler(async (req, res) => {
+  const code = cleanAgentCode(req.params.code);
+  const order = await prisma.$transaction(async (tx) => {
+    const agent = await tx.deliveryAgent.findUnique({ where: { code } });
+    if (!agent) throw new ApiError(404, 'Delivery agent not found');
+    const existing = await tx.onlineOrder.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.deliveryAgentId !== agent.id) throw new ApiError(404, 'Assigned delivery request not found');
+    if (['DELIVERED', 'CANCELLED'].includes(existing.status)) throw new ApiError(422, 'This delivery is already closed');
+
+    const updated = await tx.onlineOrder.update({
+      where: { id: existing.id },
+      data: {
+        ...driverSnapshot(agent),
+        status: 'DRIVER_TO_RESTAURANT',
+        driverAcceptedAt: new Date()
+      },
+      include: trackingInclude
+    });
+    await tx.deliveryAgent.update({
+      where: { id: agent.id },
+      data: { status: 'DELIVERING', lastSeenAt: new Date() }
+    });
+    await createOrderTrackingEvent(tx, updated, 'DRIVER_TO_RESTAURANT', {
+      message: `${agent.name} accepted the delivery request and is heading to the restaurant.`,
+      metadata: { deliveryAgentId: agent.id, deliveryAgentCode: agent.code }
+    });
+    return orderWithTracking(tx, existing.id);
+  }, orderTransactionOptions);
+
+  emitOrderUpdate(order);
+  res.json(order);
+});
+
+export const completeDriverDelivery = asyncHandler(async (req, res) => {
+  const code = cleanAgentCode(req.params.code);
+  const order = await prisma.$transaction(async (tx) => {
+    const agent = await tx.deliveryAgent.findUnique({ where: { code } });
+    if (!agent) throw new ApiError(404, 'Delivery agent not found');
+    const existing = await tx.onlineOrder.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.deliveryAgentId !== agent.id) throw new ApiError(404, 'Assigned delivery request not found');
+    if (existing.status === 'CANCELLED') throw new ApiError(422, 'Cancelled orders cannot be delivered');
+
+    const commission = driverCommissionFor(existing);
+    const updated = await tx.onlineOrder.update({
+      where: { id: existing.id },
+      data: {
+        status: 'DELIVERED',
+        driverDeliveredAt: new Date(),
+        driverCommission: commission,
+        trackingUpdatedAt: new Date()
+      },
+      include: trackingInclude
+    });
+    await tx.deliveryAgent.update({
+      where: { id: agent.id },
+      data: { status: 'ONLINE', lastSeenAt: new Date() }
+    });
+    await createOrderTrackingEvent(tx, updated, 'DELIVERED', {
+      message: `${agent.name} marked the order as delivered. Driver commission: ${commission}.`,
+      metadata: { deliveryAgentId: agent.id, deliveryAgentCode: agent.code, driverCommission: commission }
+    });
+    return orderWithTracking(tx, existing.id);
+  }, orderTransactionOptions);
+
+  emitOrderUpdate(order);
+  res.json(order);
+});
+
+export const updateDriverLocation = asyncHandler(async (req, res) => {
+  const code = cleanAgentCode(req.params.code);
+  const order = await prisma.$transaction(async (tx) => {
+    const agent = await tx.deliveryAgent.findUnique({ where: { code } });
+    if (!agent) throw new ApiError(404, 'Delivery agent not found');
+    const existing = await tx.onlineOrder.findUnique({ where: { id: req.params.id } });
+    if (!existing || existing.deliveryAgentId !== agent.id) throw new ApiError(404, 'Assigned delivery request not found');
+
+    const locationData = {
+      ...(req.body.latitude !== undefined ? { latitude: req.body.latitude === '' ? null : Number(req.body.latitude) } : {}),
+      ...(req.body.longitude !== undefined ? { longitude: req.body.longitude === '' ? null : Number(req.body.longitude) } : {}),
+      ...(req.body.heading !== undefined ? { heading: req.body.heading === '' ? null : Number(req.body.heading) } : {}),
+      ...(req.body.speedKph !== undefined ? { speedKph: req.body.speedKph === '' ? null : Number(req.body.speedKph) } : {}),
+      lastSeenAt: new Date()
+    };
+    await tx.deliveryAgent.update({ where: { id: agent.id }, data: locationData });
+    const updated = await tx.onlineOrder.update({
+      where: { id: existing.id },
+      data: {
+        ...(req.body.latitude !== undefined ? { driverLatitude: req.body.latitude === '' ? null : Number(req.body.latitude) } : {}),
+        ...(req.body.longitude !== undefined ? { driverLongitude: req.body.longitude === '' ? null : Number(req.body.longitude) } : {}),
+        ...(req.body.heading !== undefined ? { driverHeading: req.body.heading === '' ? null : Number(req.body.heading) } : {}),
+        ...(req.body.speedKph !== undefined ? { driverSpeedKph: req.body.speedKph === '' ? null : Number(req.body.speedKph) } : {}),
+        ...(req.body.etaMinutes !== undefined ? { etaMinutes: req.body.etaMinutes === '' ? null : Number(req.body.etaMinutes) } : {}),
+        ...(req.body.distanceKm !== undefined ? { distanceKm: req.body.distanceKm === '' ? null : Number(req.body.distanceKm) } : {}),
+        trackingUpdatedAt: new Date()
+      },
+      include: trackingInclude
+    });
+    await createOrderTrackingEvent(tx, updated, updated.status, {
+      message: req.body.message || 'Driver location updated.',
+      latitude: req.body.latitude,
+      longitude: req.body.longitude,
+      etaMinutes: req.body.etaMinutes,
+      distanceKm: req.body.distanceKm,
+      metadata: { deliveryAgentId: agent.id, deliveryAgentCode: agent.code, tracking: true }
+    });
+    return orderWithTracking(tx, existing.id);
+  }, orderTransactionOptions);
+
+  emitOrderUpdate(order);
   res.json(order);
 });
 
