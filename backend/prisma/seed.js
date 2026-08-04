@@ -21,7 +21,15 @@ const adminPermissions = [
   'users:write'
 ];
 
-const marketingPermissions = ['marketing:read', 'marketing:write', 'promotions:read', 'promotions:write'];
+const marketingPermissions = [
+  'marketing:read',
+  'marketing:write',
+  'promotions:read',
+  'promotions:write',
+  'sales:read',
+  'sales:write',
+  'menu:write'
+];
 
 const appSettings = {
   restaurantName: 'ChopASAP',
@@ -76,7 +84,7 @@ async function main() {
     update: { permissions: marketingPermissions },
     create: {
       name: 'Marketing Manager',
-      description: 'Marketing and growth modules only. No payments, users, settings, stock, or operations access.',
+      description: 'Marketing, promotions, online orders, and menu availability access. No payments, users, settings, stock, or expenses access.',
       permissions: marketingPermissions
     }
   });

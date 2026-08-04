@@ -1183,15 +1183,15 @@ function PromotionCarousel({ slides, onAction }) {
           <Pressable key={slide.id || slide.title} style={[styles.promotionHeroCard, { width: cardWidth }]} onPress={() => onAction?.(campaignActionFor(slide), slide)}>
             <View style={styles.promotionHeroText}>
               <Text style={styles.promoEyebrow}>{slide.label || 'Featured'}</Text>
-              <Text style={styles.promotionHeroTitle} numberOfLines={2}>{slide.title}</Text>
-              {slide.description ? <Text style={styles.promotionHeroCopy} numberOfLines={2}>{slide.description}</Text> : null}
+              <Text style={styles.promotionHeroTitle} numberOfLines={1}>{slide.title}</Text>
+              {slide.description ? <Text style={styles.promotionHeroCopy} numberOfLines={1}>{slide.description}</Text> : null}
               <View style={styles.promotionHeroCta}>
                 <Text style={styles.promotionHeroCtaText}>{slide.ctaLabel || 'View offer'}</Text>
                 <Ionicons name="chevron-forward" size={15} color="#fff" />
               </View>
             </View>
             <View style={styles.promotionHeroMedia}>
-              {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.promotionHeroImage} /> : <Ionicons name="bag-handle-outline" size={44} color={brandRed} />}
+              {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.promotionHeroImage} resizeMode="cover" /> : <Ionicons name="bag-handle-outline" size={30} color={brandRed} />}
             </View>
           </Pressable>
         ))}
@@ -1982,20 +1982,20 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   contentBody: { padding: 16, paddingBottom: 100 },
   pageTitle: { fontSize: 24, fontWeight: '900', color: '#151923', marginBottom: 14 },
-  promotionHeroBlock: { marginBottom: 14 },
-  promotionHeroRail: { gap: 10 },
-  promotionHeroCard: { minHeight: 112, borderRadius: 16, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#ffd08a', overflow: 'hidden', flexDirection: 'row' },
-  promotionHeroText: { flex: 1, padding: 12, justifyContent: 'center' },
-  promotionHeroTitle: { color: '#151923', fontSize: 16, lineHeight: 20, fontWeight: '900' },
-  promotionHeroCopy: { marginTop: 3, color: '#6c6250', fontSize: 12, lineHeight: 15, fontWeight: '700' },
-  promotionHeroCta: { marginTop: 8, alignSelf: 'flex-start', height: 28, borderRadius: 14, backgroundColor: '#151923', paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  promotionHeroCtaText: { color: '#fff', fontSize: 12, fontWeight: '900' },
-  promotionHeroMedia: { width: 92, backgroundColor: '#ffe6a3', alignItems: 'center', justifyContent: 'center' },
+  promotionHeroBlock: { marginBottom: 8 },
+  promotionHeroRail: { gap: 8 },
+  promotionHeroCard: { height: 82, borderRadius: 14, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#ffd08a', overflow: 'hidden', flexDirection: 'row' },
+  promotionHeroText: { flex: 1, paddingVertical: 8, paddingLeft: 10, paddingRight: 8, justifyContent: 'center' },
+  promotionHeroTitle: { color: '#151923', fontSize: 14, lineHeight: 17, fontWeight: '900' },
+  promotionHeroCopy: { marginTop: 2, color: '#6c6250', fontSize: 11, lineHeight: 13, fontWeight: '700' },
+  promotionHeroCta: { marginTop: 6, alignSelf: 'flex-start', height: 24, borderRadius: 12, backgroundColor: '#151923', paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  promotionHeroCtaText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  promotionHeroMedia: { width: 72, backgroundColor: '#ffe6a3', alignItems: 'center', justifyContent: 'center' },
   promotionHeroImage: { width: '100%', height: '100%' },
-  promotionHeroDots: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
-  promotionHeroDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#d8dee2' },
-  promotionHeroDotActive: { width: 22, backgroundColor: brandRed },
-  promotionHeroStatus: { position: 'absolute', right: 2, bottom: 0, color: brandRed, fontSize: 9, fontWeight: '900', textTransform: 'uppercase' },
+  promotionHeroDots: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  promotionHeroDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#d8dee2' },
+  promotionHeroDotActive: { width: 16, backgroundColor: brandRed },
+  promotionHeroStatus: { position: 'absolute', right: 2, bottom: -1, color: brandRed, fontSize: 8, fontWeight: '900', textTransform: 'uppercase' },
   categoryQuickAccess: { marginBottom: 10, gap: 6 },
   categoryGridTop: { flexDirection: 'row', gap: 8 },
   categoryGridBottom: { flexDirection: 'row', gap: 7 },
