@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import {
   ActivityIndicator,
+  AccessibilityInfo,
   Alert,
   Animated,
   Image,
@@ -40,6 +41,7 @@ const activeOrdersKey = 'chopasap_mobile_active_orders';
 const flashSaleDismissedKey = 'chopasap_mobile_flash_sale_dismissed';
 const driverCodeKey = 'chopasap_mobile_driver_code';
 const appModeKey = 'chopasap_mobile_mode';
+const splashProductsKey = 'chopasap_mobile_splash_products';
 
 const emptyReservationForm = {
   customerName: '',
@@ -127,6 +129,87 @@ const fallbackPromotionSlide = {
 const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 const rewardClaimTypes = ['DAILY_REWARD', 'DAILY_STREAK', 'LOYALTY_PROGRAM', 'CHALLENGE', 'REFERRAL_PROGRAM'];
+const splashMessages = [
+  'Fresh meals from restaurants near you.',
+  'Fast delivery to your doorstep.',
+  'Discover local favorites.',
+  'Order in minutes.'
+];
+const splashLoadingMessages = [
+  'Loading nearby restaurants...',
+  "Preparing today's recommendations...",
+  'Finding the fastest delivery routes...',
+  'Checking available offers...',
+  'Personalizing your experience...'
+];
+const defaultSplashProducts = [
+  {
+    name: 'Achu and Yellow Soup',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784715469/restaurant-system/menu/mctj24atiwjqcnp2dtqh.jpg'
+  },
+  {
+    name: 'Crispy Chicken',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785500852/restaurant-system/menu/asughecgnf37zm4qryrb.jpg'
+  },
+  {
+    name: 'Fried Chicken and Fries',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785501135/restaurant-system/menu/dm5eqrmritukxx2pqusy.jpg'
+  },
+  {
+    name: 'Fried Rice',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784717286/restaurant-system/menu/kiy3vwg2ljhhvhtno2sf.jpg'
+  },
+  {
+    name: 'Fufu Corn and Khati Khati',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784716934/restaurant-system/menu/jtlesye5zt0rafyvivw6.jpg'
+  },
+  {
+    name: 'Garri and Eru',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784717535/restaurant-system/menu/jwf2opr0ekzpkwjlcpeg.jpg'
+  },
+  {
+    name: 'Grilled Chicken and Fries',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785501641/restaurant-system/menu/qwo4qemgzxc0kgaoo0cs.jpg'
+  },
+  {
+    name: 'Rice and Tomato Stew',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784718445/restaurant-system/menu/sr1ug42pkfw6bs9bqsnj.jpg'
+  },
+  {
+    name: 'Roasted Fish and Plantain',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785500945/restaurant-system/menu/ngfdzwbdnmajumeybx6a.jpg'
+  }
+];
+
+const validProductImage = (item) => item?.name && /^https?:\/\//i.test(String(item.imageUrl || ''));
+const freshSplashProducts = (products = defaultSplashProducts, count = 3) => {
+  const pool = (products.length ? products : defaultSplashProducts).filter(validProductImage);
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return [...shuffled, ...defaultSplashProducts].filter(validProductImage).slice(0, count);
+};
+const menuSplashProducts = (items = []) => items.filter(validProductImage).map((item) => ({ name: item.name, imageUrl: item.imageUrl }));
+const normalizeExternalUrl = (url = '') => {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  if (/^(https?:\/\/|mailto:|tel:|whatsapp:\/\/)/i.test(value)) return value;
+  if (/^www\./i.test(value)) return `https://${value}`;
+  return '';
+};
+
+const openExternalUrl = async (url, fallback) => {
+  const normalized = normalizeExternalUrl(url);
+  if (!normalized) {
+    fallback?.();
+    return false;
+  }
+  try {
+    await Linking.openURL(normalized);
+    return true;
+  } catch {
+    fallback?.();
+    return false;
+  }
+};
 
 function campaignActionFor(slide = {}) {
   const text = `${slide.type || ''} ${slide.title || ''} ${slide.ctaLabel || ''} ${slide.deepLink || ''}`.toLowerCase();
@@ -143,19 +226,127 @@ function trackingMapUrl(order = {}) {
   return `https://maps.googleapis.com/maps/api/staticmap?size=640x320&scale=2&maptype=roadmap&markers=color:red%7Clabel:D%7C${driver}&markers=color:green%7Clabel:H%7C${customer}&path=color:0xd71920ff%7Cweight:5%7C${driver}%7C${customer}&key=${googleMapsApiKey}`;
 }
 
-function Loader({ label = 'Loading' }) {
+function Loader({ label = 'Loading', products = defaultSplashProducts }) {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [loadingIndex, setLoadingIndex] = useState(0);
+  const [visibleProducts, setVisibleProducts] = useState(() => freshSplashProducts(products));
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const reveal = useRef(new Animated.Value(0)).current;
+  const float = useRef(new Animated.Value(0)).current;
+  const route = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    setVisibleProducts(freshSplashProducts(products));
+  }, [products]);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => setReduceMotion(false));
+    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', setReduceMotion);
+    return () => subscription?.remove?.();
+  }, []);
+
+  useEffect(() => {
+    const messageTimer = setInterval(() => setMessageIndex((current) => (current + 1) % splashMessages.length), 1700);
+    const loadingTimer = setInterval(() => setLoadingIndex((current) => (current + 1) % splashLoadingMessages.length), 2400);
+    return () => {
+      clearInterval(messageTimer);
+      clearInterval(loadingTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      reveal.setValue(1);
+      float.setValue(1);
+      route.setValue(1);
+      return undefined;
+    }
+    Animated.timing(reveal, { toValue: 1, duration: 850, useNativeDriver: true }).start();
+    const floatLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 1800, useNativeDriver: true })
+      ])
+    );
+    const routeLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(route, { toValue: 1, duration: 2200, useNativeDriver: false }),
+        Animated.timing(route, { toValue: 0, duration: 200, useNativeDriver: false })
+      ])
+    );
+    floatLoop.start();
+    routeLoop.start();
+    return () => {
+      floatLoop.stop();
+      routeLoop.stop();
+    };
+  }, [float, reduceMotion, reveal, route]);
+
+  const heroTranslate = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const scooterTranslate = route.interpolate({ inputRange: [0, 1], outputRange: [0, 132] });
+  const routeWidth = route.interpolate({ inputRange: [0, 1], outputRange: ['18%', '72%'] });
+
   return (
     <View style={styles.loader}>
-      <View style={styles.loaderPlate}>
-        <Image source={logo} style={styles.loaderLogo} />
-        <View style={styles.loaderHands}>
-          <View style={styles.hand} />
-          <View style={[styles.hand, styles.handRight]} />
+      <Animated.View
+        style={[
+          styles.splashShell,
+          {
+            opacity: reveal,
+            transform: [{ scale: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1] }) }]
+          }
+        ]}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={`${label}. ${splashLoadingMessages[loadingIndex]}`}
+      >
+        <View style={styles.splashTop}>
+          <Animated.View style={[styles.splashLogoWrap, { transform: [{ translateY: heroTranslate }] }]}>
+            <View style={styles.splashLogoGlow} />
+            <Image source={logo} style={styles.splashLogo} />
+          </Animated.View>
+          <Text style={styles.splashBrand}>CHOP ASAP</Text>
+          <Text style={styles.splashTagline}>Fresh food, delivered fast.</Text>
         </View>
-        <ActivityIndicator color={brandRed} size="large" style={styles.loaderSpinner} />
-        <Text style={styles.loaderTitle}>{label}</Text>
-        <Text style={styles.loaderText}>Fresh meals are landing.</Text>
-      </View>
+
+        <View style={styles.splashFoodStage}>
+          <Animated.View style={[styles.splashFoodCard, styles.splashFoodCardLeft, { transform: [{ translateY: heroTranslate }] }]}>
+            <Image source={{ uri: visibleProducts[0].imageUrl }} style={styles.splashFoodImage} />
+            <Text style={styles.splashFoodLabel} numberOfLines={2}>{visibleProducts[0].name}</Text>
+          </Animated.View>
+          <Animated.View style={[styles.splashFoodCard, styles.splashFoodCardMain, { transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [-4, 5] }) }] }]}>
+            <Image source={{ uri: visibleProducts[1].imageUrl }} style={styles.splashFoodImage} />
+            <Text style={styles.splashFoodLabel} numberOfLines={2}>{visibleProducts[1].name}</Text>
+          </Animated.View>
+          <Animated.View style={[styles.splashFoodCard, styles.splashFoodCardRight, { transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [7, -5] }) }] }]}>
+            <Image source={{ uri: visibleProducts[2].imageUrl }} style={styles.splashFoodImage} />
+            <Text style={styles.splashFoodLabel} numberOfLines={2}>{visibleProducts[2].name}</Text>
+          </Animated.View>
+          <View style={styles.splashSteamOne} />
+          <View style={styles.splashSteamTwo} />
+        </View>
+
+        <View style={styles.splashRouteBox}>
+          <View style={styles.splashRouteRail}>
+            <Animated.View style={[styles.splashRouteFill, { width: routeWidth }]} />
+            <Animated.View style={[styles.splashScooter, { transform: [{ translateX: scooterTranslate }] }]}>
+              <Ionicons name="bicycle" size={20} color="#fff" />
+            </Animated.View>
+          </View>
+          <View style={styles.splashRouteMeta}>
+            <View style={styles.splashRoutePill}><Ionicons name="restaurant-outline" size={14} color={brandRed} /><Text style={styles.splashRouteText}>Restaurants</Text></View>
+            <View style={styles.splashRoutePill}><Ionicons name="home-outline" size={14} color="#19a463" /><Text style={styles.splashRouteText}>Doorstep</Text></View>
+          </View>
+        </View>
+
+        <View style={styles.splashMessageBox}>
+          <Text style={styles.splashMessage}>{splashMessages[messageIndex]}</Text>
+          <Text style={styles.splashLoadingText}>{splashLoadingMessages[loadingIndex]}</Text>
+          <View style={styles.splashProgressTrack}>
+            <Animated.View style={[styles.splashProgressFill, { width: routeWidth }]} />
+          </View>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -482,6 +673,7 @@ export default function App() {
   const [settings, setSettings] = useState({});
   const [promotions, setPromotions] = useState([]);
   const [marketing, setMarketing] = useState({ items: [], hero: null, floatingRewards: [], flashDeal: null });
+  const [splashProducts, setSplashProducts] = useState(() => freshSplashProducts(defaultSplashProducts, 9));
   const [flashSale, setFlashSale] = useState(null);
   const [orders, setOrders] = useState([]);
   const [activeOrders, setActiveOrders] = useState([]);
@@ -613,7 +805,7 @@ export default function App() {
 
   const bootstrap = async () => {
     try {
-      const [savedCustomer, savedFavorites, savedLanguage, savedActiveOrders, dismissedFlashSale, savedMode, savedDriverCode, initialUrl] = await Promise.all([
+      const [savedCustomer, savedFavorites, savedLanguage, savedActiveOrders, dismissedFlashSale, savedMode, savedDriverCode, savedSplashProducts, initialUrl] = await Promise.all([
         AsyncStorage.getItem(customerKey),
         AsyncStorage.getItem(favoritesKey),
         AsyncStorage.getItem(languageKey),
@@ -621,6 +813,7 @@ export default function App() {
         AsyncStorage.getItem(flashSaleDismissedKey),
         AsyncStorage.getItem(appModeKey),
         AsyncStorage.getItem(driverCodeKey),
+        AsyncStorage.getItem(splashProductsKey),
         Linking.getInitialURL()
       ]);
       const nextLanguage = savedLanguage || 'en';
@@ -635,6 +828,12 @@ export default function App() {
       }
       if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
       if (savedActiveOrders) setActiveOrders(JSON.parse(savedActiveOrders));
+      if (savedSplashProducts) {
+        const parsedProducts = JSON.parse(savedSplashProducts);
+        if (Array.isArray(parsedProducts) && parsedProducts.some(validProductImage)) {
+          setSplashProducts(parsedProducts);
+        }
+      }
       if (savedCustomer) {
         const parsed = JSON.parse(savedCustomer);
         setCustomer(parsed);
@@ -655,6 +854,11 @@ export default function App() {
         api.flashSale().catch(() => ({ item: null }))
       ]);
       setItems(menuData.items || []);
+      const nextSplashProducts = menuSplashProducts(menuData.items || []);
+      if (nextSplashProducts.length) {
+        setSplashProducts(nextSplashProducts);
+        AsyncStorage.setItem(splashProductsKey, JSON.stringify(nextSplashProducts.slice(0, 24))).catch(() => {});
+      }
       setMenuCategories(menuData.categories || []);
       setSettings(settingsData || {});
       setPromotions(promotionData.items || []);
@@ -815,6 +1019,11 @@ export default function App() {
         api.flashSale().catch(() => ({ item: flashSale }))
       ]);
       setItems(menuData.items || []);
+      const nextSplashProducts = menuSplashProducts(menuData.items || []);
+      if (nextSplashProducts.length) {
+        setSplashProducts(nextSplashProducts);
+        AsyncStorage.setItem(splashProductsKey, JSON.stringify(nextSplashProducts.slice(0, 24))).catch(() => {});
+      }
       setMenuCategories(menuData.categories || []);
       setSettings(settingsData || {});
       setPromotions(promotionData.items || []);
@@ -1058,7 +1267,7 @@ export default function App() {
     setCustomerForm({ name: '', phone: '', email: '', address: '', profileImageUrl: '', referralCode: '' });
   };
 
-  if (loading) return <Loader label="Loading ChopASAP" />;
+  if (loading) return <Loader label="Loading ChopASAP" products={splashProducts} />;
 
   if (appMode === 'driver') {
     return (
@@ -1283,7 +1492,7 @@ function LegacyHomeView({ items, favorites, promotions, activeOrders, flashSale,
           <Text style={styles.promoEyebrow}>Featured promotion</Text>
           <Text style={styles.promoTitle}>{featuredPromotion?.title || 'Promote on ChopASAP'}</Text>
           <Text style={styles.cardCopy}>{featuredPromotion?.description || 'Put your business in front of customers ordering meals today.'}</Text>
-          <Pressable style={styles.secondaryButton} onPress={featuredPromotion?.ctaUrl ? () => Linking.openURL(featuredPromotion.ctaUrl) : onPromote}>
+          <Pressable style={styles.secondaryButton} onPress={featuredPromotion?.ctaUrl ? () => openExternalUrl(featuredPromotion.ctaUrl, onPromote) : onPromote}>
             <Text style={styles.secondaryButtonText}>{featuredPromotion?.ctaLabel || 'Request promotion'}</Text>
           </Pressable>
         </View>
@@ -1434,7 +1643,7 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
           <Text style={styles.sectionTitle}>{t(language, 'promotions')}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promotionRail}>
             {promotions.slice(0, 4).map((promotion) => (
-              <Pressable key={promotion.id || promotion.title} style={styles.promotionTile} onPress={promotion.ctaUrl ? () => Linking.openURL(promotion.ctaUrl) : undefined}>
+              <Pressable key={promotion.id || promotion.title} style={styles.promotionTile} onPress={promotion.ctaUrl ? () => openExternalUrl(promotion.ctaUrl) : undefined}>
                 {promotion.imageUrl ? <Image source={{ uri: promotion.imageUrl }} style={styles.promotionTileImage} /> : <View style={styles.promotionTileFallback}><Ionicons name="sparkles-outline" size={24} color={brandRed} /></View>}
                 <Text style={styles.promoEyebrow}>{t(language, 'offer')}</Text>
                 <Text style={styles.promoTitle} numberOfLines={2}>{promotion.title}</Text>
@@ -2297,15 +2506,35 @@ function BottomTabs({ tab, setTab, language, activeOrderCount = 0, pulse }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#eaf5f8', paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight || 0 : 0 },
   appSafe: { flex: 1, backgroundColor: '#eaf5f8' },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  loaderPlate: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', padding: 28 },
-  loaderLogo: { width: 116, height: 116, borderRadius: 30 },
-  loaderHands: { flexDirection: 'row', gap: 54, marginTop: -10 },
-  hand: { width: 54, height: 22, borderRadius: 20, backgroundColor: '#ffd3b6', transform: [{ rotate: '-16deg' }] },
-  handRight: { transform: [{ rotate: '16deg' }] },
-  loaderSpinner: { marginTop: 22 },
-  loaderTitle: { marginTop: 16, fontSize: 18, fontWeight: '900', color: '#151923' },
-  loaderText: { marginTop: 4, color: '#6d6f76', fontWeight: '700' },
+  loader: { flex: 1, backgroundColor: '#fff8ef' },
+  splashShell: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 54, paddingBottom: 34, backgroundColor: '#fff8ef' },
+  splashTop: { alignItems: 'center' },
+  splashLogoWrap: { width: 106, height: 106, alignItems: 'center', justifyContent: 'center' },
+  splashLogoGlow: { position: 'absolute', width: 122, height: 122, borderRadius: 61, backgroundColor: '#ffd071', opacity: 0.28 },
+  splashLogo: { width: 84, height: 84, borderRadius: 24, shadowColor: brandRed, shadowOpacity: 0.18, shadowRadius: 20 },
+  splashBrand: { marginTop: 12, color: brandRed, fontSize: 24, fontWeight: '900', letterSpacing: 0 },
+  splashTagline: { marginTop: 4, color: '#29384d', fontSize: 13, fontWeight: '800' },
+  splashFoodStage: { height: 238, justifyContent: 'center' },
+  splashFoodCard: { position: 'absolute', borderRadius: 24, backgroundColor: '#fff', padding: 8, shadowColor: '#4b2d12', shadowOpacity: 0.13, shadowRadius: 18, elevation: 6 },
+  splashFoodCardLeft: { left: 0, top: 58, width: 116, transform: [{ rotate: '-5deg' }] },
+  splashFoodCardMain: { alignSelf: 'center', top: 18, width: 152, zIndex: 2 },
+  splashFoodCardRight: { right: 0, top: 82, width: 116, transform: [{ rotate: '5deg' }] },
+  splashFoodImage: { width: '100%', height: 92, borderRadius: 18, backgroundColor: '#fff1ca' },
+  splashFoodLabel: { marginTop: 7, minHeight: 30, color: '#151923', fontSize: 10, lineHeight: 14, fontWeight: '900', textAlign: 'center' },
+  splashSteamOne: { position: 'absolute', top: 8, left: '43%', width: 10, height: 42, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.72)', transform: [{ rotate: '-14deg' }] },
+  splashSteamTwo: { position: 'absolute', top: 18, left: '52%', width: 8, height: 34, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.6)', transform: [{ rotate: '12deg' }] },
+  splashRouteBox: { borderRadius: 24, backgroundColor: '#151923', padding: 16, gap: 12 },
+  splashRouteRail: { height: 42, justifyContent: 'center' },
+  splashRouteFill: { height: 5, borderRadius: 5, backgroundColor: '#2fbf71' },
+  splashScooter: { position: 'absolute', left: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
+  splashRouteMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  splashRoutePill: { minHeight: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  splashRouteText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  splashMessageBox: { alignItems: 'center', gap: 8 },
+  splashMessage: { color: '#151923', fontSize: 21, lineHeight: 27, fontWeight: '900', textAlign: 'center' },
+  splashLoadingText: { color: '#667085', fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  splashProgressTrack: { marginTop: 8, width: '76%', height: 7, borderRadius: 7, backgroundColor: '#ffe2b4', overflow: 'hidden' },
+  splashProgressFill: { height: '100%', borderRadius: 7, backgroundColor: brandRed },
   overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(21,25,35,0.65)', padding: 18 },
   languageCard: { width: '100%', maxWidth: 380, borderRadius: 26, backgroundColor: '#fff', padding: 22, alignItems: 'center' },
   languageIcon: { width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },

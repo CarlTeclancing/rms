@@ -197,6 +197,189 @@
     width: 42%;
     animation: chop-progress 1.65s ease-in-out infinite;
   }
+
+  .public-splash-bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 18% 16%, rgba(255, 208, 113, 0.34), transparent 30%),
+      radial-gradient(circle at 86% 12%, rgba(47, 191, 113, 0.18), transparent 28%),
+      linear-gradient(135deg, #fff8ef 0%, #ffffff 52%, #eef8fa 100%);
+  }
+
+  .public-splash-copy {
+    animation: public-splash-reveal 0.85s ease-out both;
+  }
+
+  .public-splash-stage {
+    position: relative;
+    min-height: 520px;
+    border-radius: 42px;
+  }
+
+  .public-food-card {
+    position: absolute;
+    overflow: hidden;
+    border: 10px solid #fff;
+    border-radius: 32px;
+    background: #fff;
+    box-shadow: 0 28px 80px rgba(68, 45, 24, 0.16);
+    animation: public-food-float 4.2s ease-in-out infinite;
+  }
+
+  .public-food-card img {
+    display: block;
+    height: 100%;
+    width: 100%;
+    object-fit: cover;
+  }
+
+  .public-food-card span {
+    position: absolute;
+    left: 12px;
+    bottom: 12px;
+    border-radius: 9999px;
+    background: rgba(21, 25, 35, 0.82);
+    padding: 7px 11px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    backdrop-filter: blur(10px);
+  }
+
+  .public-food-card-one {
+    left: 0;
+    top: 80px;
+    height: 190px;
+    width: 190px;
+    transform: rotate(-7deg);
+  }
+
+  .public-food-card-two {
+    left: 50%;
+    top: 16px;
+    z-index: 3;
+    height: 264px;
+    width: 264px;
+    transform: translateX(-50%);
+    animation-delay: 0.28s;
+  }
+
+  .public-food-card-three {
+    right: 0;
+    top: 122px;
+    height: 198px;
+    width: 198px;
+    transform: rotate(6deg);
+    animation-delay: 0.55s;
+  }
+
+  .public-route-card {
+    position: absolute;
+    left: 50%;
+    bottom: 36px;
+    width: min(470px, 92%);
+    transform: translateX(-50%);
+    border-radius: 30px;
+    background: #151923;
+    padding: 20px;
+    box-shadow: 0 28px 70px rgba(21, 25, 35, 0.18);
+  }
+
+  .public-route-line {
+    position: relative;
+    height: 48px;
+  }
+
+  .public-route-line::before {
+    content: '';
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 50%;
+    height: 5px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.16);
+    transform: translateY(-50%);
+  }
+
+  .public-route-line span {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    height: 5px;
+    width: 68%;
+    border-radius: 9999px;
+    background: #2fbf71;
+    transform: translateY(-50%);
+    animation: public-route-fill 2.2s ease-in-out infinite;
+  }
+
+  .public-route-scooter {
+    position: absolute;
+    left: 28px;
+    top: 25px;
+    display: grid;
+    height: 42px;
+    width: 42px;
+    place-items: center;
+    border: 3px solid #fff;
+    border-radius: 9999px;
+    background: #d71920;
+    color: #fff;
+    animation: public-scooter 2.2s ease-in-out infinite;
+  }
+
+  .public-route-points {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .public-route-points span,
+  .public-splash-token {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .public-splash-token {
+    position: absolute;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.86);
+    padding: 10px 14px;
+    color: #151923;
+    font-size: 13px;
+    font-weight: 700;
+    box-shadow: 0 16px 40px rgba(68, 45, 24, 0.1);
+    backdrop-filter: blur(14px);
+    animation: public-token-float 3.8s ease-in-out infinite;
+  }
+
+  .public-token-one {
+    left: 20px;
+    top: 18px;
+    color: #d71920;
+  }
+
+  .public-token-two {
+    right: 28px;
+    top: 26px;
+    color: #0b8f4f;
+    animation-delay: 0.45s;
+  }
+
+  .public-splash-message {
+    animation: public-message-soft 1.7s ease-in-out infinite;
+  }
+
+  .public-splash-progress {
+    width: 42%;
+    animation: public-progress 1.9s ease-in-out infinite;
+  }
 }
 
 @layer utilities {
@@ -272,12 +455,129 @@
   }
 }
 
+@keyframes public-splash-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes public-food-float {
+  0%, 100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -12px;
+  }
+}
+
+@keyframes public-route-fill {
+  0% {
+    width: 18%;
+  }
+  70%, 100% {
+    width: 72%;
+  }
+}
+
+@keyframes public-scooter {
+  0% {
+    transform: translateX(0);
+  }
+  70%, 100% {
+    transform: translateX(330px);
+  }
+}
+
+@keyframes public-token-float {
+  0%, 100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+
+@keyframes public-message-soft {
+  0%, 100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes public-progress {
+  0% {
+    transform: translateX(-115%);
+  }
+  55% {
+    transform: translateX(70%);
+  }
+  100% {
+    transform: translateX(230%);
+  }
+}
+
+@media (max-width: 767px) {
+  .public-splash-stage {
+    min-height: 360px;
+  }
+
+  .public-food-card-one {
+    top: 72px;
+    height: 128px;
+    width: 128px;
+  }
+
+  .public-food-card-two {
+    top: 24px;
+    height: 178px;
+    width: 178px;
+  }
+
+  .public-food-card-three {
+    top: 102px;
+    height: 132px;
+    width: 132px;
+  }
+
+  .public-route-card {
+    bottom: 10px;
+    padding: 16px;
+  }
+
+  .public-route-scooter {
+    animation-name: public-scooter-mobile;
+  }
+}
+
+@keyframes public-scooter-mobile {
+  0% {
+    transform: translateX(0);
+  }
+  70%, 100% {
+    transform: translateX(210px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chop-loader-logo-wrap,
   .chop-loader-ring,
   .chop-loader-food,
   .chop-loader-hand,
-  .chop-loader-progress {
+  .chop-loader-progress,
+  .public-splash-copy,
+  .public-food-card,
+  .public-route-line span,
+  .public-route-scooter,
+  .public-splash-token,
+  .public-splash-message,
+  .public-splash-progress {
     animation: none;
   }
 }

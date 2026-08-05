@@ -47,6 +47,58 @@ const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc
 const chopasapLogo = '/chopasap-logo.png';
 const brandRed = '#d71920';
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const splashMessages = [
+  'Fresh meals from restaurants near you.',
+  'Fast delivery to your doorstep.',
+  'Discover local favorites.',
+  'Order in minutes.'
+];
+const splashLoadingMessages = [
+  'Loading nearby restaurants...',
+  "Preparing today's recommendations...",
+  'Finding the fastest delivery routes...',
+  'Checking available offers...',
+  'Personalizing your experience...'
+];
+const defaultSplashProducts = [
+  {
+    name: 'Achu and Yellow Soup',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784715469/restaurant-system/menu/mctj24atiwjqcnp2dtqh.jpg'
+  },
+  {
+    name: 'Crispy Chicken',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785500852/restaurant-system/menu/asughecgnf37zm4qryrb.jpg'
+  },
+  {
+    name: 'Fried Chicken and Fries',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785501135/restaurant-system/menu/dm5eqrmritukxx2pqusy.jpg'
+  },
+  {
+    name: 'Fried Rice',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784717286/restaurant-system/menu/kiy3vwg2ljhhvhtno2sf.jpg'
+  },
+  {
+    name: 'Fufu Corn and Khati Khati',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784716934/restaurant-system/menu/jtlesye5zt0rafyvivw6.jpg'
+  },
+  {
+    name: 'Garri and Eru',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784717535/restaurant-system/menu/jwf2opr0ekzpkwjlcpeg.jpg'
+  },
+  {
+    name: 'Grilled Chicken and Fries',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785501641/restaurant-system/menu/qwo4qemgzxc0kgaoo0cs.jpg'
+  },
+  {
+    name: 'Rice and Tomato Stew',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1784718445/restaurant-system/menu/sr1ug42pkfw6bs9bqsnj.jpg'
+  },
+  {
+    name: 'Roasted Fish and Plantain',
+    imageUrl: 'https://res.cloudinary.com/dpzzy5erq/image/upload/v1785500945/restaurant-system/menu/ngfdzwbdnmajumeybx6a.jpg'
+  }
+];
+const splashProductsStorageKey = 'chopasap_splash_products';
 const tabs = [
   { id: 'home', label: { en: 'Home', fr: 'Accueil' }, icon: Home },
   { id: 'meals', label: { en: 'Meals', fr: 'Repas' }, icon: ShoppingBag },
@@ -142,6 +194,21 @@ const translations = {
 };
 const textFor = (value, language) => (typeof value === 'object' ? value[language] || value.en : value);
 const tr = (language, key) => translations[language]?.[key] || translations.en[key] || key;
+const validProductImage = (item) => item?.name && /^https?:\/\//i.test(String(item.imageUrl || ''));
+const freshSplashProducts = (products = defaultSplashProducts, count = 3) => {
+  const pool = (products.length ? products : defaultSplashProducts).filter(validProductImage);
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return [...shuffled, ...defaultSplashProducts].filter(validProductImage).slice(0, count);
+};
+const menuSplashProducts = (items = []) => items.filter(validProductImage).map((item) => ({ name: item.name, imageUrl: item.imageUrl }));
+const storedSplashProducts = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(splashProductsStorageKey) || '[]');
+    return Array.isArray(parsed) && parsed.some(validProductImage) ? parsed : defaultSplashProducts;
+  } catch {
+    return defaultSplashProducts;
+  }
+};
 const supportFaqs = [
   {
     question: 'How does ChopASAP ordering work?',
@@ -1100,6 +1167,74 @@ function BottomNav({ activeTab, setActiveTab, language = 'en', activeOrderCount 
   );
 }
 
+function PublicSplash({ customer, language = 'en' }) {
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [loadingIndex, setLoadingIndex] = useState(0);
+  const [visibleProducts] = useState(() => freshSplashProducts(storedSplashProducts()));
+  const firstName = customer?.name?.split(' ')?.[0];
+
+  useEffect(() => {
+    const messageTimer = window.setInterval(() => setMessageIndex((current) => (current + 1) % splashMessages.length), 1700);
+    const loadingTimer = window.setInterval(() => setLoadingIndex((current) => (current + 1) % splashLoadingMessages.length), 2400);
+    return () => {
+      window.clearInterval(messageTimer);
+      window.clearInterval(loadingTimer);
+    };
+  }, []);
+
+  return (
+    <main className="public-splash fixed inset-0 z-[100] flex min-h-screen items-center justify-center overflow-hidden bg-[#fff8ef] px-5 py-8 text-[#151923]" role="status" aria-live="polite" aria-label={splashLoadingMessages[loadingIndex]}>
+      <div className="public-splash-bg" aria-hidden="true" />
+      <div className="relative grid w-full max-w-6xl items-center gap-8 md:grid-cols-[0.92fr_1.08fr]">
+        <section className="public-splash-copy text-center md:text-left">
+          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] bg-white shadow-[0_24px_60px_rgba(215,25,32,0.18)] md:mx-0">
+            <img className="h-20 w-20 rounded-3xl object-cover" src={chopasapLogo} alt="ChopASAP" />
+          </div>
+          <p className="mt-6 text-sm font-black uppercase tracking-[0.18em] text-[#d71920]">CHOP ASAP</p>
+          <h1 className="mt-3 text-4xl font-black leading-tight text-[#151923] md:text-6xl">
+            {firstName ? `Welcome back, ${firstName}.` : language === 'fr' ? 'Bienvenue.' : 'Welcome.'}
+          </h1>
+          <p className="mt-4 max-w-xl text-lg font-semibold leading-8 text-[#4d5964] md:text-xl">
+            {firstName ? "We're finding your favorite meals..." : "Let's discover great food near you."}
+          </p>
+          <div className="mt-8 rounded-3xl bg-white/80 p-4 shadow-[0_18px_50px_rgba(63,45,24,0.08)] backdrop-blur">
+            <p className="public-splash-message text-lg font-black text-[#151923]">{splashMessages[messageIndex]}</p>
+            <p className="mt-2 text-sm font-semibold text-[#667085]">{splashLoadingMessages[loadingIndex]}</p>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#ffe2b4]">
+              <span className="public-splash-progress block h-full rounded-full bg-[#d71920]" />
+            </div>
+          </div>
+        </section>
+
+        <section className="public-splash-stage" aria-hidden="true">
+          <div className="public-food-card public-food-card-one">
+            <img src={visibleProducts[0].imageUrl} alt="" loading="eager" />
+            <span>{visibleProducts[0].name}</span>
+          </div>
+          <div className="public-food-card public-food-card-two">
+            <img src={visibleProducts[1].imageUrl} alt="" loading="eager" />
+            <span>{visibleProducts[1].name}</span>
+          </div>
+          <div className="public-food-card public-food-card-three">
+            <img src={visibleProducts[2].imageUrl} alt="" loading="eager" />
+            <span>{visibleProducts[2].name}</span>
+          </div>
+          <div className="public-route-card">
+            <div className="public-route-line"><span /></div>
+            <div className="public-route-scooter"><Truck size={22} /></div>
+            <div className="public-route-points">
+              <span><MapPin size={15} /> Restaurant</span>
+              <span><Home size={15} /> Doorstep</span>
+            </div>
+          </div>
+          <div className="public-splash-token public-token-one"><Sparkles size={18} /> Fresh</div>
+          <div className="public-splash-token public-token-two"><Star size={18} /> Trusted</div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 export default function PublicPortal() {
   const { data, loading, error, refetch } = useApi(() => endpoints.publicMenu(), []);
   const promotions = useApi(() => endpoints.publicPromotions(), []);
@@ -1212,6 +1347,13 @@ export default function PublicPortal() {
   const isFocusedPage = Boolean(focusedPageTitle);
   const customerRank = rewardRank(customer?.points);
   const referralLink = customer?.referralCode ? `${window.location.origin}${window.location.pathname}?ref=${customer.referralCode}` : '';
+
+  useEffect(() => {
+    const products = menuSplashProducts(items);
+    if (products.length) {
+      localStorage.setItem(splashProductsStorageKey, JSON.stringify(products.slice(0, 24)));
+    }
+  }, [items]);
 
   const playNotificationSound = () => {
     if (!soundEnabled || !window.AudioContext) return;
@@ -1818,7 +1960,7 @@ export default function PublicPortal() {
     setPromotionOpen(true);
   };
 
-  if (loading) return <Loading label="Loading menu" fullscreen />;
+  if (loading) return <PublicSplash customer={customer} language={language} />;
   if (error || !data) return <EmptyState title="Menu unavailable" message="The ordering portal could not load the menu." onRetry={refetch} />;
 
   const renderMeals = (list) => (
