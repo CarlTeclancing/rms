@@ -374,37 +374,156 @@ function LanguagePrompt({ visible, language, onChoose }) {
 }
 
 function CustomerGate({ language, form, setForm, saving, onSubmit, onDriverMode }) {
-  const complete = form.name.trim().length >= 2 && form.phone.trim().length >= 6;
+  const [step, setStep] = useState(0);
+  const stepAnim = useRef(new Animated.Value(0)).current;
+  const nameComplete = form.name.trim().length >= 2;
+  const phoneComplete = form.phone.trim().length >= 6;
+  const canContinue = step === 0 ? nameComplete : step === 1 ? phoneComplete : true;
+  const stepTitles = ['Name', 'Phone', 'Address'];
+  const stepSubtitles = ['Your name', 'OTP code', 'Delivery details'];
+  const nextLabel = step < 2 ? 'Next' : saving ? t(language, 'checking') : 'Done';
+
+  useEffect(() => {
+    stepAnim.setValue(0);
+    Animated.timing(stepAnim, {
+      toValue: 1,
+      duration: 280,
+      useNativeDriver: true
+    }).start();
+  }, [step, stepAnim]);
+
+  const StepIllustration = () => {
+    if (step === 0) {
+      return (
+        <Svg width="168" height="168" viewBox="0 0 168 168">
+          <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
+          <Circle cx="84" cy="72" r="34" fill="#fff" />
+          <Circle cx="84" cy="72" r="16" fill="#0f172a" opacity="0.9" />
+          <Path d="M56 110c0-16 12-24 28-24s28 8 28 24" fill="#fff" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
+          <Path d="M124 46l14 14" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" opacity="0.6" />
+          <Circle cx="128" cy="118" r="10" fill="#d71920" />
+        </Svg>
+      );
+    }
+    if (step === 1) {
+      return (
+        <Svg width="168" height="168" viewBox="0 0 168 168">
+          <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
+          <Rect x="56" y="32" width="56" height="88" rx="20" fill="#fff" />
+          <Path d="M72 60h24" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
+          <Path d="M72 86h24" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
+          <Path d="M72 112h16" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
+          <Circle cx="84" cy="132" r="12" fill="#d71920" />
+        </Svg>
+      );
+    }
+    return (
+      <Svg width="168" height="168" viewBox="0 0 168 168">
+        <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
+        <Path d="M84 40c-26 0-48 22-48 48 0 18 10 30 24 38v20h48v-20c14-8 24-20 24-38 0-26-22-48-48-48Z" fill="#fff" />
+        <Circle cx="84" cy="76" r="16" fill="#0f172a" opacity="0.9" />
+        <Path d="M74 98c0-6 6-10 10-10s10 4 10 10" fill="#0f172a" />
+        <Circle cx="118" cy="118" r="10" fill="#d71920" />
+      </Svg>
+    );
+  };
+
+  const currentField = step === 0 ? {
+    icon: 'person-outline',
+    label: 'Name',
+    placeholder: 'Amina N.',
+    value: form.name,
+    onChangeText: (value) => setForm({ ...form, name: value }),
+    keyboardType: 'default'
+  } : step === 1 ? {
+    icon: 'call-outline',
+    label: 'Phone',
+    placeholder: '671 286 999',
+    value: form.phone,
+    onChangeText: (value) => setForm({ ...form, phone: value }),
+    keyboardType: 'phone-pad'
+  } : {
+    icon: 'location-outline',
+    label: 'Address',
+    placeholder: 'Bonanjo, near...',
+    value: form.address,
+    onChangeText: (value) => setForm({ ...form, address: value }),
+    keyboardType: 'default'
+  };
+
+  const handleNext = () => {
+    if (step < 2) {
+      setStep(step + 1);
+    } else {
+      onSubmit();
+    }
+  };
+
   return (
-    <View style={styles.gate}>
+    <ScrollView style={styles.gate} contentContainerStyle={styles.gateScroll} showsVerticalScrollIndicator={false}>
       <View style={styles.gateCard}>
         <View style={styles.gateHeader}>
-          <Image source={logo} style={styles.gateLogo} />
-          <Text style={styles.gateTitle}>{t(language, 'welcome')}</Text>
-          <Text style={styles.gateCopy}>{t(language, 'enterDetails')}</Text>
+          <View style={styles.gateArtwork}>
+            <StepIllustration />
+          </View>
+          <Text style={styles.gateTitle}>Order in 3 steps</Text>
+          <Text style={styles.gateCopy}>Phone + code + delivery.</Text>
+          <View style={styles.stepBar}>
+            {[0, 1, 2].map((index) => (
+              <View key={index} style={[styles.stepSegment, step === index && styles.stepSegmentActive]} />
+            ))}
+          </View>
+          <View style={styles.stepRow}>
+            <Text style={styles.stepLabel}>{stepTitles[step]}</Text>
+            <Text style={styles.stepHighlight}>{stepSubtitles[step]}</Text>
+          </View>
         </View>
-        <View style={styles.formBody}>
-          <Field label={t(language, 'name')} value={form.name} onChangeText={(name) => setForm({ ...form, name })} placeholder="Amina N." />
-          <Field label={t(language, 'phone')} value={form.phone} onChangeText={(phone) => setForm({ ...form, phone })} placeholder="671286999" keyboardType="phone-pad" />
-          <Field label={t(language, 'addressOptional')} value={form.address} onChangeText={(address) => setForm({ ...form, address })} placeholder="Bonanjo, near..." />
-          {form.referralCode ? <Text style={styles.referralBadge}>{t(language, 'referralActive')}</Text> : null}
-          <Pressable style={[styles.primaryButton, (!complete || saving) && styles.disabled]} disabled={!complete || saving} onPress={onSubmit}>
-            <Text style={styles.primaryButtonText}>{saving ? t(language, 'checking') : t(language, 'continue')}</Text>
+        <Animated.View
+          style={[
+            styles.stepCard,
+            {
+              opacity: stepAnim,
+              transform: [
+                {
+                  translateY: stepAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] })
+                }
+              ]
+            }
+          ]}
+        >
+          <Field
+            icon={currentField.icon}
+            label={currentField.label}
+            value={currentField.value}
+            onChangeText={currentField.onChangeText}
+            placeholder={currentField.placeholder}
+            keyboardType={currentField.keyboardType}
+          />
+          {step === 2 ? <Text style={styles.optionalText}>Skip for now if you want.</Text> : null}
+          <Pressable style={[styles.primaryButton, (!canContinue || saving) && styles.disabled]} disabled={!canContinue || saving} onPress={handleNext}>
+            <Text style={styles.primaryButtonText}>{nextLabel}</Text>
           </Pressable>
-          <Pressable style={styles.driverModeButton} onPress={onDriverMode}>
-            <Ionicons name="bicycle-outline" size={18} color={brandRed} />
-            <Text style={styles.driverModeText}>Delivery agent mode</Text>
+          {step === 2 ? (
+            <Pressable style={styles.skipButton} onPress={onSubmit}>
+              <Text style={styles.skipButtonText}>Skip</Text>
+            </Pressable>
+          ) : null}
+          <Pressable style={styles.softButton} onPress={onDriverMode}>
+            <Text style={styles.softButtonText}>Delivery agent mode</Text>
           </Pressable>
-        </View>
+        </Animated.View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
-function Field({ label, style, ...props }) {
+function Field({ label, icon, style, ...props }) {
   return (
     <View style={[styles.field, style]}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+      <View style={styles.fieldLabelRow}>
+        {icon ? <Ionicons name={icon} size={16} color="#5f6770" style={styles.fieldIcon} /> : null}
+        <Text style={styles.fieldLabel}>{label}</Text>
+      </View>
       <TextInput style={styles.input} placeholderTextColor="#9aa4ad" {...props} />
     </View>
   );
@@ -2544,19 +2663,46 @@ const styles = StyleSheet.create({
   languageOptionActive: { backgroundColor: brandRed, borderColor: brandRed },
   languageOptionText: { fontWeight: '900', color: '#151923' },
   languageOptionTextActive: { color: '#fff' },
-  gate: { flex: 1, justifyContent: 'center', padding: 18 },
-  gateCard: { overflow: 'hidden', borderRadius: 28, backgroundColor: '#fff' },
-  gateHeader: { alignItems: 'center', backgroundColor: '#151923', padding: 24 },
-  gateLogo: { width: 68, height: 68, borderRadius: 18 },
-  gateTitle: { marginTop: 16, color: '#fff', fontSize: 24, fontWeight: '900', textAlign: 'center' },
-  gateCopy: { marginTop: 8, color: 'rgba(255,255,255,0.72)', fontWeight: '700' },
-  formBody: { padding: 22, gap: 14 },
-  field: { borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#f7fbfc', borderRadius: 18, padding: 14 },
-  fieldLabel: { fontSize: 12, color: brandRed, textTransform: 'uppercase', fontWeight: '900', marginBottom: 6 },
-  input: { fontSize: 16, color: '#151923', fontWeight: '800', minHeight: 24 },
+  gate: { flex: 1, padding: 0, backgroundColor: '#eef7f9' },
+  gateScroll: { flexGrow: 1, justifyContent: 'center' },
+  gateCard: { overflow: 'hidden', width: '100%', backgroundColor: '#fff', shadowColor: '#171a1f', shadowOpacity: 0.08, shadowRadius: 28, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
+  gateHeader: { alignItems: 'flex-start', backgroundColor: '#fff', padding: 24 },
+  gateBadgeText: { fontSize: 12, fontWeight: '900', color: brandRed, letterSpacing: 0.6, textTransform: 'uppercase' },
+  gateTitle: { marginTop: 18, color: '#151923', fontSize: 32, fontWeight: '900', lineHeight: 40 },
+  gateCopy: { marginTop: 10, color: '#5f6770', fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  gateArtwork: { width: '100%', alignItems: 'center', paddingVertical: 14 },
+  stepBar: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 22 },
+  stepSegment: { flex: 1, height: 4, borderRadius: 999, backgroundColor: '#f0f4f7' },
+  stepSegmentActive: { backgroundColor: brandRed },
+  stepRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16 },
+  stepLabel: { color: '#151923', fontSize: 18, fontWeight: '900' },
+  stepHighlight: { color: '#5f6770', fontSize: 14, fontWeight: '700' },
+  stepIndicatorRow: { flexDirection: 'row', gap: 10, marginTop: 24 },
+  stepDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f6f8', alignItems: 'center', justifyContent: 'center' },
+  stepDotActive: { backgroundColor: brandRed },
+  stepDotText: { color: '#5f6770', fontWeight: '900' },
+  stepDotTextActive: { color: '#fff' },
+  stepTitle: { marginTop: 20, color: '#151923', fontSize: 26, fontWeight: '900', lineHeight: 34 },
+  stepSubtitle: { marginTop: 10, color: '#5f6770', fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  stepCard: { padding: 24, gap: 18, backgroundColor: '#fdfdfd' },
+  optionalText: { color: '#5f6770', fontSize: 13, lineHeight: 20, marginTop: -8, marginBottom: 10, fontWeight: '700' },
+  formBody: { padding: 24, gap: 16 },
+  field: { borderWidth: 1, borderColor: '#e4e7eb', backgroundColor: '#f8fbfc', borderRadius: 18, padding: 16 },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  fieldIcon: { marginTop: 2 },
+  fieldLabel: { fontSize: 12, color: '#5f6770', fontWeight: '900', letterSpacing: 0.5 },
+  input: { fontSize: 17, color: '#151923', fontWeight: '800', minHeight: 26 },
+  primaryButton: { minHeight: 56, borderRadius: 20, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 20, shadowColor: brandRed, shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
+  softButton: { marginTop: 10, minHeight: 52, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f8fb' },
+  softButtonText: { color: '#2b3b4c', fontWeight: '900', fontSize: 15 },
+  skipButton: { marginTop: 10, minHeight: 52, borderRadius: 20, borderWidth: 1, borderColor: '#d1d9e0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  skipButtonText: { color: '#5f6770', fontWeight: '900', fontSize: 15 },
   referralBadge: { backgroundColor: '#fff4d7', color: '#8b5f00', padding: 12, borderRadius: 16, textAlign: 'center', fontWeight: '900' },
-  primaryButton: { minHeight: 48, borderRadius: 16, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
-  primaryButtonText: { color: '#fff', fontWeight: '900' },
+  primaryButton: { minHeight: 56, borderRadius: 20, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 20, shadowColor: brandRed, shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
+  softButton: { marginTop: 10, minHeight: 52, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f8fb' },
+  softButtonText: { color: '#2b3b4c', fontWeight: '900', fontSize: 15 },
   driverModeButton: { minHeight: 44, borderRadius: 14, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff8f8', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
   driverModeText: { color: brandRed, fontWeight: '900' },
   driverGateHeader: { alignItems: 'center', backgroundColor: brandRed, padding: 24 },
