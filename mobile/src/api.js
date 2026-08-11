@@ -80,13 +80,22 @@ export const api = {
   submitPromotionRequest: (data) => request('/public/promotions', { method: 'POST', body: JSON.stringify(data) })
 };
 
+const normalizeUploadAsset = (file) => {
+  const asset = Array.isArray(file) ? file[0] : file;
+  if (!asset || typeof asset.uri !== 'string') return null;
+  return {
+    uri: asset.uri,
+    name: asset.fileName || 'image.jpg',
+    type: asset.mimeType || 'image/jpeg'
+  };
+};
+
 export const uploadCustomerAvatar = async (file) => {
+  const image = normalizeUploadAsset(file);
+  if (!image) throw new Error('Invalid upload asset');
+
   const form = new FormData();
-  form.append('image', {
-    uri: file.uri,
-    name: file.fileName || 'profile.jpg',
-    type: file.mimeType || 'image/jpeg'
-  });
+  form.append('image', image);
 
   const url = `${API_URL}/public/upload/customer-avatar`;
   let response;
@@ -103,12 +112,11 @@ export const uploadCustomerAvatar = async (file) => {
 };
 
 export const uploadPromotionImage = async (file) => {
+  const image = normalizeUploadAsset(file);
+  if (!image) throw new Error('Invalid upload asset');
+
   const form = new FormData();
-  form.append('image', {
-    uri: file.uri,
-    name: file.fileName || 'promotion.jpg',
-    type: file.mimeType || 'image/jpeg'
-  });
+  form.append('image', image);
 
   const url = `${API_URL}/public/upload/promotion-image`;
   let response;

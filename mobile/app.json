@@ -4,31 +4,35 @@
     "slug": "chopasap",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/chopasap-logo.png",
+    "icon": "./assets/expo-app-icon.png",
     "scheme": "chopasap",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/chopasap-logo.png",
+      "image": "./assets/expo-app-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#eaf5f8"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chopasap.mobile"
     },
     "android": {
-      "usesCleartextTraffic": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/chopasap-logo.png",
+        "foregroundImage": "./assets/expo-app-icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.chopasap.mobile"
     },
     "extra": {
       "eas": {
-        "projectId": "replace-with-eas-project-id"
+        "projectId": "c36fefc1-9d9e-4f28-8b9a-879ccf181804"
       }
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

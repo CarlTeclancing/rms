@@ -15,7 +15,6 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   Share,
   StyleSheet,
@@ -26,6 +25,7 @@ import {
   useWindowDimensions,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { API_URL, api, uploadCustomerAvatar, uploadPromotionImage } from './src/api';
 import { t } from './src/i18n';
@@ -40,6 +40,7 @@ const languageKey = 'chopasap_mobile_language';
 const activeOrdersKey = 'chopasap_mobile_active_orders';
 const flashSaleDismissedKey = 'chopasap_mobile_flash_sale_dismissed';
 const driverCodeKey = 'chopasap_mobile_driver_code';
+const driverPhotoKey = 'chopasap_mobile_driver_photo';
 const appModeKey = 'chopasap_mobile_mode';
 const splashProductsKey = 'chopasap_mobile_splash_products';
 
@@ -96,6 +97,18 @@ const mealPrice = (item, variationName) => Number(mealVariations(item).find((ent
 const cartKeyFor = (id, variationName) => `${id}:${variationName || 'base'}`;
 const orderItemTotal = (item) => Number(item.total ?? Number(item.price || item.unitPrice || 0) * Number(item.quantity || 0));
 const orderItemName = (item) => item.menuItem?.name || item.name || 'Menu item';
+const isValidImageUri = (uri) => {
+  if (typeof uri !== 'string') return false;
+  const value = uri.trim();
+  if (!value) return false;
+  return /^(https?:\/\/|file:\/\/\/|content:\/\/|asset:\/\/|data:image\/|blob:|ph:\/\/)/i.test(value);
+};
+const imageSource = (uri, fallback = logo) => {
+  if (isValidImageUri(uri)) return { uri: uri.trim() };
+  if (typeof fallback === 'string' && isValidImageUri(fallback)) return { uri: fallback.trim() };
+  if (fallback != null && typeof fallback === 'object') return fallback;
+  return logo;
+};
 const deliveryStatusLabels = {
   PENDING: 'Order received',
   ACCEPTED: 'Restaurant accepted',
@@ -129,6 +142,12 @@ const fallbackPromotionSlide = {
 const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 const rewardClaimTypes = ['DAILY_REWARD', 'DAILY_STREAK', 'LOYALTY_PROGRAM', 'CHALLENGE', 'REFERRAL_PROGRAM'];
+const driverRanks = [
+  { threshold: 0, title: 'Rookie Rider', next: 'Reach 5 completed deliveries' },
+  { threshold: 5, title: 'Delivery Pro', next: 'Reach 15 completed deliveries' },
+  { threshold: 15, title: 'Routing Expert', next: 'Reach 30 completed deliveries' },
+  { threshold: 30, title: 'ChopASAP Elite', next: 'Keep delivering great service' }
+];
 const splashMessages = [
   'Fresh meals from restaurants near you.',
   'Fast delivery to your doorstep.',
@@ -311,15 +330,15 @@ function Loader({ label = 'Loading', products = defaultSplashProducts }) {
 
         <View style={styles.splashFoodStage}>
           <Animated.View style={[styles.splashFoodCard, styles.splashFoodCardLeft, { transform: [{ translateY: heroTranslate }] }]}>
-            <Image source={{ uri: visibleProducts[0].imageUrl }} style={styles.splashFoodImage} />
+            <Image source={imageSource(visibleProducts[0].imageUrl)} style={styles.splashFoodImage} />
             <Text style={styles.splashFoodLabel} numberOfLines={2}>{visibleProducts[0].name}</Text>
           </Animated.View>
           <Animated.View style={[styles.splashFoodCard, styles.splashFoodCardMain, { transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [-4, 5] }) }] }]}>
-            <Image source={{ uri: visibleProducts[1].imageUrl }} style={styles.splashFoodImage} />
+            <Image source={imageSource(visibleProducts[1].imageUrl)} style={styles.splashFoodImage} />
             <Text style={styles.splashFoodLabel} numberOfLines={2}>{visibleProducts[1].name}</Text>
           </Animated.View>
           <Animated.View style={[styles.splashFoodCard, styles.splashFoodCardRight, { transform: [{ translateY: float.interpolate({ inputRange: [0, 1], outputRange: [7, -5] }) }] }]}>
-            <Image source={{ uri: visibleProducts[2].imageUrl }} style={styles.splashFoodImage} />
+            <Image source={imageSource(visibleProducts[2].imageUrl)} style={styles.splashFoodImage} />
             <Text style={styles.splashFoodLabel} numberOfLines={2}>{visibleProducts[2].name}</Text>
           </Animated.View>
           <View style={styles.splashSteamOne} />
@@ -374,144 +393,59 @@ function LanguagePrompt({ visible, language, onChoose }) {
 }
 
 function CustomerGate({ language, form, setForm, saving, onSubmit, onDriverMode }) {
-  const [step, setStep] = useState(0);
-  const stepAnim = useRef(new Animated.Value(0)).current;
   const nameComplete = form.name.trim().length >= 2;
   const phoneComplete = form.phone.trim().length >= 6;
-  const canContinue = step === 0 ? nameComplete : step === 1 ? phoneComplete : true;
-  const stepTitles = ['Name', 'Phone', 'Address'];
-  const stepSubtitles = ['Your name', 'OTP code', 'Delivery details'];
-  const nextLabel = step < 2 ? 'Next' : saving ? t(language, 'checking') : 'Done';
-
-  useEffect(() => {
-    stepAnim.setValue(0);
-    Animated.timing(stepAnim, {
-      toValue: 1,
-      duration: 280,
-      useNativeDriver: true
-    }).start();
-  }, [step, stepAnim]);
-
-  const StepIllustration = () => {
-    if (step === 0) {
-      return (
-        <Svg width="168" height="168" viewBox="0 0 168 168">
-          <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
-          <Circle cx="84" cy="72" r="34" fill="#fff" />
-          <Circle cx="84" cy="72" r="16" fill="#0f172a" opacity="0.9" />
-          <Path d="M56 110c0-16 12-24 28-24s28 8 28 24" fill="#fff" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
-          <Path d="M124 46l14 14" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" opacity="0.6" />
-          <Circle cx="128" cy="118" r="10" fill="#d71920" />
-        </Svg>
-      );
-    }
-    if (step === 1) {
-      return (
-        <Svg width="168" height="168" viewBox="0 0 168 168">
-          <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
-          <Rect x="56" y="32" width="56" height="88" rx="20" fill="#fff" />
-          <Path d="M72 60h24" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
-          <Path d="M72 86h24" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
-          <Path d="M72 112h16" stroke="#0f172a" strokeWidth="8" strokeLinecap="round" />
-          <Circle cx="84" cy="132" r="12" fill="#d71920" />
-        </Svg>
-      );
-    }
-    return (
-      <Svg width="168" height="168" viewBox="0 0 168 168">
-        <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
-        <Path d="M84 40c-26 0-48 22-48 48 0 18 10 30 24 38v20h48v-20c14-8 24-20 24-38 0-26-22-48-48-48Z" fill="#fff" />
-        <Circle cx="84" cy="76" r="16" fill="#0f172a" opacity="0.9" />
-        <Path d="M74 98c0-6 6-10 10-10s10 4 10 10" fill="#0f172a" />
-        <Circle cx="118" cy="118" r="10" fill="#d71920" />
-      </Svg>
-    );
-  };
-
-  const currentField = step === 0 ? {
-    icon: 'person-outline',
-    label: 'Name',
-    placeholder: 'Amina N.',
-    value: form.name,
-    onChangeText: (value) => setForm({ ...form, name: value }),
-    keyboardType: 'default'
-  } : step === 1 ? {
-    icon: 'call-outline',
-    label: 'Phone',
-    placeholder: '671 286 999',
-    value: form.phone,
-    onChangeText: (value) => setForm({ ...form, phone: value }),
-    keyboardType: 'phone-pad'
-  } : {
-    icon: 'location-outline',
-    label: 'Address',
-    placeholder: 'Bonanjo, near...',
-    value: form.address,
-    onChangeText: (value) => setForm({ ...form, address: value }),
-    keyboardType: 'default'
-  };
-
-  const handleNext = () => {
-    if (step < 2) {
-      setStep(step + 1);
-    } else {
-      onSubmit();
-    }
-  };
+  const canContinue = nameComplete && phoneComplete;
+  const buttonLabel = saving ? t(language, 'checking') : 'Start';
 
   return (
     <ScrollView style={styles.gate} contentContainerStyle={styles.gateScroll} showsVerticalScrollIndicator={false}>
       <View style={styles.gateCard}>
         <View style={styles.gateHeader}>
           <View style={styles.gateArtwork}>
-            <StepIllustration />
+            <Svg width="168" height="168" viewBox="0 0 168 168">
+              <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
+              <Path d="M76 40c-24 0-44 20-44 44 0 12 5 22 13 30v24h62v-24c8-8 13-18 13-30 0-24-20-44-44-44Z" fill="#fff" />
+              <Circle cx="84" cy="80" r="18" fill="#0f172a" opacity="0.9" />
+              <Path d="M78 106c0-6 6-10 10-10s10 4 10 10" fill="#0f172a" />
+              <Path d="M40 128h88" stroke="#d71920" strokeWidth="10" strokeLinecap="round" opacity="0.75" />
+            </Svg>
           </View>
-          <Text style={styles.gateTitle}>Order in 3 steps</Text>
-          <Text style={styles.gateCopy}>Phone + code + delivery.</Text>
-          <View style={styles.stepBar}>
-            {[0, 1, 2].map((index) => (
-              <View key={index} style={[styles.stepSegment, step === index && styles.stepSegmentActive]} />
-            ))}
-          </View>
-          <View style={styles.stepRow}>
-            <Text style={styles.stepLabel}>{stepTitles[step]}</Text>
-            <Text style={styles.stepHighlight}>{stepSubtitles[step]}</Text>
-          </View>
+          <Text style={styles.gateTitle}>Enter details</Text>
+          <Text style={styles.gateCopy}>Name, phone, address.</Text>
         </View>
-        <Animated.View
-          style={[
-            styles.stepCard,
-            {
-              opacity: stepAnim,
-              transform: [
-                {
-                  translateY: stepAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] })
-                }
-              ]
-            }
-          ]}
-        >
+        <View style={styles.formBody}>
           <Field
-            icon={currentField.icon}
-            label={currentField.label}
-            value={currentField.value}
-            onChangeText={currentField.onChangeText}
-            placeholder={currentField.placeholder}
-            keyboardType={currentField.keyboardType}
+            icon="person-outline"
+            label="Name"
+            placeholder="Amina N."
+            value={form.name}
+            onChangeText={(value) => setForm({ ...form, name: value })}
+            keyboardType="default"
           />
-          {step === 2 ? <Text style={styles.optionalText}>Skip for now if you want.</Text> : null}
-          <Pressable style={[styles.primaryButton, (!canContinue || saving) && styles.disabled]} disabled={!canContinue || saving} onPress={handleNext}>
-            <Text style={styles.primaryButtonText}>{nextLabel}</Text>
+          <Field
+            icon="call-outline"
+            label="Phone"
+            placeholder="671 286 999"
+            value={form.phone}
+            onChangeText={(value) => setForm({ ...form, phone: value })}
+            keyboardType="phone-pad"
+          />
+          <Field
+            icon="location-outline"
+            label="Address (optional)"
+            placeholder="Bonanjo, near..."
+            value={form.address}
+            onChangeText={(value) => setForm({ ...form, address: value })}
+            keyboardType="default"
+          />
+          <Pressable style={[styles.primaryButton, (!canContinue || saving) && styles.disabled]} disabled={!canContinue || saving} onPress={onSubmit}>
+            <Text style={styles.primaryButtonText}>{buttonLabel}</Text>
           </Pressable>
-          {step === 2 ? (
-            <Pressable style={styles.skipButton} onPress={onSubmit}>
-              <Text style={styles.skipButtonText}>Skip</Text>
-            </Pressable>
-          ) : null}
           <Pressable style={styles.softButton} onPress={onDriverMode}>
-            <Text style={styles.softButtonText}>Delivery agent mode</Text>
+            <Text style={styles.softButtonText}>Driver mode</Text>
           </Pressable>
-        </Animated.View>
+        </View>
       </View>
     </ScrollView>
   );
@@ -532,7 +466,7 @@ function Field({ label, icon, style, ...props }) {
 function MealCard({ item, favorite, onOpen, onFavorite, onShare }) {
   return (
     <Pressable style={styles.mealCard} onPress={() => onOpen(item)}>
-      <Image source={{ uri: item.imageUrl || fallbackImage }} style={styles.mealImage} />
+      <Image source={imageSource(item.imageUrl, fallbackImage)} style={styles.mealImage} />
       <Pressable style={styles.shareButton} onPress={() => onShare(item)}>
         <Ionicons name="share-social-outline" size={18} color="#29384d" />
       </Pressable>
@@ -584,7 +518,7 @@ function MealDetail({ item, visible, customer, settings, language, onClose, onAd
     <Modal visible={visible} animationType="slide">
       <SafeAreaView style={styles.detailScreen}>
         <ScrollView contentContainerStyle={styles.detailContent}>
-          <Image source={{ uri: item.imageUrl || fallbackImage }} style={styles.detailImage} />
+          <Image source={imageSource(item.imageUrl, fallbackImage)} style={styles.detailImage} />
           <Pressable style={[styles.detailIcon, styles.detailShare]} onPress={() => onShare(item)}>
             <Ionicons name="share-social-outline" size={22} color="#07142a" />
           </Pressable>
@@ -689,87 +623,292 @@ function DriverGate({ code, setCode, saving, onSubmit, onCustomerMode }) {
   );
 }
 
-function DriverDashboard({ agent, requests, code, refreshing, savingId, onRefresh, onAccept, onDeliver, onLogout }) {
-  const activeCount = requests.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status)).length;
+function DriverDashboard({ agent, requests, code, refreshing, savingId, driverPhoto, selectedOrder, driverTab, driverTrackingUpdates, setDriverTab, setSelectedOrder, driverDetailOpen, setDriverDetailOpen, setDriverTrackingUpdates, onRefresh, onAccept, onDeliver, onLogout, onPickPhoto, onUpdateTracking }) {
+  const activeOrders = requests.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status));
+  const historyOrders = requests.filter((order) => ['DELIVERED', 'CANCELLED'].includes(order.status));
+  const activeCount = activeOrders.length;
+  const completedCount = historyOrders.filter((order) => order.status === 'DELIVERED').length;
   const earned = requests.reduce((sum, order) => sum + Number(order.driverCommission || 0), 0);
+  const pendingEarnings = activeOrders.reduce((sum, order) => sum + Number(order.driverCommission || 0), 0);
+  const rank = driverRanks.slice().reverse().find((entry) => completedCount >= entry.threshold) || driverRanks[0];
+  const tabs = [
+    { id: 'home', title: 'Home' },
+    { id: 'active', title: 'Active' },
+    { id: 'history', title: 'History' },
+    { id: 'wallet', title: 'Wallet' },
+    { id: 'profile', title: 'Profile' }
+  ];
+  const visibleOrders = driverTab === 'active' ? activeOrders : driverTab === 'history' ? historyOrders : requests;
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+    setDriverTrackingUpdates({
+      latitude: String(selectedOrder.driverLatitude || ''),
+      longitude: String(selectedOrder.driverLongitude || ''),
+      status: selectedOrder.status || ''
+    });
+  }, [selectedOrder]);
+
+  const renderOrderCard = (order) => {
+    const status = order.status || 'PENDING';
+    const canAccept = status === 'DRIVER_ASSIGNED';
+    const canDeliver = ['DRIVER_TO_RESTAURANT', 'DRIVER_ARRIVED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DRIVER_NEARBY'].includes(status);
+    const commission = Number(order.driverCommission || Number(order.deliveryFee || 0) * 0.5);
+
+    return (
+      <Pressable key={order.id} style={styles.driverOrderCard} onPress={() => { setSelectedOrder(order); setDriverDetailOpen(true); }}>
+        <View style={styles.orderCardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.orderNo}>{order.orderNo}</Text>
+            <Text style={styles.status}>{status.replaceAll('_', ' ')}</Text>
+          </View>
+          <Text style={styles.driverCommission}>{formatMoney(commission)}</Text>
+        </View>
+        <Text style={styles.orderMeta}>{order.customerName} - {order.customerPhone}</Text>
+        <Text style={styles.orderMeta}>{order.deliveryAddress}</Text>
+        <View style={styles.driverItemsBox}>
+          {(order.items || []).slice(0, 3).map((item) => (
+            <View key={item.id} style={styles.driverItemRow}>
+              <Image source={imageSource(item.menuItem?.imageUrl || fallbackImage)} style={styles.driverItemImage} />
+              <Text style={styles.driverItemName} numberOfLines={1}>{item.quantity} x {orderItemName(item)}</Text>
+            </View>
+          ))}
+          {order.items?.length > 3 ? <Text style={styles.driverMoreItems}>+{order.items.length - 3} more items</Text> : null}
+        </View>
+        <View style={styles.driverActionRow}>
+          {canAccept ? (
+            <Pressable style={[styles.primaryButton, savingId === order.id && styles.disabled]} disabled={savingId === order.id} onPress={() => onAccept(order.id)}>
+              <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+              <Text style={styles.primaryButtonText}>Accept delivery</Text>
+            </Pressable>
+          ) : null}
+          {canDeliver ? (
+            <Pressable style={[styles.primaryButton, savingId === order.id && styles.disabled]} disabled={savingId === order.id} onPress={() => onDeliver(order.id)}>
+              <Ionicons name="flag-outline" size={18} color="#fff" />
+              <Text style={styles.primaryButtonText}>Mark delivered</Text>
+            </Pressable>
+          ) : null}
+          {!canAccept && !canDeliver ? <Text style={styles.driverHint}>Tap for details, then update status or location.</Text> : null}
+        </View>
+      </Pressable>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.appSafe}>
       <StatusBar style="dark" />
       <View style={styles.driverHeader}>
-        <View>
-          <Text style={styles.brand}>CHOP ASAP</Text>
-          <Text style={styles.driverHeaderTitle}>{agent?.name || 'Delivery agent'}</Text>
-          <Text style={styles.driverHeaderMeta}>Code {agent?.code || code}</Text>
+        <View style={styles.driverProfileRow}>
+          <View style={styles.driverAvatarCard}>
+            <Image source={imageSource(driverPhoto, logo)} style={styles.driverAvatar} />
+          </View>
+          <View style={styles.driverHeaderDetails}>
+            <Text style={styles.brand}>CHOP ASAP</Text>
+            <Text style={styles.driverHeaderTitle}>{agent?.name || 'Delivery agent'}</Text>
+            <Text style={styles.driverHeaderMeta}>Code {agent?.code || code}</Text>
+            <Text style={styles.driverBadge}>{rank.title}</Text>
+            <Text style={styles.driverBadgeMeta}>{rank.next}</Text>
+          </View>
         </View>
         <Pressable style={styles.headerIconButton} onPress={onLogout}>
           <Ionicons name="swap-horizontal-outline" size={22} color="#29384d" />
         </Pressable>
       </View>
+
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentBody}
+        contentContainerStyle={[styles.contentBody, { paddingBottom: 150 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[brandRed]} tintColor={brandRed} />}
       >
         <View style={styles.driverStatsRow}>
           <View style={styles.driverStatCard}>
             <Text style={styles.driverStatValue}>{activeCount}</Text>
-            <Text style={styles.driverStatLabel}>Active requests</Text>
+            <Text style={styles.driverStatLabel}>Active</Text>
           </View>
           <View style={styles.driverStatCard}>
-            <Text style={styles.driverStatValue}>{formatMoney(earned)}</Text>
-            <Text style={styles.driverStatLabel}>Commission earned</Text>
+            <Text style={styles.driverStatValue}>{completedCount}</Text>
+            <Text style={styles.driverStatLabel}>Delivered</Text>
+          </View>
+          <View style={styles.driverStatCard}>
+            <Text style={styles.driverStatValue}>{formatMoney(pendingEarnings)}</Text>
+            <Text style={styles.driverStatLabel}>Pending earnings</Text>
           </View>
         </View>
-        <Text style={styles.pageTitle}>Delivery requests</Text>
-        {requests.length ? requests.map((order) => {
-          const status = order.status || 'PENDING';
-          const canAccept = status === 'DRIVER_ASSIGNED';
-          const canDeliver = ['DRIVER_TO_RESTAURANT', 'DRIVER_ARRIVED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DRIVER_NEARBY'].includes(status);
-          const commission = Number(order.driverCommission || Number(order.deliveryFee || 0) * 0.5);
-          return (
-            <View key={order.id} style={styles.driverOrderCard}>
-              <View style={styles.orderCardTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.orderNo}>{order.orderNo}</Text>
-                  <Text style={styles.status}>{status.replaceAll('_', ' ')}</Text>
-                </View>
-                <Text style={styles.driverCommission}>{formatMoney(commission)}</Text>
+
+        {driverTab === 'home' ? (
+          <View>
+            <Text style={styles.pageTitle}>Agent dashboard</Text>
+            <View style={styles.supportCard}>
+              <Ionicons name="rocket-outline" size={28} color={brandRed} />
+              <Text style={styles.supportTitle}>Ready for delivery</Text>
+              <Text style={styles.supportText}>Switch tabs to manage active orders, review delivery history, update your wallet, or manage your profile.</Text>
+            </View>
+            <View style={styles.driverHomeGrid}>
+              <View style={styles.driverMetricCard}>
+                <Text style={styles.driverMetricValue}>{requests.length}</Text>
+                <Text style={styles.driverMetricLabel}>Total orders</Text>
               </View>
-              <Text style={styles.orderMeta}>{order.customerName} - {order.customerPhone}</Text>
-              <Text style={styles.orderMeta}>{order.deliveryAddress}</Text>
+              <View style={styles.driverMetricCard}>
+                <Text style={styles.driverMetricValue}>{formatMoney(earned)}</Text>
+                <Text style={styles.driverMetricLabel}>Total commission</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        {driverTab === 'active' ? (
+          <View>
+            <Text style={styles.pageTitle}>Active deliveries</Text>
+            {visibleOrders.length ? visibleOrders.map(renderOrderCard) : (
+              <View style={styles.supportCard}>
+                <Ionicons name="bicycle-outline" size={32} color={brandRed} />
+                <Text style={styles.supportTitle}>No active orders</Text>
+                <Text style={styles.supportText}>Keep your status ready and pull to refresh for new assigned jobs.</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {driverTab === 'history' ? (
+          <View>
+            <Text style={styles.pageTitle}>Delivery history</Text>
+            {visibleOrders.length ? visibleOrders.map(renderOrderCard) : (
+              <View style={styles.supportCard}>
+                <Ionicons name="time-outline" size={32} color={brandRed} />
+                <Text style={styles.supportTitle}>No completed deliveries yet</Text>
+                <Text style={styles.supportText}>Start your first delivery and it will appear here.</Text>
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {driverTab === 'wallet' ? (
+          <View>
+            <Text style={styles.pageTitle}>Wallet</Text>
+            <View style={styles.walletCard}>
+              <Text style={styles.walletLabel}>Available balance</Text>
+              <Text style={styles.walletBalance}>{formatMoney(earned)}</Text>
+              <Text style={styles.walletText}>Withdrawals and payout details are managed by the ChopASAP operations team.</Text>
+            </View>
+            <View style={styles.walletCard}> 
+              <Text style={styles.walletLabel}>Pending pay</Text>
+              <Text style={styles.walletBalance}>{formatMoney(pendingEarnings)}</Text>
+              <Text style={styles.walletText}>Orders currently in transit or waiting settlement.</Text>
+            </View>
+          </View>
+        ) : null}
+
+        {driverTab === 'profile' ? (
+          <View>
+            <Text style={styles.pageTitle}>Profile</Text>
+            <View style={styles.driverProfileCard}>
+              <View style={styles.driverProfileHeader}>
+                <View style={styles.driverProfileAvatarWrapper}>
+                  <Image source={imageSource(driverPhoto, logo)} style={styles.driverAvatarLarge} />
+                </View>
+                <View style={styles.driverProfileHeaderText}>
+                  <Text style={styles.driverProfileTitle}>{agent?.name || 'Driver profile'}</Text>
+                  <Text style={styles.driverProfileSubtitle}>{agent?.phone || 'No phone number'}</Text>
+                </View>
+              </View>
+              <View style={styles.driverProfileStatsRow}>
+                <View style={styles.driverProfileStatCard}>
+                  <Text style={styles.driverProfileStatValue}>{code}</Text>
+                  <Text style={styles.driverProfileStatLabel}>Driver code</Text>
+                </View>
+                <View style={styles.driverProfileStatCard}>
+                  <Text style={styles.driverProfileStatValue}>{rank.title}</Text>
+                  <Text style={styles.driverProfileStatLabel}>Rank</Text>
+                </View>
+              </View>
+              <View style={styles.driverProfileDetailsRow}>
+                <View style={styles.driverProfileDetailItem}>
+                  <Text style={styles.driverProfileLabel}>Next target</Text>
+                  <Text style={styles.driverProfileValue}>{rank.next}</Text>
+                </View>
+                <View style={styles.driverProfileDetailItem}>
+                  <Text style={styles.driverProfileLabel}>Completed</Text>
+                  <Text style={styles.driverProfileValue}>{completedCount}</Text>
+                </View>
+              </View>
+              <Pressable style={styles.primaryButton} onPress={onPickPhoto}>
+                <Ionicons name="camera-outline" size={18} color="#fff" />
+                <Text style={styles.primaryButtonText}>Upload profile image</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View style={styles.driverBottomNav}>
+        {tabs.map((tabItem) => {
+          const iconName = tabItem.id === 'home' ? 'home-outline'
+            : tabItem.id === 'active' ? 'bicycle-outline'
+            : tabItem.id === 'history' ? 'time-outline'
+            : tabItem.id === 'wallet' ? 'wallet-outline'
+            : 'person-outline';
+          const active = driverTab === tabItem.id;
+          return (
+            <Pressable
+              key={tabItem.id}
+              style={[styles.driverBottomNavButton, active && styles.driverBottomNavButtonActive]}
+              onPress={() => setDriverTab(tabItem.id)}
+            >
+              <Ionicons name={iconName} size={20} color={active ? brandRed : '#5f6770'} />
+              <Text style={[styles.driverBottomNavText, active && styles.driverBottomNavTextActive]}>{tabItem.title}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Modal visible={Boolean(driverDetailOpen && selectedOrder)} transparent animationType="slide">
+        <View style={styles.overlay}>
+          <View style={styles.orderDetailModal}>
+            <ScrollView style={{ width: '100%' }} contentContainerStyle={{ gap: 12 }}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Order details</Text>
+                <Pressable onPress={() => { setDriverDetailOpen(false); setSelectedOrder(null); }}>
+                  <Ionicons name="close" size={24} color="#29384d" />
+                </Pressable>
+              </View>
+              <Text style={styles.orderMeta}>Order {selectedOrder?.orderNo}</Text>
+              <Text style={styles.orderMeta}>{deliveryStatusLabels[selectedOrder?.status] || selectedOrder?.status}</Text>
+              <Text style={styles.orderMeta}>{selectedOrder?.customerName} • {selectedOrder?.customerPhone}</Text>
+              <Text style={styles.orderMeta}>{selectedOrder?.deliveryAddress}</Text>
               <View style={styles.driverItemsBox}>
-                {(order.items || []).slice(0, 3).map((item) => (
+                {(selectedOrder?.items || []).map((item) => (
                   <View key={item.id} style={styles.driverItemRow}>
-                    <Image source={{ uri: item.menuItem?.imageUrl || fallbackImage }} style={styles.driverItemImage} />
-                    <Text style={styles.driverItemName} numberOfLines={1}>{item.quantity} x {orderItemName(item)}</Text>
+                    <Text style={styles.driverItemName}>{item.quantity} x {orderItemName(item)}</Text>
+                    <Text style={styles.driverCommission}>{formatMoney(orderItemTotal(item))}</Text>
                   </View>
                 ))}
               </View>
-              <View style={styles.driverActionRow}>
-                {canAccept ? (
-                  <Pressable style={[styles.primaryButton, savingId === order.id && styles.disabled]} disabled={savingId === order.id} onPress={() => onAccept(order.id)}>
-                    <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                    <Text style={styles.primaryButtonText}>Accept delivery</Text>
-                  </Pressable>
-                ) : null}
-                {canDeliver ? (
-                  <Pressable style={[styles.primaryButton, savingId === order.id && styles.disabled]} disabled={savingId === order.id} onPress={() => onDeliver(order.id)}>
-                    <Ionicons name="flag-outline" size={18} color="#fff" />
-                    <Text style={styles.primaryButtonText}>Mark delivered</Text>
-                  </Pressable>
-                ) : null}
-                {!canAccept && !canDeliver ? <Text style={styles.driverHint}>Waiting for the next delivery action.</Text> : null}
+              {trackingMapUrl(selectedOrder) ? (
+                <Image source={imageSource(trackingMapUrl(selectedOrder))} style={styles.mapPreview} />
+              ) : null}
+              <View style={styles.field}> 
+                <Text style={styles.fieldLabel}>Driver latitude</Text>
+                <TextInput style={styles.input} value={driverTrackingUpdates.latitude} onChangeText={(value) => setDriverTrackingUpdates((current) => ({ ...current, latitude: value }))} keyboardType="numeric" />
               </View>
-            </View>
-          );
-        }) : (
-          <View style={styles.supportCard}>
-            <Ionicons name="receipt-outline" size={32} color={brandRed} />
-            <Text style={styles.supportTitle}>No assigned deliveries</Text>
-            <Text style={styles.supportText}>Pull down to refresh when a staff member assigns an order to your code.</Text>
+              <View style={styles.field}> 
+                <Text style={styles.fieldLabel}>Driver longitude</Text>
+                <TextInput style={styles.input} value={driverTrackingUpdates.longitude} onChangeText={(value) => setDriverTrackingUpdates((current) => ({ ...current, longitude: value }))} keyboardType="numeric" />
+              </View>
+              <View style={styles.field}> 
+                <Text style={styles.fieldLabel}>Delivery status</Text>
+                <TextInput style={styles.input} value={driverTrackingUpdates.status} onChangeText={(value) => setDriverTrackingUpdates((current) => ({ ...current, status: value }))} placeholder="e.g. OUT_FOR_DELIVERY" />
+              </View>
+              <Pressable style={styles.primaryButton} onPress={onUpdateTracking}>
+                <Ionicons name="location-outline" size={18} color="#fff" />
+                <Text style={styles.primaryButtonText}>Update location</Text>
+              </Pressable>
+              <Pressable style={[styles.softButton, { marginTop: 8 }]} onPress={() => { setDriverDetailOpen(false); setSelectedOrder(null); }}>
+                <Text style={styles.softButtonText}>Close</Text>
+              </Pressable>
+            </ScrollView>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -782,6 +921,11 @@ export default function App() {
   const [driverAgent, setDriverAgent] = useState(null);
   const [driverRequests, setDriverRequests] = useState([]);
   const [driverSavingId, setDriverSavingId] = useState('');
+  const [driverTab, setDriverTab] = useState('home');
+  const [selectedDriverOrder, setSelectedDriverOrder] = useState(null);
+  const [driverPhoto, setDriverPhoto] = useState(null);
+  const [driverTrackingUpdates, setDriverTrackingUpdates] = useState({ latitude: '', longitude: '', status: '' });
+  const [driverDetailOpen, setDriverDetailOpen] = useState(false);
   const [tab, setTab] = useState('home');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -924,7 +1068,7 @@ export default function App() {
 
   const bootstrap = async () => {
     try {
-      const [savedCustomer, savedFavorites, savedLanguage, savedActiveOrders, dismissedFlashSale, savedMode, savedDriverCode, savedSplashProducts, initialUrl] = await Promise.all([
+      const [savedCustomer, savedFavorites, savedLanguage, savedActiveOrders, dismissedFlashSale, savedMode, savedDriverCode, savedDriverPhoto, savedSplashProducts, initialUrl] = await Promise.all([
         AsyncStorage.getItem(customerKey),
         AsyncStorage.getItem(favoritesKey),
         AsyncStorage.getItem(languageKey),
@@ -944,6 +1088,9 @@ export default function App() {
         if (savedMode === 'driver') {
           loadDriverRequests(savedDriverCode).catch(() => {});
         }
+      }
+      if (savedDriverPhoto) {
+        setDriverPhoto(JSON.parse(savedDriverPhoto));
       }
       if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
       if (savedActiveOrders) setActiveOrders(JSON.parse(savedActiveOrders));
@@ -1036,7 +1183,8 @@ export default function App() {
     try {
       const response = await api.customerSession(customerForm);
       await saveCustomer(response);
-      await loadOrders(response.id);
+      await refreshApp();
+      setTab('home');
     } catch (error) {
       Alert.alert('ChopASAP', error.message);
     } finally {
@@ -1086,6 +1234,33 @@ export default function App() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateDriverTracking = async () => {
+    if (!selectedDriverOrder?.id) return;
+    const { latitude, longitude, status } = driverTrackingUpdates;
+    if (!latitude || !longitude) return Alert.alert('Tracking update', 'Please add both latitude and longitude.');
+    try {
+      const updated = await api.updateDriverLocation(driverCode, selectedDriverOrder.id, {
+        driverLatitude: Number(latitude),
+        driverLongitude: Number(longitude),
+        status: status || selectedDriverOrder.status
+      });
+      setSelectedDriverOrder(updated);
+      setDriverRequests((current) => current.map((order) => (order.id === updated.id ? updated : order)));
+      setDriverDetailOpen(false);
+      Alert.alert('ChopASAP', 'Driver location and status updated.');
+    } catch (error) {
+      Alert.alert('ChopASAP', error.message);
+    }
+  };
+
+  const pickDriverPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setDriverPhoto(asset.uri);
+    await AsyncStorage.setItem(driverPhotoKey, JSON.stringify(asset.uri));
   };
 
   const acceptDelivery = async (orderId) => {
@@ -1400,10 +1575,20 @@ export default function App() {
             code={driverCode}
             refreshing={refreshing}
             savingId={driverSavingId}
+            driverPhoto={driverPhoto}
+            selectedOrder={selectedDriverOrder}
+            driverTab={driverTab}
+            driverTrackingUpdates={driverTrackingUpdates}
+            setDriverTab={setDriverTab}
+            setSelectedOrder={setSelectedDriverOrder}
+            setDriverDetailOpen={setDriverDetailOpen}
+            setDriverTrackingUpdates={setDriverTrackingUpdates}
             onRefresh={refreshApp}
             onAccept={acceptDelivery}
             onDeliver={completeDelivery}
             onLogout={logoutDriver}
+            onPickPhoto={pickDriverPhoto}
+            onUpdateTracking={updateDriverTracking}
           />
         )}
       </SafeAreaView>
@@ -1441,7 +1626,7 @@ export default function App() {
                 {cart.length ? <Text style={styles.cartBadge}>{cart.reduce((sum, item) => sum + item.quantity, 0)}</Text> : null}
               </Pressable>
               <Pressable style={styles.profileButton} onPress={() => setProfileOpen(true)}>
-                {customer.profileImageUrl ? <Image source={{ uri: customer.profileImageUrl }} style={styles.profileButtonImage} /> : <Ionicons name="person-outline" size={21} color="#29384d" />}
+                {customer.profileImageUrl ? <Image source={imageSource(customer.profileImageUrl)} style={styles.profileButtonImage} /> : <Ionicons name="person-outline" size={21} color="#29384d" />}
               </Pressable>
             </View>
           </View>
@@ -1606,7 +1791,7 @@ function LegacyHomeView({ items, favorites, promotions, activeOrders, flashSale,
       </View>
 
       <View style={styles.promoCard}>
-        {featuredPromotion?.imageUrl ? <Image source={{ uri: featuredPromotion.imageUrl }} style={styles.promoImage} /> : <View style={styles.promoImageFallback}><Ionicons name="sparkles-outline" size={32} color={brandRed} /></View>}
+        {featuredPromotion?.imageUrl ? <Image source={imageSource(featuredPromotion.imageUrl)} style={styles.promoImage} /> : <View style={styles.promoImageFallback}><Ionicons name="sparkles-outline" size={32} color={brandRed} /></View>}
         <View style={styles.promoBody}>
           <Text style={styles.promoEyebrow}>Featured promotion</Text>
           <Text style={styles.promoTitle}>{featuredPromotion?.title || 'Promote on ChopASAP'}</Text>
@@ -1763,7 +1948,7 @@ function HomeView({ items, menuCategories, categoryLimit, favorites, promotions,
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promotionRail}>
             {promotions.slice(0, 4).map((promotion) => (
               <Pressable key={promotion.id || promotion.title} style={styles.promotionTile} onPress={promotion.ctaUrl ? () => openExternalUrl(promotion.ctaUrl) : undefined}>
-                {promotion.imageUrl ? <Image source={{ uri: promotion.imageUrl }} style={styles.promotionTileImage} /> : <View style={styles.promotionTileFallback}><Ionicons name="sparkles-outline" size={24} color={brandRed} /></View>}
+                {promotion.imageUrl ? <Image source={imageSource(promotion.imageUrl)} style={styles.promotionTileImage} /> : <View style={styles.promotionTileFallback}><Ionicons name="sparkles-outline" size={24} color={brandRed} /></View>}
                 <Text style={styles.promoEyebrow}>{t(language, 'offer')}</Text>
                 <Text style={styles.promoTitle} numberOfLines={2}>{promotion.title}</Text>
                 <Text style={styles.cardCopy} numberOfLines={2}>{promotion.description}</Text>
@@ -1820,7 +2005,7 @@ function PromotionCarousel({ slides, onAction }) {
               </View>
             </View>
             <View style={styles.promotionHeroMedia}>
-              {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.promotionHeroImage} resizeMode="cover" /> : <Ionicons name="bag-handle-outline" size={30} color={brandRed} />}
+              {slide.imageUrl ? <Image source={imageSource(slide.imageUrl)} style={styles.promotionHeroImage} resizeMode="cover" /> : <Ionicons name="bag-handle-outline" size={30} color={brandRed} />}
             </View>
           </Pressable>
         ))}
@@ -1934,7 +2119,7 @@ function CategoryMealSection({ category, favorites, onOpen, onFavorite, onShare 
 function FeaturedMealCard({ item, favorite, onOpen, onFavorite, onShare }) {
   return (
     <Pressable style={styles.featuredMealCard} onPress={() => onOpen(item)}>
-      <Image source={{ uri: item.imageUrl || fallbackImage }} style={styles.featuredMealImage} />
+      <Image source={imageSource(item.imageUrl, fallbackImage)} style={styles.featuredMealImage} />
       <Pressable style={styles.shareButton} onPress={() => onShare(item)}>
         <Ionicons name="share-social-outline" size={18} color="#29384d" />
       </Pressable>
@@ -2058,7 +2243,7 @@ function OrderTrackingCard({ order }) {
       </View>
 
       {mapUrl ? (
-        <Image source={{ uri: mapUrl }} style={styles.mapPreview} />
+        <Image source={imageSource(mapUrl)} style={styles.mapPreview} />
       ) : (
         <View style={styles.mapPreview}>
           <View style={styles.routeLine} />
@@ -2075,7 +2260,7 @@ function OrderTrackingCard({ order }) {
       </View>
 
       <View style={styles.driverBox}>
-        {order.driverPhotoUrl ? <Image source={{ uri: order.driverPhotoUrl }} style={styles.driverPhoto} /> : <View style={styles.driverPhotoFallback}><Ionicons name="person" size={18} color="#29384d" /></View>}
+        {order.driverPhotoUrl ? <Image source={imageSource(order.driverPhotoUrl)} style={styles.driverPhoto} /> : <View style={styles.driverPhotoFallback}><Ionicons name="person" size={18} color="#29384d" /></View>}
         <View style={styles.driverInfo}>
           <Text style={styles.driverName}>{order.driverName || 'Driver not assigned yet'}</Text>
           <Text style={styles.driverMeta}>{order.vehicleInfo || 'Vehicle details will appear here'}</Text>
@@ -2128,7 +2313,7 @@ function OrderDetailModal({ visible, order, language, onClose }) {
             {items.length ? items.map((item, index) => (
               <View key={item.id || `${item.menuItemId || item.name}-${index}`} style={styles.orderDetailItemBlock}>
                 <View style={styles.orderDetailItem}>
-                  <Image source={{ uri: item.menuItem?.imageUrl || item.imageUrl || fallbackImage }} style={styles.orderDetailImage} />
+                  <Image source={imageSource(item.menuItem?.imageUrl || item.imageUrl, fallbackImage)} style={styles.orderDetailImage} />
                   <View style={styles.checkoutItemInfo}>
                     <Text style={styles.checkoutItemName}>{orderItemName(item)}</Text>
                     {item.variationName ? <Text style={styles.checkoutItemVariation}>{item.variationName}</Text> : null}
@@ -2198,7 +2383,7 @@ function ProfileView({ customer, customerForm, setCustomerForm, language, choose
     <View>
       <View style={styles.profileHeader}>
         <Pressable onPress={onPickAvatar}>
-          {customer.profileImageUrl ? <Image source={{ uri: customer.profileImageUrl }} style={styles.avatar} /> : <View style={styles.avatarFallback}><Ionicons name="person" size={34} color="#fff" /></View>}
+          {customer.profileImageUrl ? <Image source={imageSource(customer.profileImageUrl)} style={styles.avatar} /> : <View style={styles.avatarFallback}><Ionicons name="person" size={34} color="#fff" /></View>}
           <View style={styles.avatarEditBadge}>
             <Ionicons name="camera" size={14} color="#fff" />
           </View>
@@ -2282,7 +2467,7 @@ function ProfileModal({ visible, onClose, ...profileProps }) {
 function CheckoutItem({ item, address, updateQty }) {
   return (
     <View style={styles.checkoutItem}>
-      <Image source={{ uri: item.imageUrl || fallbackImage }} style={styles.checkoutItemImage} />
+      <Image source={imageSource(item.imageUrl, fallbackImage)} style={styles.checkoutItemImage} />
       <View style={styles.checkoutItemInfo}>
         <Text style={styles.checkoutItemName} numberOfLines={1}>{item.name}</Text>
         {item.variationName ? <Text style={styles.checkoutItemVariation} numberOfLines={1}>{item.variationName}</Text> : null}
@@ -2580,7 +2765,7 @@ function PromotionModal({ visible, language, form, setForm, saving, onPickImage,
           <Field label="Promotion title" value={form.title} onChangeText={(title) => setForm({ ...form, title })} />
           <Field label="Description" value={form.description} onChangeText={(description) => setForm({ ...form, description })} multiline />
           <View style={styles.uploadCard}>
-            {form.imageUrl ? <Image source={{ uri: form.imageUrl }} style={styles.uploadPreview} /> : <Ionicons name="image-outline" size={28} color={brandRed} />}
+            {form.imageUrl ? <Image source={imageSource(form.imageUrl)} style={styles.uploadPreview} /> : <Ionicons name="image-outline" size={28} color={brandRed} />}
             <Pressable style={styles.secondaryButton} onPress={onPickImage}>
               <Text style={styles.secondaryButtonText}>{form.imageUrl ? 'Change image' : 'Upload image'}</Text>
             </Pressable>
@@ -2664,12 +2849,12 @@ const styles = StyleSheet.create({
   languageOptionText: { fontWeight: '900', color: '#151923' },
   languageOptionTextActive: { color: '#fff' },
   gate: { flex: 1, padding: 0, backgroundColor: '#eef7f9' },
-  gateScroll: { flexGrow: 1, justifyContent: 'center' },
-  gateCard: { overflow: 'hidden', width: '100%', backgroundColor: '#fff', shadowColor: '#171a1f', shadowOpacity: 0.08, shadowRadius: 28, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
+  gateScroll: { flexGrow: 1 },
+  gateCard: { overflow: 'hidden', width: '100%', minHeight: '100%', flex: 1, backgroundColor: '#fff', shadowColor: '#171a1f', shadowOpacity: 0.08, shadowRadius: 28, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
   gateHeader: { alignItems: 'flex-start', backgroundColor: '#fff', padding: 24 },
   gateBadgeText: { fontSize: 12, fontWeight: '900', color: brandRed, letterSpacing: 0.6, textTransform: 'uppercase' },
-  gateTitle: { marginTop: 18, color: '#151923', fontSize: 32, fontWeight: '900', lineHeight: 40 },
-  gateCopy: { marginTop: 10, color: '#5f6770', fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  gateTitle: { marginTop: 18, color: '#151923', fontSize: 28, fontWeight: '900', lineHeight: 36 },
+  gateCopy: { marginTop: 10, color: '#5f6770', fontSize: 15, lineHeight: 22, fontWeight: '700' },
   gateArtwork: { width: '100%', alignItems: 'center', paddingVertical: 14 },
   stepBar: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 22 },
   stepSegment: { flex: 1, height: 4, borderRadius: 999, backgroundColor: '#f0f4f7' },
@@ -2685,8 +2870,8 @@ const styles = StyleSheet.create({
   stepTitle: { marginTop: 20, color: '#151923', fontSize: 26, fontWeight: '900', lineHeight: 34 },
   stepSubtitle: { marginTop: 10, color: '#5f6770', fontSize: 15, lineHeight: 22, fontWeight: '600' },
   stepCard: { padding: 24, gap: 18, backgroundColor: '#fdfdfd' },
-  optionalText: { color: '#5f6770', fontSize: 13, lineHeight: 20, marginTop: -8, marginBottom: 10, fontWeight: '700' },
-  formBody: { padding: 24, gap: 16 },
+  optionalText: { color: '#5f6770', fontSize: 13, lineHeight: 20, marginTop: 0, marginBottom: 10, fontWeight: '700' },
+  formBody: { flex: 1, justifyContent: 'space-between', padding: 24, gap: 16 },
   field: { borderWidth: 1, borderColor: '#e4e7eb', backgroundColor: '#f8fbfc', borderRadius: 18, padding: 16 },
   fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   fieldIcon: { marginTop: 2 },
@@ -2721,6 +2906,46 @@ const styles = StyleSheet.create({
   driverItemName: { flex: 1, color: '#151923', fontSize: 12, fontWeight: '800' },
   driverActionRow: { gap: 8 },
   driverHint: { color: '#6d6f76', fontSize: 12, fontWeight: '800' },
+  driverProfileRow: { flexDirection: 'row', gap: 16, alignItems: 'center', flex: 1 },
+  driverAvatarCard: { width: 96, minHeight: 96, borderRadius: 24, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 10, shadowColor: '#1b2431', shadowOpacity: 0.05, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 4 },
+  driverAvatar: { width: 72, height: 72, borderRadius: 18, backgroundColor: '#f1f5f8' },
+  uploadPhotoButton: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: '#fde2e4', backgroundColor: '#fff8f8' },
+  uploadPhotoText: { color: brandRed, fontWeight: '900', fontSize: 12 },
+  driverHeaderDetails: { flex: 1, justifyContent: 'center' },
+  driverBadge: { marginTop: 8, color: '#151923', fontWeight: '900', fontSize: 13 },
+  driverBadgeMeta: { marginTop: 2, color: '#6d6f76', fontSize: 12, fontWeight: '700' },
+  driverProfileHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#edf0f2' },
+  driverProfileAvatarWrapper: { width: 88, height: 88, borderRadius: 26, backgroundColor: '#f7fbfc', alignItems: 'center', justifyContent: 'center' },
+  driverAvatarLarge: { width: 76, height: 76, borderRadius: 22, backgroundColor: '#eef3f4' },
+  driverProfileHeaderText: { flex: 1 },
+  driverProfileTitle: { fontSize: 20, fontWeight: '900', color: '#151923' },
+  driverProfileSubtitle: { marginTop: 4, color: '#6d6f76', fontWeight: '700' },
+  driverProfileStatsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  driverProfileStatCard: { flex: 1, borderRadius: 18, backgroundColor: '#f7fbfc', padding: 14, alignItems: 'center' },
+  driverProfileStatValue: { color: '#151923', fontSize: 16, fontWeight: '900' },
+  driverProfileStatLabel: { marginTop: 6, color: '#6d6f76', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  driverProfileDetailsRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  driverProfileDetailItem: { flex: 1, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 14 },
+  driverBottomNav: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e6eaee', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 28 : 10, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: -3 }, elevation: 12 },
+  driverBottomNavButton: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
+  driverBottomNavButtonActive: { backgroundColor: '#fff4f5' },
+  driverBottomNavText: { marginTop: 2, fontSize: 11, color: '#5f6770', fontWeight: '900' },
+  driverBottomNavTextActive: { color: brandRed },
+  driverHomeGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 14 },
+  driverMetricCard: { flex: 1, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 16 },
+  driverMetricValue: { color: '#151923', fontSize: 24, fontWeight: '900' },
+  driverMetricLabel: { marginTop: 8, color: '#6d6f76', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  walletCard: { borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 18, marginBottom: 12 },
+  walletLabel: { color: '#6d6f76', fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
+  walletBalance: { marginTop: 8, color: '#151923', fontSize: 28, fontWeight: '900' },
+  walletText: { marginTop: 8, color: '#6d6f76', fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  driverProfileCard: { borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 18, gap: 10 },
+  driverProfileLabel: { color: '#6d6f76', fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
+  driverProfileValue: { color: '#151923', fontWeight: '900', fontSize: 15 },
+  driverMoreItems: { color: '#6d6f76', fontSize: 12, fontWeight: '900', marginTop: 6 },
+  orderDetailModal: { width: '100%', maxWidth: 520, backgroundColor: '#fff', borderRadius: 28, padding: 18, maxHeight: '90%' },
+  modalHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mapPreview: { width: '100%', height: 160, borderRadius: 18, marginTop: 8, backgroundColor: '#f0f4f7' },
   detailAddButton: { flex: 1 },
   disabled: { opacity: 0.55 },
   header: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },

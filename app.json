@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "802551f6-6a54-4017-84ae-21c2600f74ab"
+      }
+    },
+    "android": {
+      "package": "com.yuvcarl.restaurantmanagementsystem"
+    }
+  }
+}
