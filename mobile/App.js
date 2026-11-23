@@ -29,10 +29,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import { API_URL, api, uploadCustomerAvatar, uploadPromotionImage } from './src/api';
 import { t } from './src/i18n';
+import AuthScreens, { AuthSplash } from './src/AuthScreens';
 
 const logo = require('./assets/chopasap-logo.png');
 const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
-const portalUrl = process.env.EXPO_PUBLIC_PORTAL_URL || 'https://your-domain.com';
+const portalUrl = process.env.EXPO_PUBLIC_PORTAL_URL || 'https://www.app.chopasap.com';
 const brandRed = '#d71920';
 const customerKey = 'chopasap_mobile_customer';
 const favoritesKey = 'chopasap_mobile_favorites';
@@ -389,65 +390,6 @@ function LanguagePrompt({ visible, language, onChoose }) {
         </View>
       </View>
     </Modal>
-  );
-}
-
-function CustomerGate({ language, form, setForm, saving, onSubmit, onDriverMode }) {
-  const nameComplete = form.name.trim().length >= 2;
-  const phoneComplete = form.phone.trim().length >= 6;
-  const canContinue = nameComplete && phoneComplete;
-  const buttonLabel = saving ? t(language, 'checking') : 'Start';
-
-  return (
-    <ScrollView style={styles.gate} contentContainerStyle={styles.gateScroll} showsVerticalScrollIndicator={false}>
-      <View style={styles.gateCard}>
-        <View style={styles.gateHeader}>
-          <View style={styles.gateArtwork}>
-            <Svg width="168" height="168" viewBox="0 0 168 168">
-              <Rect x="0" y="0" width="168" height="168" rx="36" fill="#eef8fb" />
-              <Path d="M76 40c-24 0-44 20-44 44 0 12 5 22 13 30v24h62v-24c8-8 13-18 13-30 0-24-20-44-44-44Z" fill="#fff" />
-              <Circle cx="84" cy="80" r="18" fill="#0f172a" opacity="0.9" />
-              <Path d="M78 106c0-6 6-10 10-10s10 4 10 10" fill="#0f172a" />
-              <Path d="M40 128h88" stroke="#d71920" strokeWidth="10" strokeLinecap="round" opacity="0.75" />
-            </Svg>
-          </View>
-          <Text style={styles.gateTitle}>Enter details</Text>
-          <Text style={styles.gateCopy}>Name, phone, address.</Text>
-        </View>
-        <View style={styles.formBody}>
-          <Field
-            icon="person-outline"
-            label="Name"
-            placeholder="Amina N."
-            value={form.name}
-            onChangeText={(value) => setForm({ ...form, name: value })}
-            keyboardType="default"
-          />
-          <Field
-            icon="call-outline"
-            label="Phone"
-            placeholder="671 286 999"
-            value={form.phone}
-            onChangeText={(value) => setForm({ ...form, phone: value })}
-            keyboardType="phone-pad"
-          />
-          <Field
-            icon="location-outline"
-            label="Address (optional)"
-            placeholder="Bonanjo, near..."
-            value={form.address}
-            onChangeText={(value) => setForm({ ...form, address: value })}
-            keyboardType="default"
-          />
-          <Pressable style={[styles.primaryButton, (!canContinue || saving) && styles.disabled]} disabled={!canContinue || saving} onPress={onSubmit}>
-            <Text style={styles.primaryButtonText}>{buttonLabel}</Text>
-          </Pressable>
-          <Pressable style={styles.softButton} onPress={onDriverMode}>
-            <Text style={styles.softButtonText}>Driver mode</Text>
-          </Pressable>
-        </View>
-      </View>
-    </ScrollView>
   );
 }
 
@@ -1561,7 +1503,7 @@ export default function App() {
     setCustomerForm({ name: '', phone: '', email: '', address: '', profileImageUrl: '', referralCode: '' });
   };
 
-  if (loading) return <Loader label="Loading ChopASAP" products={splashProducts} />;
+  if (loading) return <AuthSplash />;
 
   if (appMode === 'driver') {
     return (
@@ -1596,12 +1538,12 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <SafeAreaView style={styles.appSafe}>
+    <SafeAreaView edges={customer ? undefined : ['top']} style={[styles.safe, !customer && { backgroundColor: '#fff', paddingTop: 0 }]}>
+      <SafeAreaView edges={customer ? undefined : ['bottom']} style={[styles.appSafe, !customer && { backgroundColor: '#fff' }]}>
         <StatusBar style="dark" />
         <LanguagePrompt visible={languagePrompt} language={language} onChoose={chooseLanguage} />
         {!customer ? (
-          <CustomerGate language={language} form={customerForm} setForm={setCustomerForm} saving={saving} onSubmit={submitCustomer} onDriverMode={openDriverMode} />
+          <AuthScreens items={items} language={language} form={customerForm} setForm={setCustomerForm} saving={saving} onSubmit={submitCustomer} onDriverMode={openDriverMode} />
         ) : (
           <>
           <View style={styles.header}>

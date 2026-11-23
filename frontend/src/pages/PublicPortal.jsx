@@ -36,6 +36,7 @@ import clsx from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import BuyerAuth, { BuyerSplash } from '../components/BuyerAuth.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Loading } from '../components/Loading.jsx';
 import { apiBaseUrl, endpoints } from '../services/api.js';
@@ -703,43 +704,6 @@ function FlashSalePopup({ code, open, onClose, onUse }) {
   );
 }
 
-function CustomerGate({ form, saving, onChange, onSubmit, language }) {
-  const complete = form.name.trim().length >= 2 && form.phone.trim().length >= 6;
-  return (
-    <div className="fixed inset-0 z-[90] overflow-y-auto bg-[#eaf5f8] px-4 py-8">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md items-center">
-        <div className="w-full overflow-hidden rounded-[1.75rem] bg-white shadow-2xl">
-          <div className="bg-[#151923] px-6 pb-7 pt-6 text-center text-white">
-            <img className="mx-auto h-16 w-16 rounded-2xl object-cover shadow-lg" src={chopasapLogo} alt="ChopASAP" />
-            <h1 className="mt-4 text-2xl font-black leading-8">{tr(language, 'welcome')}</h1>
-            <p className="mt-2 text-sm font-semibold text-white/70">{tr(language, 'enterDetails')}</p>
-          </div>
-          <form className="p-6 sm:p-8" onSubmit={onSubmit}>
-            <div className="grid gap-4">
-              <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
-                <span className="text-xs font-black uppercase text-[#d71920]">{tr(language, 'name')}</span>
-                <input className="mt-2 w-full bg-transparent text-lg font-black text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: Amina N." value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} minLength={2} required />
-              </label>
-              <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
-                <span className="text-xs font-black uppercase text-[#d71920]">{tr(language, 'phone')}</span>
-                <input className="mt-2 w-full bg-transparent text-lg font-black text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: 671286999" type="tel" inputMode="tel" value={form.phone} onChange={(event) => onChange({ ...form, phone: event.target.value })} minLength={6} required />
-              </label>
-              <label className="block rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 focus-within:border-[#d71920] focus-within:bg-white">
-                <span className="text-xs font-black uppercase text-stone-500">{tr(language, 'addressOptional')}</span>
-                <input className="mt-2 w-full bg-transparent text-base font-semibold text-[#151923] outline-none placeholder:text-[#a8b1ba]" placeholder="Example: Bonanjo, near..." value={form.address} onChange={(event) => onChange({ ...form, address: event.target.value })} />
-              </label>
-            </div>
-            {form.referralCode ? <p className="mt-4 rounded-2xl bg-[#fff4d7] px-4 py-3 text-center text-xs font-black text-[#8b5f00]">{tr(language, 'referralActive')}</p> : null}
-            <button className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white shadow-[0_14px_28px_rgba(215,25,32,0.22)] disabled:opacity-60" disabled={saving}>
-              {saving ? tr(language, 'checking') : complete ? tr(language, 'continue') : tr(language, 'enterNamePhone')}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function NotificationPanel({ open, notifications, soundEnabled, permission, onClose, onEnable, onToggleSound }) {
   if (!open) return null;
   return (
@@ -1164,74 +1128,6 @@ function BottomNav({ activeTab, setActiveTab, language = 'en', activeOrderCount 
         <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} language={language} badge={tab.id === 'orders' ? activeOrderCount : 0} />
       ))}
     </nav>
-  );
-}
-
-function PublicSplash({ customer, language = 'en' }) {
-  const [messageIndex, setMessageIndex] = useState(0);
-  const [loadingIndex, setLoadingIndex] = useState(0);
-  const [visibleProducts] = useState(() => freshSplashProducts(storedSplashProducts()));
-  const firstName = customer?.name?.split(' ')?.[0];
-
-  useEffect(() => {
-    const messageTimer = window.setInterval(() => setMessageIndex((current) => (current + 1) % splashMessages.length), 1700);
-    const loadingTimer = window.setInterval(() => setLoadingIndex((current) => (current + 1) % splashLoadingMessages.length), 2400);
-    return () => {
-      window.clearInterval(messageTimer);
-      window.clearInterval(loadingTimer);
-    };
-  }, []);
-
-  return (
-    <main className="public-splash fixed inset-0 z-[100] flex min-h-screen items-center justify-center overflow-hidden bg-[#fff8ef] px-5 py-8 text-[#151923]" role="status" aria-live="polite" aria-label={splashLoadingMessages[loadingIndex]}>
-      <div className="public-splash-bg" aria-hidden="true" />
-      <div className="relative grid w-full max-w-6xl items-center gap-8 md:grid-cols-[0.92fr_1.08fr]">
-        <section className="public-splash-copy text-center md:text-left">
-          <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-[28px] bg-white shadow-[0_24px_60px_rgba(215,25,32,0.18)] md:mx-0">
-            <img className="h-20 w-20 rounded-3xl object-cover" src={chopasapLogo} alt="ChopASAP" />
-          </div>
-          <p className="mt-6 text-sm font-black uppercase tracking-[0.18em] text-[#d71920]">CHOP ASAP</p>
-          <h1 className="mt-3 text-4xl font-black leading-tight text-[#151923] md:text-6xl">
-            {firstName ? `Welcome back, ${firstName}.` : language === 'fr' ? 'Bienvenue.' : 'Welcome.'}
-          </h1>
-          <p className="mt-4 max-w-xl text-lg font-semibold leading-8 text-[#4d5964] md:text-xl">
-            {firstName ? "We're finding your favorite meals..." : "Let's discover great food near you."}
-          </p>
-          <div className="mt-8 rounded-3xl bg-white/80 p-4 shadow-[0_18px_50px_rgba(63,45,24,0.08)] backdrop-blur">
-            <p className="public-splash-message text-lg font-black text-[#151923]">{splashMessages[messageIndex]}</p>
-            <p className="mt-2 text-sm font-semibold text-[#667085]">{splashLoadingMessages[loadingIndex]}</p>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#ffe2b4]">
-              <span className="public-splash-progress block h-full rounded-full bg-[#d71920]" />
-            </div>
-          </div>
-        </section>
-
-        <section className="public-splash-stage" aria-hidden="true">
-          <div className="public-food-card public-food-card-one">
-            <img src={visibleProducts[0].imageUrl} alt="" loading="eager" />
-            <span>{visibleProducts[0].name}</span>
-          </div>
-          <div className="public-food-card public-food-card-two">
-            <img src={visibleProducts[1].imageUrl} alt="" loading="eager" />
-            <span>{visibleProducts[1].name}</span>
-          </div>
-          <div className="public-food-card public-food-card-three">
-            <img src={visibleProducts[2].imageUrl} alt="" loading="eager" />
-            <span>{visibleProducts[2].name}</span>
-          </div>
-          <div className="public-route-card">
-            <div className="public-route-line"><span /></div>
-            <div className="public-route-scooter"><Truck size={22} /></div>
-            <div className="public-route-points">
-              <span><MapPin size={15} /> Restaurant</span>
-              <span><Home size={15} /> Doorstep</span>
-            </div>
-          </div>
-          <div className="public-splash-token public-token-one"><Sparkles size={18} /> Fresh</div>
-          <div className="public-splash-token public-token-two"><Star size={18} /> Trusted</div>
-        </section>
-      </div>
-    </main>
   );
 }
 
@@ -1960,7 +1856,8 @@ export default function PublicPortal() {
     setPromotionOpen(true);
   };
 
-  if (loading) return <PublicSplash customer={customer} language={language} />;
+  if (loading) return <BuyerSplash />;
+  if (!customer) return <BuyerAuth form={customerForm} saving={customerSaving} onChange={setCustomerForm} onSubmit={submitCustomerSession} items={items} />;
   if (error || !data) return <EmptyState title="Menu unavailable" message="The ordering portal could not load the menu." onRetry={refetch} />;
 
   const renderMeals = (list) => (
@@ -1975,7 +1872,6 @@ export default function PublicPortal() {
     <div className="min-h-screen bg-[#eaf5f8] text-stone-950">
       <div className="mx-auto min-h-screen max-w-7xl bg-[#eef8fa]">
         <LanguagePrompt open={languagePromptOpen} language={language} onChoose={chooseLanguage} />
-        {!customer ? <CustomerGate form={customerForm} saving={customerSaving} onChange={setCustomerForm} onSubmit={submitCustomerSession} language={language} /> : null}
         {showInstallPrompt ? <InstallAppPrompt canInstall={Boolean(installPrompt)} onInstall={installApp} onDismiss={dismissInstallPrompt} /> : null}
         <header className="relative z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
           {isFocusedPage ? (

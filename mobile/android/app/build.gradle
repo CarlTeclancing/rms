@@ -92,7 +92,7 @@ android {
         applicationId 'com.chopasap.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        versionCode 2
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
@@ -104,15 +104,29 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            def uploadStoreFile = project.findProperty('CHOPASAP_UPLOAD_STORE_FILE') ?: System.getenv('CHOPASAP_UPLOAD_STORE_FILE')
+            def uploadStorePassword = project.findProperty('CHOPASAP_UPLOAD_STORE_PASSWORD') ?: System.getenv('CHOPASAP_UPLOAD_STORE_PASSWORD')
+            def uploadKeyAlias = project.findProperty('CHOPASAP_UPLOAD_KEY_ALIAS') ?: System.getenv('CHOPASAP_UPLOAD_KEY_ALIAS')
+            def uploadKeyPassword = project.findProperty('CHOPASAP_UPLOAD_KEY_PASSWORD') ?: System.getenv('CHOPASAP_UPLOAD_KEY_PASSWORD')
+
+            if (uploadStoreFile && uploadStorePassword && uploadKeyAlias && uploadKeyPassword) {
+                storeFile file(uploadStoreFile)
+                storePassword uploadStorePassword
+                keyAlias uploadKeyAlias
+                keyPassword uploadKeyPassword
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            if (!signingConfigs.release.storeFile) {
+                throw new GradleException("Release signing is not configured. Set CHOPASAP_UPLOAD_STORE_FILE, CHOPASAP_UPLOAD_STORE_PASSWORD, CHOPASAP_UPLOAD_KEY_ALIAS, and CHOPASAP_UPLOAD_KEY_PASSWORD.")
+            }
+            signingConfig signingConfigs.release
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

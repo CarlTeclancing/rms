@@ -8,9 +8,9 @@
     "scheme": "chopasap",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/expo-app-icon.png",
+      "image": "./assets/auth-brand.png",
       "resizeMode": "contain",
-      "backgroundColor": "#eaf5f8"
+      "backgroundColor": "#ffffff"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -24,7 +24,8 @@
         "foregroundImage": "./assets/expo-app-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.chopasap.mobile"
+      "package": "com.chopasap.mobile",
+      "versionCode": 2
     },
     "extra": {
       "eas": {

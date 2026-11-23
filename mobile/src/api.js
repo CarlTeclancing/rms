@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL;
+const productionApiUrl = 'https://rms-ruddy-nine.vercel.app/api';
 
 function getExpoHost() {
   const hostUri =
@@ -18,7 +19,7 @@ function getApiUrl() {
   }
 
   if (Platform.OS === 'web') {
-    return configuredApiUrl || 'http://localhost:5000/api';
+    return configuredApiUrl || productionApiUrl;
   }
 
   const expoHost = getExpoHost();
@@ -27,10 +28,10 @@ function getApiUrl() {
   }
 
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000/api';
+    return productionApiUrl;
   }
 
-  return 'http://localhost:5000/api';
+  return productionApiUrl;
 }
 
 export const API_URL = getApiUrl();
