@@ -1,3 +1,4 @@
+import { orderStatusLabels } from '../../../shared/orderExperience.js';
 import { ClipboardList, MapPin, Phone, RefreshCw, Truck, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -27,23 +28,29 @@ const statusStyles = {
   CANCELLED: 'bg-rose-50 text-rose-700'
 };
 
-const formatStatus = (status = 'PENDING') => status.replaceAll('_', ' ');
+const formatStatus = (status = 'PENDING') => orderStatusLabels[status] || status.replaceAll('_', ' ');
 
 export default function OnlineOrders() {
   const { data, loading, error, refetch, setData } = useApi(() => endpoints.onlineOrders(), []);
   const { data: agentData, refetch: refetchAgents } = useApi(() => endpoints.deliveryAgents(), []);
   const [updatingId, setUpdatingId] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [trackingDrafts, setTrackingDrafts] = useState({});
   const [driverDrafts, setDriverDrafts] = useState({});
   const [agentForm, setAgentForm] = useState({ code: '', name: '', phone: '', vehicleInfo: '', photoUrl: '' });
   const orders = data?.items || [];
+  const visibleOrders = orders.filter(order => (statusFilter === 'ALL' || order.status === statusFilter) && `${order.orderNo} ${order.customerName} ${order.customerPhone}`.toLowerCase().includes(search.toLowerCase()) && (!fromDate || new Date(order.createdAt) >= new Date(fromDate + 'T00:00:00')) && (!toDate || new Date(order.createdAt) <= new Date(toDate + 'T23:59:59.999')));
   const agents = agentData?.items || [];
   const activeOrders = orders.filter((order) => !['DELIVERED', 'CANCELLED'].includes(order.status));
   const totalRevenue = orders.filter((order) => order.status === 'DELIVERED').reduce((sum, order) => sum + Number(order.total || 0), 0);
 
   useEffect(() => {
     const socket = io(apiBaseUrl.replace(/\/api\/?$/, ''), { transports: ['websocket'], reconnection: true });
-    socket.on('dispatch:order-updated', () => {
+    socket.on('dispatch:order-updated', (order) => {
+      if (order.status === 'PENDING') toast.success(`Incoming order ${order.orderNo}`);
       refetch();
     });
     socket.on('order:updated', (order) => {
@@ -52,10 +59,12 @@ export default function OnlineOrders() {
         items: (current?.items || []).map((entry) => (entry.id === order.id ? { ...entry, ...order } : entry))
       }));
     });
-    return () => socket.disconnect();
+    const poll = setInterval(refetch, 30000);
+    return () => { clearInterval(poll); socket.disconnect(); };
   }, [refetch, setData]);
 
   const updateOrderStatus = async (id, status) => {
+    if (status === 'CANCELLED' && !window.confirm('Cancel this order?')) return;
     setUpdatingId(id);
     try {
       await endpoints.updateOnlineOrderStatus(id, { status });
@@ -175,9 +184,15 @@ export default function OnlineOrders() {
         </div>
       </section>
 
-      {orders.length ? (
+      <section className="card mb-5 grid gap-3 p-4 sm:grid-cols-4">
+        <label className="label">Search orders<input className="input mt-2" placeholder="Reference, name or phone" value={search} onChange={e => setSearch(e.target.value)} /></label>
+        <label className="label">Status<select className="input mt-2" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="ALL">All statuses</option>{statuses.map(status => <option key={status} value={status}>{formatStatus(status)}</option>)}</select></label>
+        <label className="label">From date<input className="input mt-2" type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} /></label>
+        <label className="label">To date<input className="input mt-2" type="date" value={toDate} onChange={e => setToDate(e.target.value)} /></label>
+      </section>
+      {visibleOrders.length ? (
         <div className="grid gap-4">
-          {orders.map((order) => (
+          {visibleOrders.map((order) => (
             <article key={order.id} className="card p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
@@ -191,7 +206,7 @@ export default function OnlineOrders() {
                     {new Date(order.createdAt).toLocaleString()}
                   </p>
                   <div className="mt-3 grid gap-2 text-sm font-semibold text-stone-700 sm:grid-cols-2">
-                    <span>{order.customerName}</span>
+                    <span>{order.customerName}</span><a className="text-brand-500 underline" target="_blank" rel="noreferrer" href={`https://wa.me/${String(order.customerPhone).replace(/\D/g, '')}?text=${encodeURIComponent(`Hello ${order.customerName}, regarding order ${order.orderNo}.`)}`}>Contact on WhatsApp</a>
                     <span className="flex items-center gap-2"><Phone size={15} /> {order.customerPhone}</span>
                     <span className="flex items-start gap-2 sm:col-span-2"><MapPin className="mt-0.5 shrink-0" size={15} /> {order.deliveryAddress}</span>
                     {order.deliveryNote ? <span className="sm:col-span-2 text-stone-500">Note: {order.deliveryNote}</span> : null}

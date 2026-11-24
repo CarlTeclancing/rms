@@ -1,3 +1,5 @@
+import { signCustomerSession } from '../middleware/customerSession.js';
+import { validateOrderInput, orderIdentity, configuredDeliveryFee } from '../services/orderValidation.service.js';
 import { prisma } from '../config/prisma.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/apiError.js';
@@ -55,6 +57,7 @@ const createOrderTrackingEvent = async (tx, order, status, options = {}) => {
       metadata: options.metadata || {}
     }
   });
+  if (options.notify === false) return;
   await tx.notification.create({
     data: {
       onlineOrderId: order.id,
@@ -109,6 +112,7 @@ const driverCommissionFor = (order) => Number((Number(order.deliveryFee || 0) * 
 const serializeCustomer = (customer, orderCount = 0) => ({
   ...customer,
   orderCount,
+  sessionToken: signCustomerSession(customer),
   referralCount: customer._count?.referrals || customer.referralCount || 0
 });
 
@@ -222,11 +226,27 @@ export const createMealReview = asyncHandler(async (req, res) => {
 });
 
 export const createOnlineOrder = asyncHandler(async (req, res) => {
-  const { items, deliveryFee = 0, latitude, longitude, customerId, ...customer } = req.body;
+  validateOrderInput(req.body);
+  if (req.customerSession.phone !== cleanPhone(req.body.customerPhone)) throw new ApiError(403, 'Order phone must match your account');
+  const { orderNo, fingerprint } = orderIdentity(req.body);
+  const replay = async () => {
+    const saved = await prisma.onlineOrder.findUnique({ where: { orderNo }, include: trackingInclude });
+    if (!saved) return null;
+    if (saved.trackingEvents?.[0]?.metadata?.requestFingerprint !== fingerprint) throw new ApiError(409, 'This request identifier was already used for a different order');
+    return saved;
+  };
+  const existing = await replay();
+  if (existing) return res.status(200).json(existing);
+  const settings = await prisma.appSettings.findUnique({ where: { id: 'default' } });
+  if (settings?.publicOrdering === false) throw new ApiError(403, 'Online ordering is currently unavailable');
+  const deliveryFee = configuredDeliveryFee(req.body, settings);
+  const { items, latitude, longitude, customerId, ...customer } = req.body;
   if (!items?.length) throw new ApiError(422, 'At least one item is required');
   let pointsEarned = 0;
 
-  const order = await prisma.$transaction(
+  let order;
+  try {
+  order = await prisma.$transaction(
     async (tx) => {
       const phone = cleanPhone(customer.customerPhone);
       const referralCode = await createReferralCode(tx, customer.customerName, phone);
@@ -252,7 +272,7 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
 
       const created = await tx.onlineOrder.create({
         data: {
-          orderNo: `WEB-${Date.now()}`,
+          orderNo,
           customerId: orderCustomer.id,
           customerName: customer.customerName,
           customerPhone: phone,
@@ -282,7 +302,7 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
       });
 
       await applyStockDeductions(tx, deductions, `Online order ${created.orderNo}`);
-      await createOrderTrackingEvent(tx, created, 'PENDING');
+      await createOrderTrackingEvent(tx, created, 'PENDING', { notify: false, metadata: { requestFingerprint: fingerprint } });
       if (pointsEarned > 0) {
         await tx.customer.update({
           where: { id: orderCustomer.id },
@@ -301,8 +321,19 @@ export const createOnlineOrder = asyncHandler(async (req, res) => {
     orderTransactionOptions
   );
 
+  } catch (error) {
+    if (error.code === 'P2002') {
+      const saved = await replay();
+      if (saved) return res.status(200).json(saved);
+    }
+    throw error;
+  }
   const responseOrder = { ...order.order, pointsEarned, customer: order.customer };
-  emitOrderUpdate(responseOrder);
+  // Notifications are best effort after the order transaction has committed.
+  try {
+    await prisma.notification.create({ data: { onlineOrderId: responseOrder.id, customerId: responseOrder.customerId, category: 'ORDERS', channel: 'IN_APP', title: 'Order received', body: `Order ${responseOrder.orderNo} is pending confirmation.`, deepLink: `order:${responseOrder.id}`, deliveredAt: new Date() } });
+  } catch { /* The order remains saved if notifications are unavailable. */ }
+  try { emitOrderUpdate(responseOrder); } catch { /* Polling still exposes the saved order. */ }
   res.status(201).json(responseOrder);
 });
 
@@ -419,7 +450,7 @@ export const getPublicOnlineOrder = asyncHandler(async (req, res) => {
     include: trackingInclude
   });
 
-  if (!order) throw new ApiError(404, 'Order not found');
+  if (!order || order.customerId !== req.customerSession.sub) throw new ApiError(404, 'Order not found');
   res.json(order);
 });
 

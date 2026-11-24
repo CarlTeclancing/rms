@@ -1,3 +1,7 @@
+import { BuyerSkeleton } from '../components/BuyerSkeleton.jsx';
+import { orderWhatsAppUrl, newOrderRequestId, orderStatusLabels, fcfa } from '../../../shared/orderExperience.js';
+import tokens from '../../../shared/designTokens.json';
+import '../buyer-design.css';
 import {
   Bell,
   CalendarClock,
@@ -40,13 +44,13 @@ import BuyerAuth, { BuyerSplash } from '../components/BuyerAuth.jsx';
 import { EmptyState } from '../components/EmptyState.jsx';
 import { Loading } from '../components/Loading.jsx';
 import { apiBaseUrl, endpoints } from '../services/api.js';
-import { currency } from '../utils/format.js';
+const currency = fcfa;
 import { useApi } from '../hooks/useApi.js';
 import { useSettings } from '../context/SettingsContext.jsx';
 
 const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
 const chopasapLogo = '/chopasap-logo.png';
-const brandRed = '#d71920';
+const brandRed = tokens.colors.primary;
 const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 const splashMessages = [
   'Fresh meals from restaurants near you.',
@@ -103,9 +107,9 @@ const splashProductsStorageKey = 'chopasap_splash_products';
 const tabs = [
   { id: 'home', label: { en: 'Home', fr: 'Accueil' }, icon: Home },
   { id: 'meals', label: { en: 'Meals', fr: 'Repas' }, icon: ShoppingBag },
-  { id: 'support', label: { en: 'Support', fr: 'Aide' }, icon: Phone },
-  { id: 'favorites', label: { en: 'Favourites', fr: 'Favoris' }, icon: Heart },
-  { id: 'orders', label: { en: 'Orders', fr: 'Commandes' }, icon: ClipboardList }
+  { id: 'cart', label: { en: 'Cart', fr: 'Panier' }, icon: ShoppingBag },
+  { id: 'orders', label: { en: 'Orders', fr: 'Commandes' }, icon: ClipboardList },
+  { id: 'profile', label: { en: 'Account', fr: 'Compte' }, icon: User }
 ];
 const translations = {
   en: {
@@ -273,7 +277,7 @@ const cartKeyFor = (menuItemId, variationName) => `${menuItemId}:${variationName
 const mealVariations = (item) => (Array.isArray(item?.variations) ? item.variations.filter((variation) => variation?.name) : []);
 const mealPrice = (item, variationName) => {
   const variation = mealVariations(item).find((entry) => entry.name === variationName);
-  return Number(variation?.price || item?.price || 0);
+  return Number(variation?.price ?? item?.price ?? 0);
 };
 const whatsappPhone = (phone = '') => {
   const digits = String(phone).replace(/\D/g, '');
@@ -376,7 +380,7 @@ function TabButton({ tab, active, onClick, desktop = false, language = 'en', bad
         desktop
           ? 'flex h-12 w-full items-center gap-3 rounded-2xl px-4 text-left text-sm font-extrabold transition'
           : 'flex min-w-0 flex-1 flex-col items-center justify-center gap-1 text-xs font-black transition',
-        active ? (desktop ? 'text-white shadow-lg' : 'text-[#d71920]') : 'text-[#42495a] hover:text-[#d71920]'
+        active ? (desktop ? 'text-white shadow-lg' : 'text-[#E51924]') : 'text-[#42495a] hover:text-[#E51924]'
       )}
       style={active && desktop ? { backgroundColor: brandRed, boxShadow: '0 14px 28px rgba(215, 25, 32, 0.16)' } : undefined}
       onClick={onClick}
@@ -384,7 +388,7 @@ function TabButton({ tab, active, onClick, desktop = false, language = 'en', bad
       <span className="relative">
         <Icon size={desktop ? 20 : 21} fill={tab.id === 'favorites' && active ? 'currentColor' : 'none'} />
         {badge ? (
-          <span className="absolute -right-2 -top-2 grid h-4 min-w-4 animate-pulse place-items-center rounded-full bg-[#d71920] px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
+          <span className="absolute -right-2 -top-2 grid h-4 min-w-4 animate-pulse place-items-center rounded-full bg-[#E51924] px-1 text-[10px] font-black leading-none text-white ring-2 ring-white">
             {badge}
           </span>
         ) : null}
@@ -395,6 +399,7 @@ function TabButton({ tab, active, onClick, desktop = false, language = 'en', bad
 }
 
 function PromotionBanner({ promotion, slides, activeIndex, onPrevious, onNext, onSelect, onAction }) {
+  if (!promotion || !slides.length) return null;
   const hasMultiple = slides.length > 1;
   return (
     <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5" aria-label="Promotions">
@@ -404,10 +409,10 @@ function PromotionBanner({ promotion, slides, activeIndex, onPrevious, onNext, o
             <p className="text-[11px] font-black uppercase tracking-wide text-[#8b5f00]">
               {promotion?.businessName || 'Featured campaign'}
             </p>
-            <h2 className="mt-1 line-clamp-2 text-xl font-black leading-6 text-[#151923] sm:text-3xl sm:leading-9">{promotion?.title}</h2>
-            <p className="mt-2 line-clamp-2 max-w-xl text-xs font-semibold leading-5 text-[#6c6250] sm:text-sm">{promotion?.description}</p>
+            <h2 className="mt-1 line-clamp-2 text-xl font-black leading-6 text-[#171B25] sm:text-3xl sm:leading-9">{promotion?.title}</h2>
+            <p className="mt-2 max-w-xl text-xs font-semibold leading-5 text-[#6c6250] sm:text-sm">{promotion?.description}</p>
             <button
-              className="mt-4 inline-flex h-9 w-fit items-center gap-2 rounded-full bg-[#151923] px-4 text-xs font-black text-white shadow-sm"
+              className="mt-4 inline-flex h-9 w-fit items-center gap-2 rounded-full bg-[#171B25] px-4 text-xs font-black text-white shadow-sm"
               onClick={() => onAction(promotion)}
             >
               {promotion?.ctaLabel || 'View offer'} <ChevronRight size={15} />
@@ -418,7 +423,7 @@ function PromotionBanner({ promotion, slides, activeIndex, onPrevious, onNext, o
               <img className="h-full min-h-[146px] w-full object-cover sm:min-h-[180px]" src={promotion.imageUrl} alt={promotion.title} />
             ) : (
               <div className="grid h-full min-h-[146px] place-items-center sm:min-h-[180px]">
-                <div className="grid h-20 w-20 place-items-center rounded-2xl bg-white/80 text-[#d71920] shadow-sm">
+                <div className="grid h-20 w-20 place-items-center rounded-2xl bg-white/80 text-[#E51924] shadow-sm">
                   <ShoppingBag size={42} />
                 </div>
               </div>
@@ -428,10 +433,10 @@ function PromotionBanner({ promotion, slides, activeIndex, onPrevious, onNext, o
 
         {hasMultiple ? (
           <>
-            <button className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-[#29384d] shadow-sm" onClick={onPrevious} aria-label="Previous promotion">
+            <button className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-[#171B25] shadow-sm" onClick={onPrevious} aria-label="Previous promotion">
               <ChevronLeft size={18} />
             </button>
-            <button className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-[#29384d] shadow-sm" onClick={onNext} aria-label="Next promotion">
+            <button className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-[#171B25] shadow-sm" onClick={onNext} aria-label="Next promotion">
               <ChevronRight size={18} />
             </button>
           </>
@@ -443,14 +448,14 @@ function PromotionBanner({ promotion, slides, activeIndex, onPrevious, onNext, o
           {slides.map((slide, index) => (
             <button
               key={slide.id}
-              className={clsx('h-2 rounded-full transition-all', index === activeIndex ? 'w-6 bg-[#d71920]' : 'w-2 bg-[#d8dee2]')}
+              className={clsx('h-2 rounded-full transition-all', index === activeIndex ? 'w-6 bg-[#E51924]' : 'w-2 bg-[#d8dee2]')}
               onClick={() => onSelect(index)}
               aria-label={`Show promotion ${index + 1}`}
               aria-current={index === activeIndex}
             />
           ))}
         </div>
-        <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">{hasMultiple ? `${activeIndex + 1}/${slides.length}` : 'Featured'}</p>
+        <p className="text-xs font-black uppercase tracking-wide text-[#E51924]">{hasMultiple ? `${activeIndex + 1}/${slides.length}` : 'Featured'}</p>
       </div>
     </section>
   );
@@ -459,12 +464,12 @@ function PromotionBanner({ promotion, slides, activeIndex, onPrevious, onNext, o
 function LanguagePrompt({ open, language, onChoose }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[95] grid place-items-center bg-[#151923]/65 px-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[95] grid place-items-center bg-[#171B25]/65 px-4 backdrop-blur-sm">
       <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white p-5 text-center shadow-2xl">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]">
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#fff1ca] text-[#E51924]">
           <Languages size={28} />
         </span>
-        <h2 className="mt-4 text-2xl font-black text-[#151923]">{tr(language, 'chooseLanguage')}</h2>
+        <h2 className="mt-4 text-2xl font-black text-[#171B25]">{tr(language, 'chooseLanguage')}</h2>
         <p className="mt-2 text-sm font-semibold text-stone-500">{tr(language, 'chooseLanguageHint')}</p>
         <div className="mt-6 grid gap-3">
           {[
@@ -474,7 +479,7 @@ function LanguagePrompt({ open, language, onChoose }) {
             <button
               key={option.id}
               type="button"
-              className={clsx('flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition', language === option.id ? 'border-[#d71920] bg-[#d71920] text-white' : 'border-[#dbe5e8] bg-[#f7fbfc] text-[#151923]')}
+              className={clsx('flex h-12 items-center justify-center rounded-2xl border text-sm font-black transition', language === option.id ? 'border-[#E51924] bg-[#E51924] text-white' : 'border-[#E5E7EB] bg-[#F8F9FB] text-[#171B25]')}
               onClick={() => onChoose(option.id)}
             >
               {option.label}
@@ -509,15 +514,15 @@ function InstallAppPrompt({ canInstall, onInstall, onDismiss }) {
       <div className="flex items-center gap-3">
         <img className="h-11 w-11 rounded-xl object-cover" src={chopasapLogo} alt="ChopASAP" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-[#151923]">Add ChopASAP to your phone</p>
-          <p className="mt-0.5 text-xs font-semibold text-[#6d6f76]">{canInstall ? 'Install the app for faster meal ordering.' : 'Use your browser menu to add ChopASAP to your home screen.'}</p>
+          <p className="text-sm font-black text-[#171B25]">Add ChopASAP to your phone</p>
+          <p className="mt-0.5 text-xs font-semibold text-[#717680]">{canInstall ? 'Install the app for faster meal ordering.' : 'Use your browser menu to add ChopASAP to your home screen.'}</p>
         </div>
-        <button className="grid h-8 w-8 place-items-center rounded-full bg-stone-100 text-[#29384d]" onClick={onDismiss} aria-label="Dismiss install prompt">
+        <button className="grid h-8 w-8 place-items-center rounded-full bg-stone-100 text-[#171B25]" onClick={onDismiss} aria-label="Dismiss install prompt">
           <X size={16} />
         </button>
       </div>
       {canInstall ? (
-        <button className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#d71920] text-sm font-black text-white" onClick={onInstall}>
+        <button className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#E51924] text-sm font-black text-white" onClick={onInstall}>
           <Smartphone size={17} /> Add app
         </button>
       ) : null}
@@ -527,9 +532,9 @@ function InstallAppPrompt({ canInstall, onInstall, onDismiss }) {
 
 function CheckoutShell({ title, onBack, children }) {
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#eef8fa] text-[#07142a] sm:grid sm:place-items-center sm:bg-black/45 sm:p-4">
-      <div className="min-h-screen w-full bg-[#eef8fa] sm:min-h-0 sm:max-h-[92vh] sm:max-w-[390px] sm:overflow-y-auto sm:rounded-[1.7rem]">
-        <header className="relative z-10 flex h-28 items-center justify-center bg-[#eef8fa] px-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#F8F9FB] text-[#07142a] sm:grid sm:place-items-center sm:bg-black/45 sm:p-4">
+      <div className="min-h-screen w-full bg-[#F8F9FB] sm:min-h-0 sm:max-h-[92vh] sm:max-w-[390px] sm:overflow-y-auto sm:rounded-[1.7rem]">
+        <header className="relative z-10 flex h-28 items-center justify-center bg-[#F8F9FB] px-6">
           <button className="absolute left-6 grid h-10 w-10 place-items-center text-[#07142a]" onClick={onBack} aria-label="Go back">
             <ChevronLeft size={24} />
           </button>
@@ -541,47 +546,32 @@ function CheckoutShell({ title, onBack, children }) {
   );
 }
 
-function CheckoutItem({ item, address, onChangeQty, onRemove }) {
-  return (
-    <div className="relative flex items-center gap-3 border-b border-[#dbe5e8] bg-white px-4 py-3 last:border-b-0">
-      <img className="h-[74px] w-[74px] shrink-0 rounded-full object-cover" src={item.imageUrl || fallbackImage} alt={item.name} />
-      <div className="min-w-0 flex-1 pr-7">
-        <p className="truncate text-[15px] font-medium text-[#111827]">{item.name}</p>
-        {item.variationName ? <p className="mt-0.5 text-xs font-medium text-[#d71920]">{item.variationName}</p> : null}
-        <p className="mt-0.5 text-sm text-[#6d6f76]">{item.quantity} item • {currency(item.price * item.quantity)}</p>
-        <p className="mt-0.5 truncate text-sm text-[#6d6f76]">Deliver to {address || 'Bonanjo Biyamassi'}</p>
-      </div>
-      <button className="absolute right-4 top-3 text-[#d71920]" type="button" onClick={() => onRemove(item.cartItemId)} aria-label={`Remove ${item.name}`}>
-        <Trash2 size={16} />
-      </button>
-      <ChevronRight className="absolute right-4 top-12 text-[#07142a]" size={20} />
-      <div className="absolute bottom-2 right-3 flex h-7 w-[84px] items-center justify-between rounded-md border border-[#818892] bg-white px-2 text-[#5f646b]">
-        <button type="button" onClick={() => onChangeQty(item.cartItemId, -1)} aria-label={`Decrease ${item.name}`}><Minus size={18} /></button>
-        <span className="text-sm font-medium text-[#07142a]">{item.quantity}</span>
-        <button type="button" onClick={() => onChangeQty(item.cartItemId, 1)} aria-label={`Increase ${item.name}`}><Plus size={18} /></button>
-      </div>
-    </div>
-  );
+function CheckoutItem({ item, onChangeQty, onRemove }) {
+  return <article className="cart-item">
+    <img src={item.imageUrl || fallbackImage} alt={item.name} loading="lazy" />
+    <div className="cart-item-copy"><h3>{item.name}</h3>{item.variationName && <p>{item.variationName}</p>}{item.note && <p>Instructions: {item.note}</p>}<p>{fcfa(item.price)} each</p><strong>{fcfa(item.price * item.quantity)}</strong></div>
+    <div className="cart-item-controls"><button type="button" onClick={() => onRemove(item.cartItemId)} aria-label={`Remove ${item.name}`}><Trash2 size={18} /></button><div><button type="button" aria-label="Decrease quantity" onClick={() => item.quantity === 1 ? onRemove(item.cartItemId) : onChangeQty(item.cartItemId, -1)}><Minus size={18} /></button><span>{item.quantity}</span><button type="button" aria-label="Increase quantity" disabled={item.quantity >= 99} onClick={() => onChangeQty(item.cartItemId, 1)}><Plus size={18} /></button></div></div>
+  </article>;
 }
 
 function PriceRows({ subtotal, deliveryFee, serviceFee = 0, total, showService = false }) {
   return (
     <div className="space-y-3 px-6 text-[16px]">
       <div className="flex items-center justify-between">
-        <span className="text-[#6d6f76]">Subtotal</span>
+        <span className="text-[#717680]">Subtotal</span>
         <span className="font-medium">{currency(subtotal)}</span>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-[#6d6f76]">Promotion</span>
+        <span className="text-[#717680]">Promotion</span>
         <span className="font-medium text-[#00a35b]">-{currency(0)}</span>
       </div>
       <div className="flex items-center justify-between">
-        <span className="flex items-center gap-2 text-[#6d6f76]">Delivery fee <Info size={16} className="rounded-full bg-[#a6abb0] text-white" /></span>
+        <span className="flex items-center gap-2 text-[#717680]">Delivery fee <Info size={16} className="rounded-full bg-[#a6abb0] text-white" /></span>
         <span className="font-medium">{currency(deliveryFee)}</span>
       </div>
       {showService ? (
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-[#6d6f76]">Taxes & Other fees <Info size={16} className="rounded-full bg-[#a6abb0] text-white" /></span>
+          <span className="flex items-center gap-2 text-[#717680]">Taxes & Other fees <Info size={16} className="rounded-full bg-[#a6abb0] text-white" /></span>
           <span className="font-medium">{currency(serviceFee)}</span>
         </div>
       ) : null}
@@ -593,70 +583,18 @@ function PriceRows({ subtotal, deliveryFee, serviceFee = 0, total, showService =
   );
 }
 
-function MealCard({ item, favorite, onFavorite, onOpen, onShare }) {
-  return (
-    <article
-      className="cursor-pointer overflow-hidden rounded-xl border border-[#f5c45d] bg-white text-left shadow-[0_10px_22px_rgba(75,45,10,0.10)] transition hover:-translate-y-0.5 hover:border-[#d71920]"
-      onClick={() => onOpen(item)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') onOpen(item);
-      }}
-    >
-      <div className="relative">
-        <img className="h-28 w-full object-cover sm:h-40" src={item.imageUrl || fallbackImage} alt={item.name} />
-        <button
-          className={clsx('absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white shadow-md sm:right-3 sm:top-3 sm:h-9 sm:w-9', favorite ? 'text-[#d71920]' : 'text-stone-500')}
-          onClick={(event) => {
-            event.stopPropagation();
-            onFavorite(item.id);
-          }}
-          aria-label="Save favorite"
-        >
-          <Heart size={18} fill={favorite ? 'currentColor' : 'none'} />
-        </button>
-        <button
-          className="absolute left-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white text-[#29384d] shadow-md sm:left-3 sm:top-3 sm:h-9 sm:w-9"
-          onClick={(event) => {
-            event.stopPropagation();
-            onShare(item);
-          }}
-          aria-label="Share meal"
-        >
-          <Share2 size={17} />
-        </button>
-      </div>
-      <div className="p-3 sm:p-4">
-        <div className="grid gap-2 sm:flex sm:items-start sm:justify-between sm:gap-3">
-          <div className="min-w-0">
-            <h3 className="line-clamp-2 min-h-[40px] text-sm font-black leading-5 text-stone-950 sm:min-h-0 sm:truncate sm:text-base">{item.name}</h3>
-            <p className="mt-1 text-xs font-bold text-stone-500">{item.category?.name || 'Kitchen'}</p>
-          </div>
-          <p className="shrink-0 text-sm font-black text-[#d71920] sm:text-base">{currency(item.price)}</p>
-        </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-1 text-[11px] font-bold text-stone-600 sm:gap-2 sm:text-xs">
-            <Star size={14} className="text-amber-500" fill="currentColor" />
-            4.8
-            <span className="h-1 w-1 rounded-full bg-stone-300" />
-            25 min
-          </div>
-          <button
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white shadow-md sm:h-10 sm:w-10"
-            style={{ backgroundColor: brandRed, boxShadow: '0 10px 18px rgba(215, 25, 32, 0.18)' }}
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpen(item);
-            }}
-            aria-label="View meal details"
-          >
-            <Plus size={19} />
-          </button>
-        </div>
-      </div>
-    </article>
-  );
+function MealCard({ item, favorite, onFavorite, onOpen, onAdd }) {
+  return <article className="buyer-meal-card">
+    <div className="buyer-meal-image">
+      <button onClick={() => onOpen(item)} aria-label={`View ${item.name}`}><img src={item.imageUrl || fallbackImage} alt={item.name} loading="lazy" /></button>
+      <button className="favorite" onClick={() => onFavorite(item.id)} aria-label={favorite ? 'Remove from favourites' : 'Save favourite'} aria-pressed={favorite}><Heart size={20} fill={favorite ? 'currentColor' : 'none'} /></button>
+    </div>
+    <div className="buyer-meal-body"><button className="text-left" onClick={() => onOpen(item)}><h3>{item.name}</h3></button><p>{item.category?.name}</p>
+      {Number(item.averageRating) > 0 && <p>? {Number(item.averageRating).toFixed(1)} ? {item.reviewCount || item._count?.reviews || ''} reviews</p>}
+      {item.isAvailable === false && <p>Currently unavailable</p>}
+      <div className="buyer-meal-footer"><strong>{fcfa(item.price)}</strong><button disabled={item.isAvailable === false} onClick={() => mealVariations(item).length ? onOpen(item) : onAdd(item)} aria-label={`Add ${item.name} to cart`}><Plus size={20} /></button></div>
+    </div>
+  </article>;
 }
 
 function FlashSalePopup({ code, open, onClose, onUse }) {
@@ -673,11 +611,11 @@ function FlashSalePopup({ code, open, onClose, onUse }) {
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-black/45 px-4">
       <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="relative bg-[#d71920] px-5 pb-6 pt-5 text-white">
+        <div className="relative bg-[#E51924] px-5 pb-6 pt-5 text-white">
           <button className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-white/15" onClick={onClose} aria-label="Close flash sale">
             <X size={17} />
           </button>
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-[#d71920]">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white text-[#E51924]">
             <Percent size={30} />
           </div>
           <p className="mt-4 text-xs font-black uppercase tracking-wide text-white/80">Flash sale</p>
@@ -685,15 +623,15 @@ function FlashSalePopup({ code, open, onClose, onUse }) {
           <p className="mt-2 text-sm font-semibold text-white/85">{code.description || `Get ${code.discountPercent}% off when you redeem onsite.`}</p>
         </div>
         <div className="p-5">
-          <div className="rounded-xl border border-dashed border-[#d71920] bg-[#fff4d7] px-4 py-3 text-center">
+          <div className="rounded-xl border border-dashed border-[#E51924] bg-[#fff4d7] px-4 py-3 text-center">
             <p className="text-xs font-black uppercase text-[#8b5f00]">Redeem code</p>
-            <p className="mt-1 text-2xl font-black tracking-[0.18em] text-[#151923]">{code.code}</p>
+            <p className="mt-1 text-2xl font-black tracking-[0.18em] text-[#171B25]">{code.code}</p>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <button className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#fff1ca] text-sm font-black text-[#d71920]" onClick={copyCode}>
+            <button className="flex h-11 items-center justify-center gap-2 rounded-xl bg-[#fff1ca] text-sm font-black text-[#E51924]" onClick={copyCode}>
               <Copy size={16} /> Copy
             </button>
-            <button className="flex h-11 items-center justify-center rounded-xl bg-[#d71920] text-sm font-black text-white" onClick={onUse}>
+            <button className="flex h-11 items-center justify-center rounded-xl bg-[#E51924] text-sm font-black text-white" onClick={onUse}>
               Order now
             </button>
           </div>
@@ -709,7 +647,7 @@ function NotificationPanel({ open, notifications, soundEnabled, permission, onCl
   return (
     <div className="fixed inset-0 z-[75] bg-black/35 px-4 py-5 sm:grid sm:place-items-start sm:justify-items-end sm:p-6">
       <div className="ml-auto w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <div className="bg-[#151923] p-5 text-white">
+        <div className="bg-[#171B25] p-5 text-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-white/60">ChopASAP alerts</p>
@@ -720,7 +658,7 @@ function NotificationPanel({ open, notifications, soundEnabled, permission, onCl
             </button>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <button className="flex h-10 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-[#151923]" onClick={onEnable}>
+            <button className="flex h-10 items-center justify-center gap-2 rounded-xl bg-white text-xs font-black text-[#171B25]" onClick={onEnable}>
               <Bell size={15} /> {permission === 'granted' ? 'Enabled' : 'Enable'}
             </button>
             <button className="flex h-10 items-center justify-center gap-2 rounded-xl bg-white/10 text-xs font-black text-white" onClick={onToggleSound}>
@@ -730,20 +668,20 @@ function NotificationPanel({ open, notifications, soundEnabled, permission, onCl
         </div>
         <div className="max-h-[60vh] overflow-y-auto p-3">
           {notifications.length ? notifications.map((item) => (
-            <div key={item.id} className="mb-2 rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4 last:mb-0">
+            <div key={item.id} className="mb-2 rounded-2xl border border-[#edf0f2] bg-[#F8F9FB] p-4 last:mb-0">
               <div className="flex items-start gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff1ca] text-[#d71920]">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#fff1ca] text-[#E51924]">
                   <Bell size={17} />
                 </span>
                 <div className="min-w-0">
-                  <p className="font-black text-[#151923]">{item.title}</p>
+                  <p className="font-black text-[#171B25]">{item.title}</p>
                   <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">{item.body}</p>
                   <p className="mt-2 text-xs font-semibold text-stone-400">{item.time || 'Just now'}</p>
                 </div>
               </div>
             </div>
           )) : (
-            <p className="rounded-2xl bg-[#f7fbfc] p-5 text-center text-sm font-semibold text-stone-500">No notifications yet.</p>
+            <p className="rounded-2xl bg-[#F8F9FB] p-5 text-center text-sm font-semibold text-stone-500">No notifications yet.</p>
           )}
           </div>
       </div>
@@ -754,25 +692,25 @@ function NotificationPanel({ open, notifications, soundEnabled, permission, onCl
 function RewardPanel({ open, rewards, onClose }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[80] bg-[#151923]/45 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[80] bg-[#171B25]/45 px-4 py-6 backdrop-blur-sm">
       <div className="ml-auto flex h-full max-w-sm flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-[#edf0f2] p-5">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Rewards</p>
+            <p className="text-xs font-black uppercase tracking-wide text-[#E51924]">Rewards</p>
             <h2 className="text-xl font-black">Growth hub</h2>
           </div>
-          <button className="grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc]" onClick={onClose} aria-label="Close rewards">
+          <button className="grid h-9 w-9 place-items-center rounded-full bg-[#F8F9FB]" onClick={onClose} aria-label="Close rewards">
             <X size={20} />
           </button>
         </div>
         <div className="grid gap-3 overflow-y-auto p-4">
           {rewards.length ? rewards.map((item) => (
             <article key={item.id} className="rounded-2xl bg-[#fff8e8] p-4">
-              <p className="text-sm font-black text-[#151923]">{item.title}</p>
+              <p className="text-sm font-black text-[#171B25]">{item.title}</p>
               <p className="mt-1 text-xs font-semibold leading-5 text-stone-600">{item.description || 'Open this reward before it expires.'}</p>
-              {item.ctaLabel ? <p className="mt-3 text-xs font-black text-[#d71920]">{item.ctaLabel}</p> : null}
+              {item.ctaLabel ? <p className="mt-3 text-xs font-black text-[#E51924]">{item.ctaLabel}</p> : null}
             </article>
-          )) : <p className="rounded-2xl bg-[#f7fbfc] p-5 text-sm font-semibold text-stone-500">No rewards are active right now.</p>}
+          )) : <p className="rounded-2xl bg-[#F8F9FB] p-5 text-sm font-semibold text-stone-500">No rewards are active right now.</p>}
         </div>
       </div>
     </div>
@@ -814,7 +752,7 @@ function OrderReviewItem({ item, order }) {
           <button
             key={value}
             type="button"
-            className={clsx('grid h-8 w-8 place-items-center rounded-full', value <= rating ? 'bg-[#d71920] text-white' : 'bg-[#fff8e8] text-[#c6a54b]')}
+            className={clsx('grid h-8 w-8 place-items-center rounded-full', value <= rating ? 'bg-[#E51924] text-white' : 'bg-[#fff8e8] text-[#c6a54b]')}
             disabled={submitted}
             onClick={() => setRating(value)}
             aria-label={`Rate ${value} stars`}
@@ -824,7 +762,7 @@ function OrderReviewItem({ item, order }) {
         ))}
       </div>
       <textarea
-        className="mt-3 min-h-[70px] w-full rounded-2xl border border-[#ead9ae] bg-[#f8fbfc] px-3 py-2 text-sm font-semibold outline-none focus:border-[#d71920] disabled:opacity-60"
+        className="mt-3 min-h-[70px] w-full rounded-2xl border border-[#ead9ae] bg-[#f8fbfc] px-3 py-2 text-sm font-semibold outline-none focus:border-[#E51924] disabled:opacity-60"
         value={comment}
         disabled={submitted}
         onChange={(event) => setComment(event.target.value)}
@@ -832,7 +770,7 @@ function OrderReviewItem({ item, order }) {
       />
       <button
         type="button"
-        className="mt-3 rounded-xl bg-[#151923] px-4 py-2 text-xs font-black text-white disabled:opacity-50"
+        className="mt-3 rounded-xl bg-[#171B25] px-4 py-2 text-xs font-black text-white disabled:opacity-50"
         disabled={saving || submitted}
         onClick={submitReview}
       >
@@ -852,10 +790,10 @@ function OrderTrackingPanel({ order }) {
     <section className="mt-5 rounded-3xl border border-[#e2edf0] bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase text-[#d71920]">Live tracking</p>
-          <h3 className="mt-1 text-xl font-black text-[#151923]">{deliveryStatusLabels[status] || status.replaceAll('_', ' ')}</h3>
+          <p className="text-xs font-black uppercase text-[#E51924]">Live tracking</p>
+          <h3 className="mt-1 text-xl font-black text-[#171B25]">{deliveryStatusLabels[status] || status.replaceAll('_', ' ')}</h3>
         </div>
-        <div className="rounded-full bg-[#fff4f4] px-3 py-1 text-xs font-black text-[#d71920]">
+        <div className="rounded-full bg-[#fff4f4] px-3 py-1 text-xs font-black text-[#E51924]">
           {order.etaMinutes ? `${order.etaMinutes} min ETA` : 'ETA updating'}
         </div>
       </div>
@@ -863,35 +801,30 @@ function OrderTrackingPanel({ order }) {
         {mapUrl ? (
           <img className="h-52 w-full rounded-2xl object-cover" src={mapUrl} alt="Live delivery route" />
         ) : (
-          <div className="relative h-52 overflow-hidden rounded-2xl bg-[#eaf5f8]">
-            <div className="absolute left-10 right-10 top-1/2 h-1 -rotate-12 rounded-full bg-[#2fbf71]" />
-            <div className="absolute left-5 top-28 grid h-10 w-10 place-items-center rounded-full border-4 border-white bg-[#151923] text-white"><ShoppingBag size={18} /></div>
-            <div className="absolute left-1/2 top-20 grid h-11 w-11 -translate-x-1/2 place-items-center rounded-full border-4 border-white bg-[#d71920] text-white"><Truck size={20} /></div>
-            <div className="absolute right-7 top-12 grid h-10 w-10 place-items-center rounded-full border-4 border-white bg-[#2fbf71] text-white"><Home size={18} /></div>
-          </div>
+          <div className="grid h-52 place-items-center rounded-2xl bg-[#F8F9FB] p-6 text-center text-sm text-stone-500">Live location is not available for this order. Status updates appear below.</div>
         )}
         <div className="grid content-start gap-3">
           <div className="grid grid-cols-3 gap-2">
-            <p className="rounded-2xl bg-[#f7fbfc] p-3 text-center text-xs font-black text-stone-600">{order.distanceKm ? `${Number(order.distanceKm).toFixed(1)} km` : 'Distance'}</p>
-            <p className="rounded-2xl bg-[#f7fbfc] p-3 text-center text-xs font-black text-stone-600">{order.driverSpeedKph ? `${Number(order.driverSpeedKph).toFixed(0)} km/h` : 'Speed'}</p>
-            <p className="rounded-2xl bg-[#f7fbfc] p-3 text-center text-xs font-black text-stone-600">{order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Waiting'}</p>
+            <p className="rounded-2xl bg-[#F8F9FB] p-3 text-center text-xs font-black text-stone-600">{order.distanceKm ? `${Number(order.distanceKm).toFixed(1)} km` : 'Distance'}</p>
+            <p className="rounded-2xl bg-[#F8F9FB] p-3 text-center text-xs font-black text-stone-600">{order.driverSpeedKph ? `${Number(order.driverSpeedKph).toFixed(0)} km/h` : 'Speed'}</p>
+            <p className="rounded-2xl bg-[#F8F9FB] p-3 text-center text-xs font-black text-stone-600">{order.trackingUpdatedAt ? new Date(order.trackingUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Waiting'}</p>
           </div>
           <div className="rounded-2xl bg-[#fff8e8] p-3">
-            <p className="text-sm font-black text-[#151923]">{order.driverName || 'Driver not assigned yet'}</p>
+            <p className="text-sm font-black text-[#171B25]">{order.driverName || 'Driver not assigned yet'}</p>
             <p className="mt-1 text-xs font-semibold text-stone-600">{order.vehicleInfo || 'Vehicle details will appear here'}</p>
-            {order.driverPhone ? <p className="mt-1 text-xs font-black text-[#d71920]">{order.driverPhone}</p> : null}
+            {order.driverPhone ? <p className="mt-1 text-xs font-black text-[#E51924]">{order.driverPhone}</p> : null}
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-[#edf0f2]">
-            <div className="h-full rounded-full bg-[#d71920]" style={{ width: `${progress}%` }} />
+            <div className="h-full rounded-full bg-[#E51924]" style={{ width: `${progress}%` }} />
           </div>
         </div>
       </div>
       <div className="mt-4 grid gap-3">
         {(events.length ? events : [{ status, title: deliveryStatusLabels[status], createdAt: order.createdAt }]).map((event, index) => (
           <div key={event.id || `${event.status}-${index}`} className="flex gap-3">
-            <span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-[#d71920]" />
+            <span className="mt-1 h-3 w-3 shrink-0 rounded-full bg-[#E51924]" />
             <div>
-              <p className="text-sm font-black text-[#151923]">{event.title || deliveryStatusLabels[event.status] || event.status?.replaceAll('_', ' ')}</p>
+              <p className="text-sm font-black text-[#171B25]">{event.title || deliveryStatusLabels[event.status] || event.status?.replaceAll('_', ' ')}</p>
               <p className="text-xs font-semibold text-stone-500">{event.createdAt ? new Date(event.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'}</p>
               {event.message ? <p className="mt-1 text-xs font-semibold text-stone-600">{event.message}</p> : null}
             </div>
@@ -906,7 +839,7 @@ function OrderDetailView({ order, onBack }) {
   if (!order) return null;
   return (
     <div className="rounded-3xl bg-white p-5 shadow-md">
-      <button className="mb-4 inline-flex items-center gap-2 text-sm font-black text-[#d71920]" onClick={onBack}>
+      <button className="mb-4 inline-flex items-center gap-2 text-sm font-black text-[#E51924]" onClick={onBack}>
         <ChevronLeft size={17} /> Back to orders
       </button>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -915,15 +848,15 @@ function OrderDetailView({ order, onBack }) {
           <h2 className="mt-1 text-2xl font-black">{order.orderNo}</h2>
           <p className="mt-1 text-sm font-semibold text-stone-500">{order.createdAt ? new Date(order.createdAt).toLocaleString() : 'Recent order'}</p>
         </div>
-        <span className="rounded-full bg-[#e7f8ef] px-3 py-1 text-xs font-black text-[#19b567]">{order.status || 'PENDING'}</span>
+        <span className="rounded-full bg-[#e7f8ef] px-3 py-1 text-xs font-black text-[#19b567]">{orderStatusLabels[order.status] || order.status}</span>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl bg-[#f7fbfc] p-4">
+        <div className="rounded-2xl bg-[#F8F9FB] p-4">
           <p className="text-xs font-black uppercase text-stone-500">Customer</p>
           <p className="mt-2 font-black">{order.customerName || 'Customer'}</p>
           <p className="mt-1 text-sm font-semibold text-stone-600">{order.customerPhone}</p>
         </div>
-        <div className="rounded-2xl bg-[#f7fbfc] p-4">
+        <div className="rounded-2xl bg-[#F8F9FB] p-4">
           <p className="text-xs font-black uppercase text-stone-500">Address</p>
           <p className="mt-2 text-sm font-semibold text-stone-700">{order.deliveryAddress || 'Not provided'}</p>
         </div>
@@ -948,14 +881,14 @@ function OrderDetailView({ order, onBack }) {
                   <p className="font-black">{item.quantity} x {item.menuItem?.name || item.name || 'Menu item'}</p>
                   {item.variationName ? <p className="mt-0.5 text-xs font-semibold text-stone-600">{item.variationName}</p> : null}
                 </div>
-                <p className="shrink-0 font-black text-[#d71920]">{currency(orderItemTotal(item))}</p>
+                <p className="shrink-0 font-black text-[#E51924]">{currency(orderItemTotal(item))}</p>
               </div>
               <OrderReviewItem item={item} order={order} />
             </div>
           ))}
         </div>
       </div>
-      <div className="mt-5 rounded-2xl bg-[#151923] p-4 text-white">
+      <div className="mt-5 rounded-2xl bg-[#171B25] p-4 text-white">
         <div className="flex items-center justify-between text-sm font-semibold text-white/70">
           <span>Subtotal</span>
           <span>{currency(order.subtotal || 0)}</span>
@@ -984,7 +917,7 @@ function MealDetail({
   onClose,
   onAdd,
   onShare,
-  onToggleReviews
+  onToggleReviews, favorite, onFavorite, note, onNoteChange, relatedItems = [], onOpenRelated
 }) {
   if (!item) return null;
   const variations = mealVariations(item);
@@ -993,9 +926,9 @@ function MealDetail({
   const averageRating = reviews.length ? (reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length).toFixed(1) : item.averageRating;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#eef8fa] text-[#111827] sm:grid sm:place-items-center sm:bg-black/45 sm:p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#F8F9FB] text-[#111827] sm:grid sm:place-items-center sm:bg-black/45 sm:p-4">
       <div className="min-h-screen w-full bg-white sm:min-h-0 sm:max-h-[92vh] sm:max-w-[390px] sm:overflow-y-auto sm:rounded-[1.7rem]">
-        <div className="h-24 bg-[#eef8fa]" />
+        <div className="h-24 bg-[#F8F9FB]" />
         <div className="relative">
           <img className="h-[245px] w-full rounded-t-[1.6rem] object-cover" src={item.imageUrl || fallbackImage} alt={item.name} />
           <button className="absolute left-5 top-4 grid h-9 w-9 place-items-center rounded-md bg-white text-[#07142a] shadow-sm" onClick={() => onShare(item)} aria-label="Share meal">
@@ -1007,7 +940,7 @@ function MealDetail({
         </div>
         <div className="px-6 pb-28 pt-3">
           <div className="flex justify-center gap-1">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#d71920]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#E51924]" />
             <span className="h-2.5 w-2.5 rounded-full bg-[#ffc15b]" />
             <span className="h-2.5 w-2.5 rounded-full bg-[#ffc15b]" />
             <span className="h-2.5 w-2.5 rounded-full bg-[#ffc15b]" />
@@ -1015,7 +948,7 @@ function MealDetail({
           <div className="mt-2 flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-lg font-black tracking-normal">{item.name}</h1>
-              <p className="text-xs text-[#6d6f76]">Delivery Free&nbsp;&nbsp;&nbsp; 10-25 min</p>
+              <p className="text-xs text-[#717680]">{item.isAvailable === false ? 'Currently unavailable' : 'Available to order'}</p>
             </div>
             <div className="shrink-0 pt-4 text-right">
               <p className="text-base font-black text-[#777]">{currency(price)}</p>
@@ -1026,7 +959,7 @@ function MealDetail({
               ) : null}
             </div>
           </div>
-          <p className="mt-4 text-[13px] font-medium leading-5 text-[#5f646b]">
+          <p className="mt-4 text-[13px] font-medium leading-5 text-[#717680]">
             {item.description || 'Freshly prepared ChopASAP meal made with quality ingredients and served hot for reserve or delivery.'}
           </p>
 
@@ -1040,15 +973,15 @@ function MealDetail({
                     key={variation.name}
                     className={clsx(
                       'flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition',
-                      selectedVariation === variation.name ? 'border-[#d71920] bg-[#fff4f4] text-[#151923]' : 'border-[#e7edf0] bg-[#f8fbfc] text-[#6d6f76]'
+                      selectedVariation === variation.name ? 'border-[#E51924] bg-[#fff4f4] text-[#171B25]' : 'border-[#e7edf0] bg-[#f8fbfc] text-[#717680]'
                     )}
                   >
                     <span className="font-bold">{variation.name}</span>
-                    <span className="flex items-center gap-2 font-black text-[#d71920]">
-                      {currency(Number(variation.price || item.price || 0))}
+                    <span className="flex items-center gap-2 font-black text-[#E51924]">
+                      {currency(Number(variation.price ?? item.price ?? 0))}
                     </span>
                     <input
-                      className="h-4 w-4 accent-[#d71920]"
+                      className="h-4 w-4 accent-[#E51924]"
                       type="radio"
                       name={`meal-variation-${item.id}`}
                       checked={selectedVariation === variation.name}
@@ -1060,16 +993,19 @@ function MealDetail({
             </section>
           ) : null}
 
+          <button className="btn-secondary mt-4" onClick={() => onFavorite(item.id)} aria-pressed={favorite}><Heart size={18} />{favorite ? 'Saved to favourites' : 'Save to favourites'}</button>
+          <label className="mt-5 block text-sm font-medium">Special preparation instructions<textarea className="input mt-2 h-24 w-full" maxLength={500} placeholder="Less pepper, no onions?" value={note} onChange={event => onNoteChange(event.target.value)} /></label>
+          {relatedItems.length > 0 && <section className="mt-5"><h2>Related meals</h2><div className="buyer-categories">{relatedItems.map(meal => <button key={meal.id} onClick={() => onOpenRelated(meal)}>{meal.name} ? {fcfa(meal.price)}</button>)}</div></section>}
           <section className="mt-7 rounded-2xl bg-[#fff8e8] p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-medium">Meal reviews</h2>
-                <p className="mt-1 text-xs font-semibold text-[#6d6f76]">
+                <p className="mt-1 text-xs font-semibold text-[#717680]">
                   {reviews.length ? `${reviews.length} customer review${reviews.length === 1 ? '' : 's'}` : 'No reviews yet'}
                 </p>
               </div>
               {reviews.length > 2 ? (
-                <button className="text-xs font-black text-[#d71920]" type="button" onClick={onToggleReviews}>
+                <button className="text-xs font-black text-[#E51924]" type="button" onClick={onToggleReviews}>
                   {showAllReviews ? 'Show less' : 'See all reviews'}
                 </button>
               ) : null}
@@ -1078,15 +1014,15 @@ function MealDetail({
               {visibleReviews.length ? visibleReviews.map((review) => (
                 <div key={review.id} className="rounded-2xl bg-white p-3 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-black text-[#151923]">{review.customerName}</p>
+                    <p className="text-sm font-black text-[#171B25]">{review.customerName}</p>
                     <span className="inline-flex items-center gap-1 text-xs font-black text-amber-600">
                       <Star size={13} fill="currentColor" /> {review.rating}
                     </span>
                   </div>
-                  {review.comment ? <p className="mt-2 text-xs font-semibold leading-5 text-[#5f646b]">{review.comment}</p> : null}
+                  {review.comment ? <p className="mt-2 text-xs font-semibold leading-5 text-[#717680]">{review.comment}</p> : null}
                 </div>
               )) : (
-                <p className="rounded-2xl bg-white p-3 text-xs font-semibold text-[#6d6f76]">No reviews yet. You can review ordered meals from your Orders page.</p>
+                <p className="rounded-2xl bg-white p-3 text-xs font-semibold text-[#717680]">No reviews yet. You can review ordered meals from your Orders page.</p>
               )}
             </div>
           </section>
@@ -1097,7 +1033,7 @@ function MealDetail({
               <img className="h-12 w-12 rounded-full object-cover" src={chopasapLogo} alt="ChopASAP" />
               <div className="min-w-0 flex-1">
                 <p className="font-black">ChopASAP</p>
-                <p className="text-xs text-[#6d6f76]">Restaurant kitchen</p>
+                <p className="text-xs text-[#717680]">Restaurant kitchen</p>
               </div>
               <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-[#16894d]">Open Now</span>
               <ChevronRight size={24} />
@@ -1106,12 +1042,12 @@ function MealDetail({
         </div>
         <div className="fixed bottom-0 left-0 right-0 z-10 bg-white px-6 py-5 sm:absolute sm:left-auto sm:right-auto sm:w-full sm:max-w-[390px]">
           <div className="grid grid-cols-[72px_1fr] gap-3">
-            <div className="flex h-10 items-center justify-between rounded-md border border-[#d71920] px-3 text-sm">
+            <div className="flex h-10 items-center justify-between rounded-md border border-[#E51924] px-3 text-sm">
               <button type="button" onClick={() => onQuantityChange(-1)} aria-label="Decrease quantity"><Minus size={16} /></button>
               <span>{quantity}</span>
               <button type="button" onClick={() => onQuantityChange(1)} aria-label="Increase quantity"><Plus size={16} /></button>
             </div>
-            <RedButton className="w-full rounded-md" onClick={() => onAdd(item, quantity, selectedVariation)}>
+            <RedButton className="w-full rounded-md" disabled={item.isAvailable === false} onClick={() => onAdd(item, quantity, selectedVariation)}>
               Add To Cart {currency(price * quantity)}
             </RedButton>
           </div>
@@ -1121,11 +1057,11 @@ function MealDetail({
   );
 }
 
-function BottomNav({ activeTab, setActiveTab, language = 'en', activeOrderCount = 0 }) {
+function BottomNav({ activeTab, setActiveTab, language = 'en', activeOrderCount = 0, cartCount = 0 }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 grid h-[72px] grid-cols-5 border-t border-[#dde7ea] bg-white px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_25px_rgba(40,50,60,0.08)] md:hidden">
       {tabs.map((tab) => (
-        <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} language={language} badge={tab.id === 'orders' ? activeOrderCount : 0} />
+        <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} language={language} badge={tab.id === 'cart' ? cartCount : tab.id === 'orders' ? activeOrderCount : 0} />
       ))}
     </nav>
   );
@@ -1140,6 +1076,9 @@ export default function PublicPortal() {
   const [language, setLanguage] = useState(() => localStorage.getItem(languageStorageKey) || 'en');
   const [languagePromptOpen, setLanguagePromptOpen] = useState(() => !localStorage.getItem(languageStorageKey));
   const [activeTab, setActiveTab] = useState('home');
+  const [confirmedOrder, setConfirmedOrder] = useState(() => { try { return JSON.parse(sessionStorage.getItem('chopasap_confirmed_order') || 'null'); } catch { return null; } });
+  const orderSubmittingRef = useRef(false);
+  const orderAttemptRef = useRef(null);
   const [customer, setCustomer] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(customerStorageKey) || 'null');
@@ -1165,6 +1104,8 @@ export default function PublicPortal() {
   });
   const [cart, setCart] = useState([]);
   const [selectedMeal, setSelectedMeal] = useState(null);
+  const [mealNote, setMealNote] = useState('');
+  const [recentMealIds, setRecentMealIds] = useState(() => { try { return JSON.parse(localStorage.getItem('chopasap_recent_meals') || '[]'); } catch { return []; } });
   const [detailQuantity, setDetailQuantity] = useState(1);
   const [selectedVariation, setSelectedVariation] = useState('');
   const [mealReviews, setMealReviews] = useState([]);
@@ -1177,6 +1118,7 @@ export default function PublicPortal() {
     }
   });
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All Meals');
   const [orderOpen, setOrderOpen] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState('cart');
   const [fulfillment, setFulfillment] = useState('delivery');
@@ -1210,7 +1152,7 @@ export default function PublicPortal() {
 
   const items = data?.items || [];
   const categories = [...new Set(items.map((item) => item.category?.name).filter(Boolean))];
-  const filteredItems = items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredItems = items.filter((item) => (categoryFilter === 'All Meals' || item.category?.name === categoryFilter) && `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase()));
   const favoriteItems = items.filter((item) => favorites.includes(item.id));
   const marketingBannerSource = [
     ...(marketing.data?.banners || []),
@@ -1228,7 +1170,7 @@ export default function PublicPortal() {
     ...marketingSlides,
     ...(promotions.data?.items || [])
   ];
-  const visiblePromotionSlides = promotionSlides.length ? promotionSlides : [fallbackPromotionSlide];
+  const visiblePromotionSlides = promotionSlides;
   const [promotionIndex, setPromotionIndex] = useState(0);
   const featuredPromotion = visiblePromotionSlides[promotionIndex] || visiblePromotionSlides[0];
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.price * item.quantity, 0), [cart]);
@@ -1314,7 +1256,7 @@ export default function PublicPortal() {
   }, [soundEnabled]);
 
   const saveCustomerSession = (nextCustomer) => {
-    const saved = { ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
+    const saved = { sessionToken: customer?.sessionToken, ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
     localStorage.setItem(customerStorageKey, JSON.stringify(saved));
     setCustomer(saved);
     setCustomerForm({ ...emptyCustomerForm, ...saved });
@@ -1500,9 +1442,9 @@ export default function PublicPortal() {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket || !selectedOrder?.id) return undefined;
-    socket.emit('order:join', selectedOrder.id);
+    socket.emit('order:join', { id: selectedOrder.id, token: customer?.sessionToken });
     return () => socket.emit('order:leave', selectedOrder.id);
-  }, [selectedOrder?.id]);
+  }, [selectedOrder?.id, customer?.sessionToken]);
 
   useEffect(() => {
     if (!customer?.id) return;
@@ -1584,6 +1526,8 @@ export default function PublicPortal() {
 
   const openMealDetail = (item) => {
     setSelectedMeal(item);
+    setMealNote('');
+    setRecentMealIds(current => { const next = [item.id, ...current.filter(id => id !== item.id)].slice(0, 6); try { localStorage.setItem('chopasap_recent_meals', JSON.stringify(next)); } catch {} return next; });
     setDetailQuantity(1);
     setSelectedVariation('');
     setMealReviews(item.reviews || []);
@@ -1630,13 +1574,14 @@ export default function PublicPortal() {
     setShowAllReviews(false);
   };
 
-  const add = (item, quantity = 1, variationName = '') => {
-    const cartItemId = cartKeyFor(item.id, variationName);
+  const add = (item, quantity = 1, variationName = '', note = '') => {
+    if (item.isAvailable === false) return toast.error('This meal is unavailable');
+    const cartItemId = `${cartKeyFor(item.id, variationName)}:${note.trim()}`;
     const price = mealPrice(item, variationName);
     setCart((current) => {
       const existing = current.find((entry) => entry.cartItemId === cartItemId);
-      if (existing) return current.map((entry) => (entry.cartItemId === cartItemId ? { ...entry, quantity: entry.quantity + quantity } : entry));
-      return [...current, { cartItemId, menuItemId: item.id, variationName, name: item.name, price, quantity, imageUrl: item.imageUrl }];
+      if (existing) return current.map((entry) => (entry.cartItemId === cartItemId ? { ...entry, quantity: Math.min(99, entry.quantity + quantity) } : entry));
+      return [...current, { cartItemId, menuItemId: item.id, variationName, name: item.name, price, quantity, imageUrl: item.imageUrl, note: note.trim() }];
     });
     toast.success(`${item.name} added`);
     if (checkoutPromptTimerRef.current) window.clearTimeout(checkoutPromptTimerRef.current);
@@ -1644,10 +1589,10 @@ export default function PublicPortal() {
       toast.custom(
         (toastItem) => (
           <div className="w-[min(92vw,360px)] rounded-2xl bg-white p-4 shadow-[0_18px_45px_rgba(17,24,39,0.18)] ring-1 ring-black/5">
-            <p className="text-sm font-black text-[#151923]">Ready to checkout?</p>
-            <p className="mt-1 text-xs font-semibold text-[#6d6f76]">Your cart has {cartCount + quantity} item{cartCount + quantity === 1 ? '' : 's'} waiting.</p>
+            <p className="text-sm font-black text-[#171B25]">Ready to checkout?</p>
+            <p className="mt-1 text-xs font-semibold text-[#717680]">Your cart has {cartCount + quantity} item{cartCount + quantity === 1 ? '' : 's'} waiting.</p>
             <div className="mt-3 flex gap-2">
-              <button className="flex-1 rounded-xl bg-[#d71920] px-3 py-2 text-xs font-black text-white" onClick={() => { toast.dismiss(toastItem.id); openCheckout('cart'); }}>
+              <button className="flex-1 rounded-xl bg-[#E51924] px-3 py-2 text-xs font-black text-white" onClick={() => { toast.dismiss(toastItem.id); openCheckout('cart'); }}>
                 Checkout cart
               </button>
               <button className="rounded-xl bg-stone-100 px-3 py-2 text-xs font-black text-stone-700" onClick={() => toast.dismiss(toastItem.id)}>
@@ -1675,7 +1620,7 @@ export default function PublicPortal() {
   const updateQty = (id, delta) => {
     setCart((current) =>
       current
-        .map((item) => (item.cartItemId === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item))
+        .map((item) => (item.cartItemId === id ? { ...item, quantity: Math.min(99, Math.max(0, item.quantity + delta)) } : item))
         .filter((item) => item.quantity > 0)
     );
   };
@@ -1693,6 +1638,7 @@ export default function PublicPortal() {
 
   const submitOrder = async (event) => {
     event?.preventDefault();
+    if (orderSubmittingRef.current) return;
     if (!settings.publicOrdering) return toast.error('Online ordering is currently unavailable');
     if (!cart.length) return toast.error('Add at least one meal');
     if (fulfillment === 'delivery' && !orderForm.deliveryAddress.trim()) return toast.error('Enter your delivery address');
@@ -1703,6 +1649,8 @@ export default function PublicPortal() {
     const customerPhone = customer?.phone || orderForm.customerPhone;
     if (!customerName?.trim()) return toast.error('Enter your name');
     if (!customerPhone?.trim()) return toast.error('Enter your phone number');
+    orderSubmittingRef.current = true;
+    let savedOrder = null;
     setSubmitting(true);
     try {
       const submittedCart = cart;
@@ -1710,14 +1658,26 @@ export default function PublicPortal() {
         ...orderForm,
         customerName,
         customerPhone,
+        deliveryNote: [orderForm.deliveryNote, ...cart.filter(item => item.note).map(item => `${item.name}: ${item.note}`)].filter(Boolean).join('\n'),
         deliveryAddress: fulfillment === 'delivery' ? orderForm.deliveryAddress : 'Reserve onsite'
       };
+      const signature = JSON.stringify({ cart, submittedCustomer, fulfillment });
+      if (!orderAttemptRef.current) { try { orderAttemptRef.current = JSON.parse(sessionStorage.getItem('chopasap_order_attempt')); } catch {} }
+      if (orderAttemptRef.current?.signature !== signature) orderAttemptRef.current = { signature, requestId: newOrderRequestId() };
+      try { sessionStorage.setItem('chopasap_order_attempt', JSON.stringify(orderAttemptRef.current)); } catch {}
       const response = await endpoints.createOnlineOrder({
+        requestId: orderAttemptRef.current.requestId,
+        fulfillment: fulfillment === 'delivery' ? 'delivery' : 'onsite',
         ...submittedCustomer,
         customerId: customer?.id,
         deliveryFee,
         items: cart.map(({ menuItemId, quantity, variationName }) => ({ menuItemId, quantity, variationName }))
       });
+      savedOrder = response.data;
+      setConfirmedOrder(response.data);
+      try { sessionStorage.setItem('chopasap_confirmed_order', JSON.stringify(response.data)); } catch {}
+      orderAttemptRef.current = null;
+      try { sessionStorage.removeItem('chopasap_order_attempt'); } catch {}
       requestOrderNotificationPermission();
       toast.success(`Order ${response.data.orderNo} received`);
       addNotification('Order placed', `${response.data.orderNo} is pending confirmation.`);
@@ -1752,20 +1712,14 @@ export default function PublicPortal() {
         await loadCustomerOrders(freshCustomer?.id || customer.id);
       }
       refetch();
-      const adminPhone = whatsappPhone(settings.supportPhone);
-      if (adminPhone) {
-        const message = buildWhatsappOrderMessage({
-          order: response.data,
-          customer: submittedCustomer,
-          cartItems: submittedCart,
-          total: grandTotal,
-          deliveryFee
-        });
-        window.location.assign(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`);
+      const whatsappUrl = orderWhatsAppUrl(response.data, settings.supportPhone);
+      if (whatsappUrl) {
+        try { window.open(whatsappUrl, '_blank', 'noopener,noreferrer'); } catch { toast('Your order is saved. Use Continue to WhatsApp to reopen it.'); }
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not place order');
+      toast.error(savedOrder ? 'Your order is saved. Open Orders or Continue to WhatsApp.' : err.response?.data?.message || 'Could not place order');
     } finally {
+      orderSubmittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -1856,28 +1810,28 @@ export default function PublicPortal() {
     setPromotionOpen(true);
   };
 
-  if (loading) return <BuyerSplash />;
+  if (loading && !data) return customer ? <BuyerSkeleton /> : <BuyerSplash />;
   if (!customer) return <BuyerAuth form={customerForm} saving={customerSaving} onChange={setCustomerForm} onSubmit={submitCustomerSession} items={items} />;
   if (error || !data) return <EmptyState title="Menu unavailable" message="The ordering portal could not load the menu." onRetry={refetch} />;
 
   const renderMeals = (list) => (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-3">
       {list.map((item) => (
-        <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onFavorite={toggleFavorite} onOpen={openMealDetail} onShare={shareMeal} />
+        <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onFavorite={toggleFavorite} onOpen={openMealDetail} onAdd={add} />
       ))}
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#eaf5f8] text-stone-950">
-      <div className="mx-auto min-h-screen max-w-7xl bg-[#eef8fa]">
+    <div style={{ '--brand': tokens.colors.primary, '--background': tokens.colors.background, '--ink': tokens.colors.text, '--muted': tokens.colors.muted, '--border': tokens.colors.border }} className="buyer-platform min-h-screen bg-[#F8F9FB] text-stone-950">
+      <div className="mx-auto min-h-screen max-w-7xl bg-[#F8F9FB]">
         <LanguagePrompt open={languagePromptOpen} language={language} onChoose={chooseLanguage} />
         {showInstallPrompt ? <InstallAppPrompt canInstall={Boolean(installPrompt)} onInstall={installApp} onDismiss={dismissInstallPrompt} /> : null}
-        <header className="relative z-30 bg-[#eef8fa]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#dbe5e8] md:px-6">
+        <header className="relative z-30 bg-[#F8F9FB]/95 px-4 pb-3 pt-4 backdrop-blur md:border-b md:border-[#E5E7EB] md:px-6">
           {isFocusedPage ? (
             <div className="grid h-12 grid-cols-[44px_1fr_44px] items-center">
               <button
-                className="grid h-10 w-10 place-items-center rounded-full bg-white text-[#29384d] shadow-sm"
+                className="grid h-10 w-10 place-items-center rounded-full bg-white text-[#171B25] shadow-sm"
                 onClick={() => {
                   if (selectedOrder) {
                     setSelectedOrder(null);
@@ -1889,7 +1843,7 @@ export default function PublicPortal() {
               >
                 <ChevronLeft size={22} />
               </button>
-              <h1 className="text-center text-xl font-black text-[#151923]">{focusedPageTitle}</h1>
+              <h1 className="text-center text-xl font-black text-[#171B25]">{focusedPageTitle}</h1>
               <span />
             </div>
           ) : (
@@ -1898,36 +1852,34 @@ export default function PublicPortal() {
                 <div className="flex min-w-0 items-center gap-3">
                   <img className="h-8 w-8 rounded-lg object-cover md:h-12 md:w-12" src={chopasapLogo} alt="ChopASAP" />
                   <div className="min-w-0">
-                    <p className="text-xl font-black uppercase tracking-normal text-[#d71920]">CHOP ASAP</p>
-                    <p className="hidden items-center gap-1 truncate text-sm font-black text-stone-950 md:flex">
-                      <MapPin size={15} className="text-[#d71920]" />
+                    <p className="text-xl font-black uppercase tracking-normal text-[#E51924]">CHOP ASAP</p>
+                    <p className="flex items-center gap-1 truncate text-sm font-black text-stone-950 flex">
+                      <MapPin size={15} className="text-[#E51924]" />
                       {orderForm.deliveryAddress || 'Choose delivery location'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => openCheckout('cart')} aria-label="Basket">
+                  <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#F8F9FB] text-[#171B25] shadow-sm" onClick={() => openCheckout('cart')} aria-label="Basket">
                     <ShoppingBag size={19} />
-                    {cartCount ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{cartCount}</span> : null}
+                    {cartCount ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#E51924] px-1 text-[9px] font-black text-white">{cartCount}</span> : null}
                   </button>
-                  <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#f7fbfc] text-[#29384d] shadow-sm" onClick={() => setNotificationPanelOpen(true)} aria-label="Notifications">
+                  <button className="relative grid h-9 w-9 place-items-center rounded-full bg-[#F8F9FB] text-[#171B25] shadow-sm" onClick={() => setNotificationPanelOpen(true)} aria-label="Notifications">
                     <Bell size={19} />
-                    {notifications.length ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#d71920] px-1 text-[9px] font-black text-white">{Math.min(notifications.length, 9)}</span> : null}
+                    {notifications.length ? <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#E51924] px-1 text-[9px] font-black text-white">{Math.min(notifications.length, 9)}</span> : null}
                   </button>
-                  <button className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-white text-[#29384d] shadow-sm" onClick={() => setActiveTab('profile')} aria-label="Profile">
+                  <button className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-white text-[#171B25] shadow-sm" onClick={() => setActiveTab('profile')} aria-label="Profile">
                     {customer?.profileImageUrl ? <img className="h-full w-full object-cover" src={customer.profileImageUrl} alt={customer.name || 'Profile'} /> : <User size={19} />}
                   </button>
                 </div>
               </div>
-              <div className="mt-4 flex h-10 items-center gap-2 rounded-xl border border-[#f15b66] bg-white px-3">
-                <input
-                  className="h-full min-w-0 flex-1 bg-transparent text-sm font-semibold text-[#29384d] outline-none placeholder:text-[#9aa4ad]"
-                  placeholder={tr(language, 'search')}
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <Search size={21} className="text-[#f15b66]" />
-              </div>
+              {['home', 'meals', 'favorites'].includes(activeTab) && <>
+                {activeTab === 'home' && <div className="buyer-welcome"><h1>What are you craving?</h1><p>Discover delicious meals freshly prepared for you{customer?.name ? ', ' + customer.name.split(' ')[0] : ''}.</p></div>}
+                <div className="buyer-search"><Search size={20} /><input aria-label="Search meals" placeholder="Search meals, drinks and more." value={search} onChange={event => setSearch(event.target.value)} />
+                  {search && <button aria-label="Clear search" onClick={() => setSearch('')}><X size={18} /></button>}
+                  <label className="sr-only" htmlFor="category-filter">Filter by category</label><select id="category-filter" aria-label="Filter by category" value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option>All Meals</option>{categories.map(name => <option key={name}>{name}</option>)}</select>
+                </div>
+              </>}
             </>
           )}
         </header>
@@ -1937,16 +1889,16 @@ export default function PublicPortal() {
             <div className="mb-3 flex items-center gap-3 rounded-2xl bg-[#fff3cf] p-3">
               <img className="h-10 w-10 rounded-xl object-cover" src={chopasapLogo} alt="ChopASAP" />
               <div>
-                <p className="text-xs font-black uppercase text-[#d71920]">ChopASAP</p>
-                <p className="text-xs font-bold text-stone-600">Restaurant module</p>
+                <p className="text-xs font-black uppercase text-[#E51924]">ChopASAP</p>
+                <p className="text-xs font-bold text-stone-600">Fresh meals, made for you</p>
               </div>
             </div>
             <nav className="grid gap-2">
                 {tabs.map((tab) => (
-                  <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} desktop language={language} badge={tab.id === 'orders' ? activeOrderCount : 0} />
+                  <TabButton key={tab.id} tab={tab} active={activeTab === tab.id} onClick={() => tab.id === 'cart' ? openCheckout('cart') : setActiveTab(tab.id)} desktop language={language} badge={tab.id === 'cart' ? cartCount : tab.id === 'orders' ? activeOrderCount : 0} />
                 ))}
             </nav>
-            <button className="mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-[#fff1ca] text-sm font-black text-[#d71920] disabled:opacity-50" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
+            <button className="mt-4 flex h-11 w-full items-center justify-center rounded-2xl bg-[#fff1ca] text-sm font-black text-[#E51924] disabled:opacity-50" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
               <CalendarClock size={17} /> Reserve
             </button>
             {activeTab === 'support' ? null : <a className="mt-2 flex h-11 w-full items-center justify-center rounded-2xl bg-stone-50 text-sm font-black text-stone-700" href="/login">Login</a>}
@@ -1965,34 +1917,36 @@ export default function PublicPortal() {
                   onAction={handlePromotionCta}
                 />
 
+                <div className="buyer-categories" aria-label="Food categories">{['All Meals', ...categories].map(name => <button key={name} aria-pressed={categoryFilter === name} onClick={() => setCategoryFilter(name)}>{items.find(item => item.category?.name === name)?.imageUrl && <img src={items.find(item => item.category?.name === name).imageUrl} alt="" loading="lazy" />}{name}</button>)}</div>
                 <section id="menu" className="mt-5">
                   <div className="mb-2 flex items-center justify-between">
-                    <h2 className="text-xl font-black tracking-normal text-[#151923]">Today's Menu</h2>
-                    <ChevronRight size={22} className="text-[#29384d]" />
+                    <h2 className="text-xl font-black tracking-normal text-[#171B25]">Today's Menu</h2>
+                    <ChevronRight size={22} className="text-[#171B25]" />
                   </div>
                   <div>
                     {filteredItems.length ? renderMeals(filteredItems) : <div className="rounded-3xl bg-white p-8 text-center font-semibold text-stone-500 shadow-md">{items.length ? 'No meals match your search.' : 'No meals are available yet.'}</div>}
                   </div>
                 </section>
 
+                {recentMealIds.length > 0 && <section className="mt-6"><h2 className="mb-4">Recently viewed</h2>{renderMeals(recentMealIds.map(id => items.find(item => item.id === id)).filter(Boolean).slice(0, 4))}</section>}
                 {false && (
                 <section className="mt-5">
                   <div className="mb-2 flex items-center justify-between">
-                    <h2 className="text-xl font-black tracking-normal text-[#151923]">Active Orders</h2>
-                    <ChevronRight size={22} className="text-[#29384d]" />
+                    <h2 className="text-xl font-black tracking-normal text-[#171B25]">Active Orders</h2>
+                    <ChevronRight size={22} className="text-[#171B25]" />
                   </div>
                   <div className="rounded-xl bg-white px-3 shadow-sm">
                     {activeOrders.length ? activeOrders.slice(0, 3).map((order) => (
-                      <div key={order.id || order.orderNo} className="flex items-center gap-3 border-b border-[#dbe5e8] py-3 last:border-b-0">
+                      <div key={order.id || order.orderNo} className="flex items-center gap-3 border-b border-[#E5E7EB] py-3 last:border-b-0">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-black text-[#151923]">{order.orderNo}</p>
+                          <p className="truncate text-sm font-black text-[#171B25]">{order.orderNo}</p>
                           <p className="mt-1 text-xs font-semibold text-[#8a8f98]">{order.items?.length || 0} item{(order.items?.length || 0) === 1 ? '' : 's'} • {currency(order.total)}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs font-black text-[#19b567]">{order.status || 'PENDING'}</p>
                           <p className="mt-1 text-[11px] font-semibold text-[#8a8f98]">Time 30mins</p>
                         </div>
-                        <ChevronRight size={18} className="text-[#29384d]" />
+                        <ChevronRight size={18} className="text-[#171B25]" />
                       </div>
                     )) : (
                       <p className="py-4 text-sm font-semibold text-[#8a8f98]">No active orders yet.</p>
@@ -2010,7 +1964,7 @@ export default function PublicPortal() {
                 <div className="mt-5">
                   {favoriteItems.length ? renderMeals(favoriteItems) : (
                     <div className="rounded-3xl bg-white p-8 text-center shadow-md">
-                      <Heart className="mx-auto text-[#d71920]" size={34} />
+                      <Heart className="mx-auto text-[#E51924]" size={34} />
                       <p className="mt-3 font-black">No favorites yet</p>
                       <p className="mt-1 text-sm font-semibold text-stone-500">Tap a heart on any meal to save it.</p>
                     </div>
@@ -2030,38 +1984,38 @@ export default function PublicPortal() {
             {activeTab === 'orders' ? (
               <section>
                 {selectedOrder ? (
-                  <OrderDetailView order={selectedOrder} onBack={() => setSelectedOrder(null)} />
+                  <><div className="buyer-account-links"><a className="btn-secondary" href={orderWhatsAppUrl(selectedOrder, settings.supportPhone) || undefined} target="_blank" rel="noreferrer">Contact ChopASAP</a><button onClick={() => { const available = selectedOrder.items.map(row => ({ row, meal: items.find(item => item.id === row.menuItemId && item.isAvailable !== false) })).filter(entry => entry.meal); if (!available.length) return toast.error('These meals are no longer available'); available.forEach(({ meal, row }) => add(meal, Math.min(99, row.quantity), mealVariations(meal).some(v => v.name === row.variationName) ? row.variationName : '')); openCheckout('cart'); }}>Reorder available meals</button></div><OrderDetailView order={selectedOrder} onBack={() => setSelectedOrder(null)} /></>
                 ) : (
                   <>
                 <h1 className="text-2xl font-black">Orders</h1>
-                <p className="mt-1 text-sm font-semibold text-stone-600">Track orders placed during this session.</p>
+                <p className="mt-1 text-sm font-semibold text-stone-600">Your active orders and order history.</p>
                 {activeOrders.length ? (
                   <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
                     {orderStatusOptions.map((status) => (
                       <button
                         key={status}
                         type="button"
-                        className={clsx('shrink-0 rounded-full border px-4 py-2 text-xs font-black', orderStatusFilter === status ? 'border-[#d71920] bg-[#fff4f4] text-[#d71920]' : 'border-[#dbe5e8] bg-white text-stone-600')}
+                        className={clsx('shrink-0 rounded-full border px-4 py-2 text-xs font-black', orderStatusFilter === status ? 'border-[#E51924] bg-[#fff4f4] text-[#E51924]' : 'border-[#E5E7EB] bg-white text-stone-600')}
                         onClick={() => setOrderStatusFilter(status)}
                       >
-                        {status === 'ALL' ? tr(language, 'all') : status.replaceAll('_', ' ')}
+                        {status === 'ALL' ? tr(language, 'all') : orderStatusLabels[status] || status}
                       </button>
                     ))}
                   </div>
                 ) : null}
                 <div className="mt-5 rounded-xl bg-white px-3 shadow-sm">
                   {visibleOrders.length ? visibleOrders.map((order) => (
-                    <button key={order.id || order.orderNo} className="flex w-full items-center gap-3 border-b border-[#dbe5e8] py-4 text-left last:border-b-0" onClick={() => setSelectedOrder(order)}>
-                      <ClipboardList size={22} className="text-[#d71920]" />
+                    <button key={order.id || order.orderNo} className="flex w-full items-center gap-3 border-b border-[#E5E7EB] py-4 text-left last:border-b-0" onClick={() => setSelectedOrder(order)}>
+                      <ClipboardList size={22} className="text-[#E51924]" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-black text-[#151923]">{order.orderNo}</p>
+                        <p className="truncate text-sm font-black text-[#171B25]">{order.orderNo}</p>
                         <p className="mt-1 text-xs font-semibold text-[#8a8f98]">{order.items?.length || 0} item{(order.items?.length || 0) === 1 ? '' : 's'} • {currency(order.total)}</p>
                       </div>
                       <span className="rounded-full bg-[#e7f8ef] px-3 py-1 text-xs font-black text-[#19b567]">{order.status || 'PENDING'}</span>
                     </button>
                   )) : (
                     <div className="py-8 text-center">
-                      <ClipboardList className="mx-auto text-[#d71920]" size={34} />
+                      <ClipboardList className="mx-auto text-[#E51924]" size={34} />
                       <p className="mt-3 font-black">{activeOrders.length ? tr(language, 'noOrdersForStatus') : 'No orders yet'}</p>
                       <p className="mt-1 text-sm font-semibold text-[#8a8f98]">{activeOrders.length ? '' : 'Orders you place from this portal will appear here.'}</p>
                     </div>
@@ -2075,9 +2029,9 @@ export default function PublicPortal() {
             {activeTab === 'support' ? (
               <section>
                 <div className="overflow-hidden rounded-3xl bg-white shadow-md">
-                  <div className="bg-[#151923] px-5 py-6 text-white sm:px-7">
+                  <div className="bg-[#171B25] px-5 py-6 text-white sm:px-7">
                     <div className="flex items-start gap-4">
-                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white text-[#d71920]">
+                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white text-[#E51924]">
                         <MessageCircle size={27} />
                       </div>
                       <div className="min-w-0">
@@ -2089,7 +2043,7 @@ export default function PublicPortal() {
                   </div>
                   <div className="grid gap-4 p-5 sm:grid-cols-3 sm:p-7">
                     <a
-                      className="rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 transition hover:border-[#d71920] hover:bg-white"
+                      className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FB] p-4 transition hover:border-[#E51924] hover:bg-white"
                       href={`https://wa.me/${whatsappPhone(settings.supportPhone)}?text=${encodeURIComponent('Hello ChopASAP, I need support with my order.')}`}
                       target="_blank"
                       rel="noreferrer"
@@ -2100,15 +2054,15 @@ export default function PublicPortal() {
                       <h2 className="mt-4 font-black">WhatsApp support</h2>
                       <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">Chat directly with the restaurant team.</p>
                     </a>
-                    <a className="rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 transition hover:border-[#d71920] hover:bg-white" href={`tel:${settings.supportPhone}`}>
-                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#fff1ca] text-[#d71920]">
+                    <a className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FB] p-4 transition hover:border-[#E51924] hover:bg-white" href={`tel:${settings.supportPhone}`}>
+                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#fff1ca] text-[#E51924]">
                         <Phone size={22} />
                       </span>
                       <h2 className="mt-4 font-black">Call support</h2>
                       <p className="mt-1 text-sm font-semibold leading-5 text-stone-600">{settings.supportPhone}</p>
                     </a>
-                    <button className="rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4 text-left transition hover:border-[#d71920] hover:bg-white disabled:opacity-60" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
-                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#eef8fa] text-[#29384d]">
+                    <button className="rounded-2xl border border-[#E5E7EB] bg-[#F8F9FB] p-4 text-left transition hover:border-[#E51924] hover:bg-white disabled:opacity-60" disabled={!settings.reservations} onClick={() => setReservationOpen(true)}>
+                      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#F8F9FB] text-[#171B25]">
                         <CalendarClock size={22} />
                       </span>
                       <h2 className="mt-4 font-black">Reserve onsite</h2>
@@ -2120,17 +2074,17 @@ export default function PublicPortal() {
                 <div className="mt-5 rounded-3xl bg-white p-5 shadow-md sm:p-7">
                   <div className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">Help center</p>
+                      <p className="text-xs font-black uppercase tracking-wide text-[#E51924]">Help center</p>
                       <h2 className="mt-1 text-xl font-black">Frequently asked questions</h2>
                     </div>
-                    <div className="hidden h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920] sm:grid">
+                    <div className="hidden h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#E51924] sm:grid">
                       <Info size={23} />
                     </div>
                   </div>
                   <div className="mt-5 grid gap-3">
                     {supportFaqs.map((faq) => (
-                      <div key={faq.question} className="rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4">
-                        <h3 className="font-black text-[#151923]">{faq.question}</h3>
+                      <div key={faq.question} className="rounded-2xl border border-[#edf0f2] bg-[#F8F9FB] p-4">
+                        <h3 className="font-black text-[#171B25]">{faq.question}</h3>
                         <p className="mt-2 text-sm font-semibold leading-6 text-stone-600">{faq.answer}</p>
                       </div>
                     ))}
@@ -2140,9 +2094,9 @@ export default function PublicPortal() {
             ) : null}
 
             {activeTab === 'profile' ? (
-              <section>
+              <section><div className="buyer-account-links"><button onClick={() => setActiveTab('favorites')}><Heart size={20} />Favourites</button><button onClick={() => setActiveTab('support')}><Phone size={20} />Contact support</button><button onClick={() => setActiveTab('orders')}><ClipboardList size={20} />Order history</button><button onClick={() => setNotificationPanelOpen(true)}><Bell size={20} />Notifications</button></div>
                 <div className="overflow-hidden rounded-3xl bg-white shadow-md">
-                  <div className="bg-[#151923] px-5 py-6 text-white sm:px-7">
+                  <div className="bg-[#171B25] px-5 py-6 text-white sm:px-7">
                     <div className="flex items-center gap-4">
                       <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-3xl bg-white/10">
                         {customer?.profileImageUrl ? (
@@ -2150,7 +2104,7 @@ export default function PublicPortal() {
                         ) : (
                           <div className="grid h-full w-full place-items-center text-white"><User size={34} /></div>
                         )}
-                        <label className="absolute bottom-1 right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-white text-[#d71920] shadow-md">
+                        <label className="absolute bottom-1 right-1 grid h-8 w-8 cursor-pointer place-items-center rounded-full bg-white text-[#E51924] shadow-md">
                           <Camera size={16} />
                           <input className="hidden" type="file" accept="image/*" disabled={avatarUploading} onChange={(event) => uploadCustomerAvatar(event.target.files?.[0])} />
                         </label>
@@ -2166,22 +2120,22 @@ export default function PublicPortal() {
                     {[
                       { label: tr(language, 'totalOrders'), value: activeOrders.length || customer?.orderCount || 0, icon: ClipboardList, tone: 'bg-[#fff4d7] text-[#8b5f00]' },
                       { label: tr(language, 'points'), value: Number(customer?.points || 0), icon: Trophy, tone: 'bg-[#e7f8ef] text-[#0b8f4f]' },
-                      { label: tr(language, 'referrals'), value: Number(customer?.referralCount || 0), icon: Gift, tone: 'bg-[#eef8fa] text-[#29384d]' }
+                      { label: tr(language, 'referrals'), value: Number(customer?.referralCount || 0), icon: Gift, tone: 'bg-[#F8F9FB] text-[#171B25]' }
                     ].map((stat) => {
                       const Icon = stat.icon;
                       return (
-                        <div key={stat.label} className="rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-3 text-center sm:p-4">
+                        <div key={stat.label} className="rounded-2xl border border-[#edf0f2] bg-[#F8F9FB] p-3 text-center sm:p-4">
                           <span className={clsx('mx-auto grid h-10 w-10 place-items-center rounded-xl', stat.tone)}>
                             <Icon size={20} />
                           </span>
-                          <p className="mt-2 text-2xl font-black text-[#151923] sm:text-3xl">{stat.value}</p>
+                          <p className="mt-2 text-2xl font-black text-[#171B25] sm:text-3xl">{stat.value}</p>
                           <p className="mt-1 text-[11px] font-black uppercase text-stone-500 sm:text-xs">{stat.label}</p>
                         </div>
                       );
                     })}
                   </div>
                   <div className="border-t border-[#edf0f2] px-5 pb-5 sm:px-7 sm:pb-7">
-                    <div className="rounded-2xl bg-[#151923] p-4 text-white">
+                    <div className="rounded-2xl bg-[#171B25] p-4 text-white">
                       <div className="flex items-center justify-between gap-4">
                         <div>
                           <p className="text-xs font-black uppercase text-white/55">{tr(language, 'currentRank')}</p>
@@ -2194,7 +2148,7 @@ export default function PublicPortal() {
                 </div>
 
                 <div className="mt-5 overflow-hidden rounded-3xl bg-white shadow-md">
-                  <div className="grid grid-cols-2 gap-2 border-b border-[#edf0f2] bg-[#f7fbfc] p-2">
+                  <div className="grid grid-cols-2 gap-2 border-b border-[#edf0f2] bg-[#F8F9FB] p-2">
                     {[
                       { id: 'referral', label: tr(language, 'shareReferralLink'), icon: Share2 },
                       { id: 'details', label: tr(language, 'accountDetails'), icon: User }
@@ -2204,7 +2158,7 @@ export default function PublicPortal() {
                         <button
                           key={tab.id}
                           type="button"
-                          className={clsx('flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black transition', profileTab === tab.id ? 'bg-white text-[#d71920] shadow-sm' : 'text-stone-600')}
+                          className={clsx('flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black transition', profileTab === tab.id ? 'bg-white text-[#E51924] shadow-sm' : 'text-stone-600')}
                           onClick={() => setProfileTab(tab.id)}
                         >
                           <Icon size={17} /> {tab.label}
@@ -2217,34 +2171,34 @@ export default function PublicPortal() {
                     <div className="p-5 sm:p-7">
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p className="text-xs font-black uppercase tracking-wide text-[#d71920]">{tr(language, 'referralRewards')}</p>
+                          <p className="text-xs font-black uppercase tracking-wide text-[#E51924]">{tr(language, 'referralRewards')}</p>
                           <h2 className="mt-1 text-xl font-black">{tr(language, 'inviteFriends')}</h2>
                           <p className="mt-1 text-sm font-semibold text-stone-500">{tr(language, 'referralHelp')}</p>
                         </div>
-                        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#d71920]">
+                        <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff1ca] text-[#E51924]">
                           <Gift size={23} />
                         </span>
                       </div>
                       <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
-                        <div className="min-w-0 rounded-2xl border border-[#dbe5e8] bg-[#f7fbfc] p-4">
+                        <div className="min-w-0 rounded-2xl border border-[#E5E7EB] bg-[#F8F9FB] p-4">
                           <p className="text-xs font-black uppercase text-stone-500">{tr(language, 'yourReferralLink')}</p>
-                          <p className="mt-2 truncate text-sm font-black text-[#151923]">{referralLink || tr(language, 'referralPending')}</p>
+                          <p className="mt-2 truncate text-sm font-black text-[#171B25]">{referralLink || tr(language, 'referralPending')}</p>
                           <p className="mt-1 text-xs font-bold text-stone-500">{customer?.referralCount || 0} {Number(customer?.referralCount || 0) === 1 ? tr(language, 'successfulReferral') : tr(language, 'successfulReferrals')}</p>
                         </div>
                         <button
                           type="button"
-                          className="flex h-12 items-center justify-center gap-2 rounded-xl bg-[#d71920] px-5 text-sm font-black text-white disabled:opacity-60"
+                          className="flex h-12 items-center justify-center gap-2 rounded-xl bg-[#E51924] px-5 text-sm font-black text-white disabled:opacity-60"
                           onClick={shareReferral}
                           disabled={!referralLink}
                         >
                           <Share2 size={17} /> {tr(language, 'share')}
                         </button>
                       </div>
-                      <div className="mt-5 rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4">
+                      <div className="mt-5 rounded-2xl border border-[#edf0f2] bg-[#F8F9FB] p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="text-xs font-black uppercase text-stone-500">{tr(language, 'language')}</p>
-                            <p className="mt-1 text-sm font-bold text-[#151923]">{language === 'fr' ? 'Français' : 'English'}</p>
+                            <p className="mt-1 text-sm font-bold text-[#171B25]">{language === 'fr' ? 'Français' : 'English'}</p>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             {[
@@ -2254,7 +2208,7 @@ export default function PublicPortal() {
                               <button
                                 key={option.id}
                                 type="button"
-                                className={clsx('h-10 rounded-xl px-4 text-xs font-black', language === option.id ? 'bg-[#d71920] text-white' : 'bg-white text-stone-600')}
+                                className={clsx('h-10 rounded-xl px-4 text-xs font-black', language === option.id ? 'bg-[#E51924] text-white' : 'bg-white text-stone-600')}
                                 onClick={() => chooseLanguage(option.id)}
                               >
                                 {option.label}
@@ -2291,13 +2245,14 @@ export default function PublicPortal() {
                         </label>
                       </div>
                       <div className="flex flex-col gap-3 sm:flex-row">
-                        <button className="flex h-11 items-center justify-center rounded-xl bg-[#d71920] px-4 text-sm font-black text-white disabled:opacity-60" disabled={customerSaving || avatarUploading}>
+                        <button className="flex h-11 items-center justify-center rounded-xl bg-[#E51924] px-4 text-sm font-black text-white disabled:opacity-60" disabled={customerSaving || avatarUploading}>
                           {customerSaving ? tr(language, 'saving') : avatarUploading ? tr(language, 'uploading') : tr(language, 'saveProfile')}
                         </button>
                         <button
                           type="button"
                           className="flex h-11 items-center justify-center rounded-xl bg-stone-100 px-4 text-sm font-black text-stone-700"
                           onClick={() => {
+                            if (!window.confirm('Log out of your account?')) return;
                             localStorage.removeItem(customerStorageKey);
                             setCustomer(null);
                             setCustomerForm(emptyCustomerForm);
@@ -2317,7 +2272,7 @@ export default function PublicPortal() {
           {!isFocusedPage ? <aside className="hidden self-start rounded-3xl bg-white p-4 shadow-md lg:block">
             <div className="flex items-center justify-between">
               <h2 className="font-black">Basket</h2>
-              <span className="rounded-full bg-[#fff1ca] px-3 py-1 text-xs font-black text-[#d71920]">{cartCount} items</span>
+              <span className="rounded-full bg-[#fff1ca] px-3 py-1 text-xs font-black text-[#E51924]">{cartCount} items</span>
             </div>
             <div className="mt-4 space-y-3">
               {cart.length ? cart.slice(0, 3).map((item) => (
@@ -2326,20 +2281,20 @@ export default function PublicPortal() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black">{item.name}</p>
                     {item.variationName ? <p className="truncate text-xs font-bold text-stone-600">{item.variationName}</p> : null}
-                    <p className="text-sm font-black text-[#d71920]">{currency(item.price * item.quantity)}</p>
+                    <p className="text-sm font-black text-[#E51924]">{currency(item.price * item.quantity)}</p>
                   </div>
                 </div>
               )) : <p className="rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-600">Your basket is empty.</p>}
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-stone-100 pt-4 text-lg font-black">
               <span>Total</span>
-              <span className="text-[#d71920]">{currency(grandTotal)}</span>
+              <span className="text-[#E51924]">{currency(grandTotal)}</span>
             </div>
             <RedButton className="mt-4 w-full" disabled={!settings.publicOrdering} onClick={() => openCheckout('cart')}>Checkout</RedButton>
           </aside> : null}
         </div>
 
-        {!isFocusedPage ? <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} language={language} activeOrderCount={activeOrderCount} /> : null}
+        {<BottomNav activeTab={activeTab} setActiveTab={(id) => id === 'cart' ? openCheckout('cart') : setActiveTab(id)} language={language} activeOrderCount={activeOrderCount} cartCount={cartCount} />}
       </div>
 
       <FlashSalePopup
@@ -2375,7 +2330,7 @@ export default function PublicPortal() {
 
       {customer && (marketing.data?.floatingRewards || []).length ? (
         <button
-          className="fixed bottom-24 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#d71920] text-white shadow-[0_18px_35px_rgba(215,25,32,0.28)] md:bottom-8 md:right-8"
+          className="fixed bottom-24 right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-[#E51924] text-white shadow-[0_18px_35px_rgba(215,25,32,0.28)] md:bottom-8 md:right-8"
           onClick={() => setRewardPanelOpen(true)}
           aria-label="Open rewards"
         >
@@ -2391,9 +2346,12 @@ export default function PublicPortal() {
           reviews={mealReviews}
           showAllReviews={showAllReviews}
           onVariationChange={setSelectedVariation}
-          onQuantityChange={(delta) => setDetailQuantity((current) => Math.max(1, current + delta))}
+          onQuantityChange={(delta) => setDetailQuantity((current) => Math.min(99, Math.max(1, current + delta)))}
           onClose={closeMealDetail}
-          onAdd={add}
+          onAdd={(item, quantity, variation) => add(item, quantity, variation, mealNote)}
+          favorite={favorites.includes(selectedMeal.id)} onFavorite={toggleFavorite}
+          note={mealNote} onNoteChange={setMealNote}
+          relatedItems={items.filter(item => item.id !== selectedMeal.id && item.categoryId === selectedMeal.categoryId).slice(0, 4)} onOpenRelated={openMealDetail}
           onShare={shareMeal}
           onToggleReviews={() => setShowAllReviews((current) => !current)}
         />
@@ -2409,10 +2367,10 @@ export default function PublicPortal() {
               <div className="pb-8">
                 <div className="bg-white">
                   {cart.map((item) => (
-                    <CheckoutItem key={item.cartItemId} item={item} address={orderForm.deliveryAddress} onChangeQty={updateQty} onRemove={(id) => updateQty(id, -999)} />
+                    <CheckoutItem key={item.cartItemId} item={item} address={orderForm.deliveryAddress} onChangeQty={updateQty} onRemove={(id) => { if (window.confirm('Remove this meal from your cart?')) updateQty(id, -999); }} />
                   ))}
                 </div>
-                <div className="mt-5 border-t border-[#dbe5e8] px-6 pt-4">
+                <div className="mt-5 border-t border-[#E5E7EB] px-6 pt-4">
                   <div className="flex items-center justify-between text-[16px]">
                     <span>Items Total</span>
                     <span>{currency(subtotal)}</span>
@@ -2421,13 +2379,13 @@ export default function PublicPortal() {
                     <span>Delivery</span>
                     <span>{currency(deliveryFee)}</span>
                   </div>
-                  <div className="mt-10 flex items-center justify-between border-t border-[#dbe5e8] pt-4 text-[16px]">
+                  <div className="mt-10 flex items-center justify-between border-t border-[#E5E7EB] pt-4 text-[16px]">
                     <span>Total</span>
                     <span>{currency(grandTotal)}</span>
                   </div>
                 </div>
                 <div className="mt-44 px-6 sm:mt-12">
-                  <RedButton className="w-full rounded-md" disabled={!settings.publicOrdering} onClick={() => setCheckoutStep('details')}>Proceed to Check out</RedButton>
+                  <RedButton className="w-full rounded-md" disabled={!settings.publicOrdering} onClick={() => setCheckoutStep('details')}>Proceed to order</RedButton>
                 </div>
               </div>
             ) : (
@@ -2440,7 +2398,7 @@ export default function PublicPortal() {
                   </div>
                 </div>
                 <h2 className="mt-3 text-xl font-medium">Add items to start a basket</h2>
-                <p className="mt-3 max-w-xs text-[16px] leading-7 text-[#5f646b]">OOPPSS your cart is empty to view items try adding an item to cart</p>
+                <p className="mt-3 max-w-xs text-[16px] leading-7 text-[#717680]">OOPPSS your cart is empty to view items try adding an item to cart</p>
                 <RedButton className="mt-10 rounded-md px-8" onClick={closeCheckout}>Start Shopping</RedButton>
               </div>
             )
@@ -2466,7 +2424,7 @@ export default function PublicPortal() {
                 <label className="flex w-full items-start gap-4 border-b border-[#edf0f2] px-6 py-4 text-left">
                   <MapPin className="mt-1 shrink-0 text-black" size={27} fill="currentColor" />
                   <span className="min-w-0 flex-1">
-                    <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">
+                    <span className="mb-1 block text-xs font-black uppercase text-[#E51924]">
                       {fulfillment === 'delivery' ? 'Delivery address' : 'Reserve onsite'}
                     </span>
                     {fulfillment === 'delivery' ? (
@@ -2481,7 +2439,7 @@ export default function PublicPortal() {
                     ) : (
                       <span className="block text-[16px] font-medium text-[#07142a]">You will come onsite to pick up the meal.</span>
                     )}
-                    <span className="mt-1 block text-sm text-[#6d6f76]">{fulfillment === 'delivery' ? 'Tell us where to deliver your order.' : 'No delivery details are needed for reserve orders.'}</span>
+                    <span className="mt-1 block text-sm text-[#717680]">{fulfillment === 'delivery' ? 'Tell us where to deliver your order.' : 'No delivery details are needed for reserve orders.'}</span>
                   </span>
                   {fulfillment === 'delivery' ? <button type="button" className="grid h-9 w-9 place-items-center" onClick={useLocation} aria-label="Use current location">
                     <ChevronRight className="text-[#07142a]" size={22} />
@@ -2490,7 +2448,7 @@ export default function PublicPortal() {
                 {fulfillment === 'delivery' ? <label className="flex w-full items-start gap-4 border-b border-[#edf0f2] px-6 py-4">
                   <User className="mt-1 shrink-0 text-black" size={24} fill="currentColor" />
                   <span className="min-w-0 flex-1">
-                    <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">Your name</span>
+                    <span className="mb-1 block text-xs font-black uppercase text-[#E51924]">Your name</span>
                     <input
                       className="min-w-0 flex-1 bg-transparent text-[16px] font-medium outline-none placeholder:text-[#9aa4ad]"
                       placeholder="Example: Amina N."
@@ -2499,13 +2457,13 @@ export default function PublicPortal() {
                       minLength={2}
                       required
                     />
-                    <span className="mt-1 block text-sm text-[#6d6f76]">The restaurant will use this name for your order.</span>
+                    <span className="mt-1 block text-sm text-[#717680]">The restaurant will use this name for your order.</span>
                   </span>
                 </label> : null}
                 {fulfillment === 'delivery' ? <label className="flex w-full items-start gap-4 px-6 py-4">
                   <Phone className="mt-1 shrink-0 text-black" size={24} />
                   <span className="min-w-0 flex-1">
-                    <span className="mb-1 block text-xs font-black uppercase text-[#d71920]">Phone number</span>
+                    <span className="mb-1 block text-xs font-black uppercase text-[#E51924]">Phone number</span>
                     <input
                       className="min-w-0 flex-1 bg-transparent text-[16px] font-medium outline-none placeholder:text-[#9aa4ad]"
                       placeholder="Example: 671286999"
@@ -2516,29 +2474,29 @@ export default function PublicPortal() {
                       minLength={6}
                       required
                     />
-                    <span className="mt-1 block text-sm text-[#6d6f76]">We need this to confirm your order if necessary.</span>
+                    <span className="mt-1 block text-sm text-[#717680]">We need this to confirm your order if necessary.</span>
                   </span>
                 </label> : null}
               </div>
               <div className="mt-4 bg-white px-6 py-5">
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#edf0f2] bg-[#f7fbfc] p-4">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[#edf0f2] bg-[#F8F9FB] p-4">
                   <input
-                    className="mt-1 h-4 w-4 accent-[#d71920]"
+                    className="mt-1 h-4 w-4 accent-[#E51924]"
                     type="checkbox"
                     checked={orderForm.isGift}
                     onChange={(event) => setOrderForm({ ...orderForm, isGift: event.target.checked })}
                   />
                   <span className="min-w-0">
-                    <span className="flex items-center gap-2 text-sm font-black text-[#151923]">
-                      <Gift size={17} className="text-[#d71920]" /> Order this meal for someone else
+                    <span className="flex items-center gap-2 text-sm font-black text-[#171B25]">
+                      <Gift size={17} className="text-[#E51924]" /> Order this meal for someone else
                     </span>
-                    <span className="mt-1 block text-sm font-semibold text-[#6d6f76]">Add their name and phone so the restaurant knows who should receive or collect the meal.</span>
+                    <span className="mt-1 block text-sm font-semibold text-[#717680]">Add their name and phone so the restaurant knows who should receive or collect the meal.</span>
                   </span>
                 </label>
                 {orderForm.isGift ? (
                   <div className="mt-4 grid gap-3">
                     <label className="block">
-                      <span className="text-xs font-black uppercase text-[#d71920]">Loved one's name</span>
+                      <span className="text-xs font-black uppercase text-[#E51924]">Loved one's name</span>
                       <input
                         className="input mt-1"
                         placeholder="Example: Nelly"
@@ -2549,7 +2507,7 @@ export default function PublicPortal() {
                       />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-black uppercase text-[#d71920]">Loved one's phone</span>
+                      <span className="text-xs font-black uppercase text-[#E51924]">Loved one's phone</span>
                       <input
                         className="input mt-1"
                         type="tel"
@@ -2563,7 +2521,7 @@ export default function PublicPortal() {
                     </label>
                     {fulfillment === 'delivery' ? (
                       <label className="block">
-                        <span className="text-xs font-black uppercase text-[#d71920]">Loved one's delivery address</span>
+                        <span className="text-xs font-black uppercase text-[#E51924]">Loved one's delivery address</span>
                         <input
                           className="input mt-1"
                           placeholder="Where should we deliver their meal?"
@@ -2579,7 +2537,7 @@ export default function PublicPortal() {
               </div>
               <div className="flex items-center justify-between px-4 py-4 text-[16px]">
                 <span>{fulfillment === 'delivery' ? 'Delivery time' : 'Reserve time'}</span>
-                <span>{fulfillment === 'delivery' ? '15-30 min(s)' : 'Restaurant confirmation'}</span>
+                <span>{fulfillment === 'delivery' ? 'Confirmed by restaurant' : 'Restaurant confirmation'}</span>
               </div>
               <div className="px-6">
                 <label className="text-[16px] leading-5 text-[#07142a]">Leave a message for the restaurant (optional)</label>
@@ -2605,40 +2563,24 @@ export default function PublicPortal() {
                 </button>
               </div>
               <PriceRows subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} total={grandTotal} showService />
-              <div className="mt-7 px-6">
+              <div className="mt-7 px-6"><p className="mb-3 text-sm text-stone-500">Your order is saved with ChopASAP first. WhatsApp opens a prepared message for you to send and finalize arrangements.</p>
                 <RedButton className="w-full rounded-md" disabled={submitting || !settings.publicOrdering || !cart.length}>
-                  {submitting ? 'Placing order...' : 'Confirm order'}
+                  {submitting ? 'Saving your order?' : 'Place Order & Continue to WhatsApp'}
                 </RedButton>
               </div>
             </form>
           ) : null}
 
-          {checkoutStep === 'success' ? (
-            <div className="flex min-h-[calc(100vh-7rem)] items-start px-0 pt-16 sm:min-h-[600px]">
-              <div className="w-full rounded-t-lg bg-white px-5 py-14 text-center">
-                <div className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-[#33c85a] text-white">
-                  <Check size={52} />
-                </div>
-                <h2 className="mt-8 text-lg font-black text-[#33c85a]">Order was placed!</h2>
-                <div className="mt-6">
-                  <p className="text-sm font-semibold text-[#5f646b]">Rate your order</p>
-                  <div className="mt-3 flex justify-center gap-2">
-                    {[1, 2, 3, 4, 5].map((rating) => (
-                      <button
-                        key={rating}
-                        type="button"
-                        className="grid h-10 w-10 place-items-center rounded-full bg-[#fff1ca] text-[#f5a400] transition hover:bg-[#ffe2a0]"
-                        onClick={() => toast.success(`Thanks for rating ${rating} star${rating === 1 ? '' : 's'}`)}
-                        aria-label={`Rate ${rating} star${rating === 1 ? '' : 's'}`}
-                      >
-                        <Star size={22} fill="currentColor" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="my-9 border-t border-dashed border-[#c9cdd1]" />
-                <RedButton className="w-3/4 rounded-md" onClick={goBackCheckout}>Back TO Home</RedButton>
-              </div>
+          {checkoutStep === 'success' && confirmedOrder ? (
+            <div className="order-confirmation" role="status">
+              <Check size={40} className="text-green-600" /><h2>Order received</h2>
+              <p>{confirmedOrder.orderNo}</p><p>{orderStatusLabels[confirmedOrder.status] || confirmedOrder.status}</p>
+              <p>Your order is saved. Send the prepared WhatsApp message to finalize arrangements.</p>
+              {confirmedOrder.items?.map(item => <p key={item.id}>{item.quantity} ? {item.menuItem?.name} ? {fcfa(item.total)}</p>)}
+              <strong>{fcfa(confirmedOrder.total)}</strong>
+              {orderWhatsAppUrl(confirmedOrder, settings.supportPhone) ? <a className="btn-primary" href={orderWhatsAppUrl(confirmedOrder, settings.supportPhone)} target="_blank" rel="noreferrer">Continue to WhatsApp</a> : <p>WhatsApp is unavailable. Your order is still saved.</p>}
+              <button className="btn-secondary" onClick={() => { closeCheckout(); setSelectedOrder(confirmedOrder); setActiveTab('orders'); }}>View order</button>
+              <button className="btn-secondary" onClick={goBackCheckout}>Continue shopping</button>
             </div>
           ) : null}
         </CheckoutShell>
@@ -2671,16 +2613,16 @@ export default function PublicPortal() {
             <div className="sm:col-span-2">
               <label className="label">Promotion image</label>
               <div className="mt-1 grid gap-3 sm:grid-cols-[96px_1fr]">
-                <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-xl border border-[#dbe5e8] bg-[#fff1ca]">
-                  {promotionForm.imageUrl ? <img className="h-full w-full object-cover" src={promotionForm.imageUrl} alt="Promotion preview" /> : <ShoppingBag className="text-[#d71920]" size={24} />}
+                <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-xl border border-[#E5E7EB] bg-[#fff1ca]">
+                  {promotionForm.imageUrl ? <img className="h-full w-full object-cover" src={promotionForm.imageUrl} alt="Promotion preview" /> : <ShoppingBag className="text-[#E51924]" size={24} />}
                 </div>
-                <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-xl border border-dashed border-[#dbe5e8] bg-white px-4 text-sm font-semibold text-[#6f7a86]">
-                  <span className="font-black text-[#151923]">{promotionImageUploading ? promotionUploadStatus : promotionForm.imageUrl ? 'Image uploaded' : 'Upload image'}</span>
+                <label className="flex min-h-24 cursor-pointer flex-col justify-center rounded-xl border border-dashed border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#6f7a86]">
+                  <span className="font-black text-[#171B25]">{promotionImageUploading ? promotionUploadStatus : promotionForm.imageUrl ? 'Image uploaded' : 'Upload image'}</span>
                   <span className="mt-1 text-xs">PNG, JPG, or WEBP up to 5MB.</span>
                   <input className="hidden" type="file" accept="image/*" disabled={promotionImageUploading} onChange={(e) => uploadPromotionImage(e.target.files?.[0])} />
                   {promotionImageUploading || promotionUploadStatus ? (
                     <span className="mt-3 block h-2 overflow-hidden rounded-full bg-stone-100">
-                      <span className="block h-full rounded-full bg-[#d71920] transition-all" style={{ width: `${promotionUploadProgress}%` }} />
+                      <span className="block h-full rounded-full bg-[#E51924] transition-all" style={{ width: `${promotionUploadProgress}%` }} />
                     </span>
                   ) : null}
                 </label>

@@ -1,0 +1,7 @@
+{
+  "colors": { "primary": "#E51924", "primaryDark": "#C9141E", "accent": "#FFC857", "background": "#F8F9FB", "surface": "#FFFFFF", "text": "#171B25", "muted": "#717680", "border": "#E5E7EB", "success": "#16A34A", "warning": "#F59E0B", "error": "#DC2626" },
+  "font": "Poppins",
+  "spacing": { "unit": 4, "gap": 8, "page": 16, "section": 24 },
+  "radius": { "control": 12, "card": 16 },
+  "touchTarget": 44
+}

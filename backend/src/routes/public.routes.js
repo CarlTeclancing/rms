@@ -1,3 +1,4 @@
+import { customerSession } from '../middleware/customerSession.js';
 import { Router } from 'express';
 import { body } from 'express-validator';
 import {
@@ -41,15 +42,16 @@ router.post(
   createMealReview
 );
 router.post('/public/customers/session', [body('name').notEmpty(), body('phone').notEmpty(), validate], upsertPublicCustomer);
-router.put('/public/customers/:id', updatePublicCustomer);
-router.get('/public/customers/:id/orders', listPublicCustomerOrders);
-router.get('/public/orders/:id', getPublicOnlineOrder);
+router.put('/public/customers/:id', customerSession, updatePublicCustomer);
+router.get('/public/customers/:id/orders', customerSession, listPublicCustomerOrders);
+router.get('/public/orders/:id', customerSession, getPublicOnlineOrder);
 router.get('/public/drivers/:code/requests', listDriverDeliveryRequests);
 router.post('/public/drivers/:code/orders/:id/accept', acceptDriverDelivery);
 router.post('/public/drivers/:code/orders/:id/deliver', completeDriverDelivery);
 router.put('/public/drivers/:code/orders/:id/location', updateDriverLocation);
 router.post(
   '/public/orders',
+  customerSession,
   [
     body('customerName').notEmpty(),
     body('customerPhone').notEmpty(),

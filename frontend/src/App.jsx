@@ -1,22 +1,24 @@
+import { lazy, Suspense } from 'react';
+import { Loading } from './components/Loading.jsx';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './layouts/AppLayout.jsx';
 import { useAuth } from './context/AuthContext.jsx';
-import Dashboard from './pages/Dashboard.jsx';
-import Debtors from './pages/Debtors.jsx';
-import BusinessIntelligence from './pages/BusinessIntelligence.jsx';
-import Expenses from './pages/Expenses.jsx';
-import Login from './pages/Login.jsx';
-import Menu from './pages/Menu.jsx';
-import Marketing from './pages/Marketing.jsx';
-import OnlineOrders from './pages/OnlineOrders.jsx';
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'));
+const Debtors = lazy(() => import('./pages/Debtors.jsx'));
+const BusinessIntelligence = lazy(() => import('./pages/BusinessIntelligence.jsx'));
+const Expenses = lazy(() => import('./pages/Expenses.jsx'));
+const Login = lazy(() => import('./pages/Login.jsx'));
+const Menu = lazy(() => import('./pages/Menu.jsx'));
+const Marketing = lazy(() => import('./pages/Marketing.jsx'));
+const OnlineOrders = lazy(() => import('./pages/OnlineOrders.jsx'));
 import PublicPortal from './pages/PublicPortal.jsx';
-import Promotions from './pages/Promotions.jsx';
-import Reports from './pages/Reports.jsx';
-import Sales from './pages/Sales.jsx';
-import SalesHistory from './pages/SalesHistory.jsx';
-import Settings from './pages/Settings.jsx';
-import Stock from './pages/Stock.jsx';
-import Users from './pages/Users.jsx';
+const Promotions = lazy(() => import('./pages/Promotions.jsx'));
+const Reports = lazy(() => import('./pages/Reports.jsx'));
+const Sales = lazy(() => import('./pages/Sales.jsx'));
+const SalesHistory = lazy(() => import('./pages/SalesHistory.jsx'));
+const Settings = lazy(() => import('./pages/Settings.jsx'));
+const Stock = lazy(() => import('./pages/Stock.jsx'));
+const Users = lazy(() => import('./pages/Users.jsx'));
 
 function ProtectedRoute() {
   const { isAuthenticated } = useAuth();
@@ -27,7 +29,7 @@ export default function App() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <Routes>
+    <Suspense fallback={<Loading label="Loading page" />}><Routes>
       <Route path="/" element={<PublicPortal />} />
       <Route path="/login" element={isAuthenticated ? <Navigate to="/admin" replace /> : <Login />} />
       <Route path="/portal" element={<PublicPortal />} />
@@ -47,6 +49,6 @@ export default function App() {
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
       </Route>
-    </Routes>
+    </Routes></Suspense>
   );
 }

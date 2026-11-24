@@ -5,9 +5,9 @@
 .buyer-auth h1 { margin: 16px 0 0; font-size: 25px; line-height: 36px; font-weight: 600; text-align: center; letter-spacing: -.5px; }
 .buyer-auth h1:focus { outline: none; }
 .buyer-actions { display: grid; gap: 17px; margin-top: 26px; }
-.buyer-button { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 45px; padding: 11px 40px; border: 1px solid #d91830; border-radius: 12px; background: #fff; color: #d91830; font-size: 14px; line-height: 20px; cursor: pointer; }
+.buyer-button { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 45px; padding: 11px 40px; border: 1px solid #E51924; border-radius: 12px; background: #fff; color: #E51924; font-size: 14px; line-height: 20px; cursor: pointer; }
 .buyer-button svg { position: absolute; left: 15px; }
-.buyer-button.primary { min-height: 48px; background: #d91830; color: white; }
+.buyer-button.primary { min-height: 48px; background: #E51924; color: white; }
 .buyer-button:hover:not(:disabled) { filter: brightness(.94); }
 .buyer-button:disabled { cursor: not-allowed; }
 .buyer-button.primary:disabled { opacity: .5; }
@@ -17,7 +17,7 @@
 .buyer-terms { margin: 0; color: #333; font-size: 10px; line-height: 15px; }
 .buyer-terms button { color: #1675ff; text-decoration: underline; }
 .buyer-details { padding: 24px; }
-.buyer-back { display: grid; place-items: center; width: 44px; height: 44px; color: #d91830; }
+.buyer-back { display: grid; place-items: center; width: 44px; height: 44px; color: #E51924; }
 .buyer-form-brand { display: block; width: 110px; height: 130px; object-fit: contain; margin: 0 auto; }
 .buyer-details h1 { font-size: 26px; margin-bottom: 16px; }
 .buyer-details p { font-size: 14px; line-height: 21px; color: #666; margin: 0; }

@@ -14,6 +14,14 @@ const publicApi = axios.create({
   baseURL: apiBaseUrl
 });
 
+publicApi.interceptors.request.use((config) => {
+  try {
+    const session = JSON.parse(localStorage.getItem('chopasap_customer_session') || 'null');
+    if (session?.sessionToken) config.headers['X-Customer-Token'] = session.sessionToken;
+  } catch {}
+  return config;
+});
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('rms_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;

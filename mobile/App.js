@@ -1,12 +1,17 @@
+import { orderWhatsAppUrl, newOrderRequestId, orderStatusLabels, fcfa } from '../shared/orderExperience';
+import tokens from '../shared/designTokens.json';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFonts } from 'expo-font';
+import { Text, TextInput, appFonts } from './src/Typography';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   AccessibilityInfo,
   Alert,
   Animated,
@@ -19,22 +24,20 @@ import {
   Share,
   StyleSheet,
   Switch,
-  Text,
-  TextInput,
-  StatusBar as NativeStatusBar,
   useWindowDimensions,
   View
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, initialWindowMetrics } from 'react-native-safe-area-context';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
-import { API_URL, api, uploadCustomerAvatar, uploadPromotionImage } from './src/api';
+import { API_URL, api, setCustomerToken, uploadCustomerAvatar, uploadPromotionImage } from './src/api';
 import { t } from './src/i18n';
 import AuthScreens, { AuthSplash } from './src/AuthScreens';
 
+const CartActionsContext = createContext(null);
 const logo = require('./assets/chopasap-logo.png');
 const fallbackImage = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
 const portalUrl = process.env.EXPO_PUBLIC_PORTAL_URL || 'https://www.app.chopasap.com';
-const brandRed = '#d71920';
+const brandRed = tokens.colors.primary;
 const customerKey = 'chopasap_mobile_customer';
 const favoritesKey = 'chopasap_mobile_favorites';
 const languageKey = 'chopasap_mobile_language';
@@ -85,16 +88,11 @@ const supportFaqs = [
   }
 ];
 
-const formatMoney = (value) =>
-  new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'XAF',
-    maximumFractionDigits: 0
-  }).format(Number(value || 0));
+const formatMoney = fcfa;
 
 const cleanPhone = (phone = '') => String(phone).replace(/\D/g, '');
 const mealVariations = (item) => (Array.isArray(item?.variations) ? item.variations.filter((variation) => variation?.name) : []);
-const mealPrice = (item, variationName) => Number(mealVariations(item).find((entry) => entry.name === variationName)?.price || item?.price || 0);
+const mealPrice = (item, variationName) => Number(mealVariations(item).find((entry) => entry.name === variationName)?.price ?? item?.price ?? 0);
 const cartKeyFor = (id, variationName) => `${id}:${variationName || 'base'}`;
 const orderItemTotal = (item) => Number(item.total ?? Number(item.price || item.unitPrice || 0) * Number(item.quantity || 0));
 const orderItemName = (item) => item.menuItem?.name || item.name || 'Menu item';
@@ -406,13 +404,11 @@ function Field({ label, icon, style, ...props }) {
 }
 
 function MealCard({ item, favorite, onOpen, onFavorite, onShare }) {
+  const onAdd = useContext(CartActionsContext);
   return (
     <Pressable style={styles.mealCard} onPress={() => onOpen(item)}>
       <Image source={imageSource(item.imageUrl, fallbackImage)} style={styles.mealImage} />
-      <Pressable style={styles.shareButton} onPress={() => onShare(item)}>
-        <Ionicons name="share-social-outline" size={18} color="#29384d" />
-      </Pressable>
-      <Pressable style={styles.favoriteButton} onPress={() => onFavorite(item.id)}>
+      <Pressable style={styles.favoriteButton} accessibilityLabel="Toggle favourite" onPress={(event) => { event.stopPropagation(); onFavorite(item.id); }}>
         <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={18} color={favorite ? brandRed : '#666'} />
       </Pressable>
       <View style={styles.mealBody}>
@@ -420,17 +416,16 @@ function MealCard({ item, favorite, onOpen, onFavorite, onShare }) {
         <Text style={styles.mealMeta}>{item.category?.name || 'Kitchen'}</Text>
         <View style={styles.mealFooter}>
           <Text style={styles.mealPrice}>{formatMoney(item.price)}</Text>
-          <View style={styles.addCircle}>
-            <Ionicons name="add" size={20} color="#fff" />
-          </View>
+          <Pressable style={styles.addCircle} accessibilityLabel={`Add ${item.name} to cart`} disabled={item.isAvailable === false} onPress={(event) => { event.stopPropagation(); mealVariations(item).length || !onAdd ? onOpen(item) : onAdd(item); }}><Ionicons name="add" size={20} color="#fff" /></Pressable>
         </View>
       </View>
     </Pressable>
   );
 }
 
-function MealDetail({ item, visible, customer, settings, language, onClose, onAdd, onShare }) {
+function MealDetail({ item, visible, customer, settings, language, onClose, onAdd, onShare, favorite, onFavorite, relatedItems = [], onOpenRelated }) {
   const [quantity, setQuantity] = useState(1);
+  const [note, setNote] = useState('');
   const variations = mealVariations(item);
   const [variation, setVariation] = useState('');
   const [reviews, setReviews] = useState([]);
@@ -438,6 +433,7 @@ function MealDetail({ item, visible, customer, settings, language, onClose, onAd
 
   useEffect(() => {
     setQuantity(1);
+    setNote('');
     setVariation('');
     setShowAllReviews(false);
   }, [item?.id]);
@@ -488,12 +484,15 @@ function MealDetail({ item, visible, customer, settings, language, onClose, onAd
                     <Ionicons name={variation === entry.name ? 'radio-button-on' : 'radio-button-off'} size={20} color={brandRed} />
                     <View style={styles.variationTextBox}>
                       <Text style={styles.optionText}>{entry.name}</Text>
-                      <Text style={styles.mealMeta}>{formatMoney(entry.price || item.price)}</Text>
+                      <Text style={styles.mealMeta}>{formatMoney(entry.price ?? item.price)}</Text>
                     </View>
                   </Pressable>
                 ))}
               </View>
             ) : null}
+            <Pressable style={styles.secondaryButton} accessibilityLabel="Toggle favourite" onPress={() => onFavorite(item.id)}><Ionicons name={favorite ? 'heart' : 'heart-outline'} size={20} color={brandRed} /><Text style={styles.secondaryButtonText}>{favorite ? 'Saved to favourites' : 'Save to favourites'}</Text></Pressable>
+            <Field label="Special preparation instructions" value={note} onChangeText={setNote} multiline maxLength={500} placeholder="Less pepper, no onions?" />
+            {relatedItems.length > 0 && <View style={styles.section}><Text style={styles.sectionTitle}>Related meals</Text>{relatedItems.map(meal => <Pressable key={meal.id} style={styles.accountLink} onPress={() => onOpenRelated(meal)}><Text style={styles.cardTitle}>{meal.name}</Text><Text style={styles.mealPrice}>{fcfa(meal.price)}</Text></Pressable>)}</View>}
             <View style={styles.reviewSection}>
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionTitle}>{t(language, 'mealReviews')}</Text>
@@ -518,17 +517,21 @@ function MealDetail({ item, visible, customer, settings, language, onClose, onAd
         </ScrollView>
         <View style={styles.detailFooter}>
           <View style={styles.qtyBox}>
-            <Pressable onPress={() => setQuantity(Math.max(1, quantity - 1))}><Ionicons name="remove" size={18} /></Pressable>
+            <Pressable style={styles.quantityAction} onPress={() => setQuantity(Math.max(1, quantity - 1))}><Ionicons name="remove" size={18} /></Pressable>
             <Text style={styles.qtyText}>{quantity}</Text>
-            <Pressable onPress={() => setQuantity(quantity + 1)}><Ionicons name="add" size={18} /></Pressable>
+            <Pressable onPress={() => setQuantity(Math.min(99, quantity + 1))}><Ionicons name="add" size={18} /></Pressable>
           </View>
-          <Pressable style={[styles.primaryButton, styles.detailAddButton]} onPress={() => onAdd(item, quantity, variation)}>
+          <Pressable style={[styles.primaryButton, styles.detailAddButton]} disabled={item.isAvailable === false} onPress={() => onAdd(item, quantity, variation, note)}>
             <Text style={styles.primaryButtonText}>{t('en', 'addToCart')} {formatMoney(price * quantity)}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
     </Modal>
   );
+}
+
+function MealSkeleton() {
+  return <SafeAreaView style={{ flex: 1, backgroundColor: tokens.colors.background, padding: 16 }} accessibilityLabel="Loading meals" accessibilityRole="progressbar"><View style={{ height: 48, marginBottom: 24, borderRadius: 12, backgroundColor: tokens.colors.border }} /><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>{[0,1,2,3,4,5].map(id => <View key={id} style={{ width: '48%', height: 200, borderRadius: 16, backgroundColor: '#fff', padding: 12 }}><View style={{ height: 120, borderRadius: 12, backgroundColor: tokens.colors.border }} /><View style={{ height: 16, marginTop: 16, borderRadius: 4, backgroundColor: tokens.colors.border }} /></View>)}</View></SafeAreaView>;
 }
 
 function StatPill({ icon, label, value }) {
@@ -653,7 +656,7 @@ function DriverDashboard({ agent, requests, code, refreshing, savingId, driverPh
           </View>
         </View>
         <Pressable style={styles.headerIconButton} onPress={onLogout}>
-          <Ionicons name="swap-horizontal-outline" size={22} color="#29384d" />
+          <Ionicons name="swap-horizontal-outline" size={22} color="#171B25" />
         </Pressable>
       </View>
 
@@ -810,7 +813,7 @@ function DriverDashboard({ agent, requests, code, refreshing, savingId, driverPh
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Order details</Text>
                 <Pressable onPress={() => { setDriverDetailOpen(false); setSelectedOrder(null); }}>
-                  <Ionicons name="close" size={24} color="#29384d" />
+                  <Ionicons name="close" size={24} color="#171B25" />
                 </Pressable>
               </View>
               <Text style={styles.orderMeta}>Order {selectedOrder?.orderNo}</Text>
@@ -856,6 +859,14 @@ function DriverDashboard({ agent, requests, code, refreshing, savingId, driverPh
 }
 
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts(appFonts);
+  if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}><Image source={require('./assets/auth-cart.png')} style={{ width: 150, height: 101 }} /></View>;
+  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><AppContent /></SafeAreaProvider>;
+}
+
+function AppContent() {
+  const orderSubmittingRef = useRef(false);
+  const orderAttemptRef = useRef(null);
   const [language, setLanguage] = useState('en');
   const [languagePrompt, setLanguagePrompt] = useState(false);
   const [appMode, setAppMode] = useState('customer');
@@ -869,6 +880,8 @@ export default function App() {
   const [driverTrackingUpdates, setDriverTrackingUpdates] = useState({ latitude: '', longitude: '', status: '' });
   const [driverDetailOpen, setDriverDetailOpen] = useState(false);
   const [tab, setTab] = useState('home');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [readNotificationIds, setReadNotificationIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [customer, setCustomer] = useState(null);
@@ -884,8 +897,13 @@ export default function App() {
   const [activeOrders, setActiveOrders] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [cart, setCart] = useState([]);
   const [selectedMeal, setSelectedMeal] = useState(null);
+  const [recentMealIds, setRecentMealIds] = useState([]);
+  const [menuError, setMenuError] = useState('');
+  const openMeal = item => { setSelectedMeal(item); setRecentMealIds(current => [item.id, ...current.filter(id => id !== item.id)].slice(0, 6)); };
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(null);
   const [checkoutStep, setCheckoutStep] = useState('cart');
@@ -911,7 +929,7 @@ export default function App() {
   const driverCodeRef = useRef('');
   const driverAgentRef = useRef(null);
 
-  const filteredItems = useMemo(() => items.filter((item) => `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase())), [items, search]);
+  const filteredItems = useMemo(() => items.filter((item) => (categoryFilter === 'all' || item.category?.name === categoryFilter) && `${item.name} ${item.category?.name || ''}`.toLowerCase().includes(search.toLowerCase())), [items, search, categoryFilter]);
   const favoriteItems = useMemo(() => items.filter((item) => favorites.includes(item.id)), [items, favorites]);
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const deliveryFee = fulfillment === 'delivery' ? Number(settings.deliveryFee || 0) : 0;
@@ -971,9 +989,9 @@ export default function App() {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket || !selectedOrder?.id) return undefined;
-    socket.emit('order:join', selectedOrder.id);
+    socket.emit('order:join', { id: selectedOrder.id, token: customer?.sessionToken });
     return () => socket.emit('order:leave', selectedOrder.id);
-  }, [selectedOrder?.id]);
+  }, [selectedOrder?.id, customer?.sessionToken]);
 
   useEffect(() => {
     if (!activeOrderCount) return undefined;
@@ -1044,6 +1062,7 @@ export default function App() {
       }
       if (savedCustomer) {
         const parsed = JSON.parse(savedCustomer);
+        setCustomerToken(parsed.sessionToken);
         setCustomer(parsed);
         setCustomerForm({ name: parsed.name || '', phone: parsed.phone || '', email: parsed.email || '', address: parsed.address || '', profileImageUrl: parsed.profileImageUrl || '', referralCode: parsed.referralCode || '' });
         refreshCustomer(parsed)
@@ -1061,6 +1080,7 @@ export default function App() {
         api.marketing().catch(() => ({ items: [], hero: null, floatingRewards: [], flashDeal: null })),
         api.flashSale().catch(() => ({ item: null }))
       ]);
+      setMenuError('');
       setItems(menuData.items || []);
       const nextSplashProducts = menuSplashProducts(menuData.items || []);
       if (nextSplashProducts.length) {
@@ -1081,7 +1101,7 @@ export default function App() {
         if (sharedMeal) setSelectedMeal(sharedMeal);
       }
     } catch (error) {
-      Alert.alert('ChopASAP', error.message);
+      setMenuError('We could not load the menu. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -1094,7 +1114,8 @@ export default function App() {
   };
 
   const saveCustomer = async (nextCustomer) => {
-    const saved = { ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
+    const saved = { sessionToken: customer?.sessionToken, ...nextCustomer, orderCount: nextCustomer.orderCount || 0 };
+    setCustomerToken(saved.sessionToken);
     setCustomer(saved);
     setCustomerForm({ name: saved.name || '', phone: saved.phone || '', email: saved.email || '', address: saved.address || '', profileImageUrl: saved.profileImageUrl || '', referralCode: saved.referralCode || '' });
     setOrderForm((current) => ({
@@ -1198,7 +1219,7 @@ export default function App() {
   };
 
   const pickDriverPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
     if (result.canceled) return;
     const asset = result.assets[0];
     setDriverPhoto(asset.uri);
@@ -1315,19 +1336,20 @@ export default function App() {
     }
   };
 
-  const addToCart = (item, quantity = 1, variationName = '') => {
-    const cartItemId = cartKeyFor(item.id, variationName);
+  const addToCart = (item, quantity = 1, variationName = '', note = '') => {
+    if (item.isAvailable === false) return Alert.alert('Unavailable', 'This meal is not available right now.');
+    const cartItemId = `${cartKeyFor(item.id, variationName)}:${note.trim()}`;
     const price = mealPrice(item, variationName);
     setCart((current) => {
       const existing = current.find((entry) => entry.cartItemId === cartItemId);
-      if (existing) return current.map((entry) => (entry.cartItemId === cartItemId ? { ...entry, quantity: entry.quantity + quantity } : entry));
-      return [...current, { cartItemId, menuItemId: item.id, name: item.name, imageUrl: item.imageUrl, quantity, variationName, price }];
+      if (existing) return current.map((entry) => (entry.cartItemId === cartItemId ? { ...entry, quantity: Math.min(99, entry.quantity + quantity) } : entry));
+      return [...current, { cartItemId, menuItemId: item.id, name: item.name, imageUrl: item.imageUrl, quantity, variationName, price, note: note.trim() }];
     });
     setSelectedMeal(null);
   };
 
   const updateQty = (id, delta) => {
-    setCart((current) => current.map((item) => (item.cartItemId === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item)).filter((item) => item.quantity > 0));
+    setCart((current) => current.map((item) => (item.cartItemId === id ? { ...item, quantity: Math.min(99, Math.max(0, item.quantity + delta)) } : item)).filter((item) => item.quantity > 0));
   };
 
   const buildWhatsappMessage = (order, submittedCart, submittedCustomer) => [
@@ -1346,7 +1368,15 @@ export default function App() {
     `Total: ${formatMoney(order.total || total)}`
   ].filter(Boolean).join('\n');
 
+  const reopenWhatsApp = async (order) => {
+    const url = orderWhatsAppUrl(order, settings.supportPhone);
+    if (!url) return Alert.alert('Order saved', 'WhatsApp is unavailable. You can view your order in Orders.');
+    try { await Linking.openURL(url); } catch { Alert.alert('Order saved', 'WhatsApp could not open. Tap Continue to WhatsApp to try again.'); }
+  };
+
   const submitOrder = async () => {
+    if (orderSubmittingRef.current) return;
+    if (settings.publicOrdering === false) return Alert.alert('ChopASAP', 'Online ordering is currently unavailable.');
     if (!cart.length) return Alert.alert('ChopASAP', t(language, 'emptyCart'));
     if (fulfillment === 'delivery' && !orderForm.deliveryAddress.trim()) return Alert.alert('ChopASAP', t(language, 'deliveryAddress'));
     if (orderForm.isGift && (!orderForm.recipientName.trim() || !orderForm.recipientPhone.trim())) return Alert.alert('ChopASAP', t(language, 'orderForLovedOne'));
@@ -1356,6 +1386,8 @@ export default function App() {
     if (!customerName?.trim()) return Alert.alert('ChopASAP', t(language, 'name'));
     if (!customerPhone?.trim()) return Alert.alert('ChopASAP', t(language, 'phone'));
 
+    orderSubmittingRef.current = true;
+    let savedOrder = null;
     setSaving(true);
     try {
       const submittedCart = cart;
@@ -1364,19 +1396,29 @@ export default function App() {
         customerPhone,
         customerEmail: customer?.email || orderForm.customerEmail || '',
         deliveryAddress: fulfillment === 'delivery' ? orderForm.deliveryAddress : 'Reserve onsite',
-        deliveryNote: orderForm.deliveryNote,
+        deliveryNote: [orderForm.deliveryNote, ...cart.filter(item => item.note).map(item => `${item.name}: ${item.note}`)].filter(Boolean).join('\n'),
         isGift: orderForm.isGift,
         recipientName: orderForm.recipientName,
         recipientPhone: orderForm.recipientPhone,
         recipientAddress: orderForm.recipientAddress
       };
+      const signature = JSON.stringify({ cart, submittedCustomer, fulfillment });
+      if (!orderAttemptRef.current) { try { orderAttemptRef.current = JSON.parse(await AsyncStorage.getItem('chopasap_order_attempt')); } catch {} }
+      if (orderAttemptRef.current?.signature !== signature) orderAttemptRef.current = { signature, requestId: newOrderRequestId() };
+      await AsyncStorage.setItem('chopasap_order_attempt', JSON.stringify(orderAttemptRef.current)).catch(() => {});
       const order = await api.createOrder({
+        requestId: orderAttemptRef.current.requestId,
+        fulfillment: fulfillment === 'delivery' ? 'delivery' : 'onsite',
         ...submittedCustomer,
         customerId: customer?.id,
         deliveryFee,
         items: cart.map(({ menuItemId, quantity, variationName }) => ({ menuItemId, quantity, variationName }))
       });
+      savedOrder = order;
+      await AsyncStorage.removeItem('chopasap_order_attempt').catch(() => {});
+      orderAttemptRef.current = null;
       setCart([]);
+      setCheckoutOpen(false);
       setCheckoutSuccess(order);
       setActiveOrders((current) => [order, ...current.filter((entry) => entry.id !== order.id)].slice(0, 10));
       if (order.customer) {
@@ -1386,15 +1428,11 @@ export default function App() {
         const freshCustomer = await refreshCustomer(customer).catch(() => null);
         await loadOrders(freshCustomer?.id || customer.id);
       }
-      const phone = cleanPhone(settings.supportPhone);
-      if (phone) {
-        Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsappMessage(order, submittedCart, submittedCustomer))}`);
-      } else {
-        Alert.alert('ChopASAP', t(language, 'orderPlaced'));
-      }
+      await reopenWhatsApp(order);
     } catch (error) {
-      Alert.alert('ChopASAP', error.message);
+      Alert.alert(savedOrder ? 'Order saved' : 'ChopASAP', savedOrder ? 'Your order is saved. Use Continue to WhatsApp to finalize arrangements.' : error.message);
     } finally {
+      orderSubmittingRef.current = false;
       setSaving(false);
     }
   };
@@ -1420,7 +1458,7 @@ export default function App() {
   };
 
   const pickPromotionImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.85 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.85 });
     if (result.canceled) return;
     setSaving(true);
     try {
@@ -1466,7 +1504,7 @@ export default function App() {
   };
 
   const pickAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, quality: 0.8 });
     if (result.canceled || !customer?.id) return;
     setSaving(true);
     try {
@@ -1495,6 +1533,7 @@ export default function App() {
   const switchAccount = async () => {
     await AsyncStorage.removeItem(customerKey);
     await AsyncStorage.removeItem(activeOrdersKey);
+    setCustomerToken(null);
     setCustomer(null);
     setOrders([]);
     setActiveOrders([]);
@@ -1503,7 +1542,7 @@ export default function App() {
     setCustomerForm({ name: '', phone: '', email: '', address: '', profileImageUrl: '', referralCode: '' });
   };
 
-  if (loading) return <AuthSplash />;
+  if (loading) return customer ? <MealSkeleton /> : <AuthSplash />;
 
   if (appMode === 'driver') {
     return (
@@ -1538,8 +1577,8 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView edges={customer ? undefined : ['top']} style={[styles.safe, !customer && { backgroundColor: '#fff', paddingTop: 0 }]}>
-      <SafeAreaView edges={customer ? undefined : ['bottom']} style={[styles.appSafe, !customer && { backgroundColor: '#fff' }]}>
+    <CartActionsContext.Provider value={addToCart}><SafeAreaView edges={['top']} style={[styles.safe, !customer && { backgroundColor: '#fff', paddingTop: 0 }]}>
+      <SafeAreaView edges={['bottom']} style={[styles.appSafe, !customer && { backgroundColor: '#fff' }]}>
         <StatusBar style="dark" />
         <LanguagePrompt visible={languagePrompt} language={language} onChoose={chooseLanguage} />
         {!customer ? (
@@ -1555,31 +1594,28 @@ export default function App() {
               </View>
             </View>
             <View style={styles.headerActions}>
-              {flashSale ? (
-              <Pressable style={styles.headerIconButton} onPress={() => setFlashSaleOpen(true)}>
-                <Ionicons name="pricetag-outline" size={21} color={brandRed} />
-              </Pressable>
-            ) : null}
+              <Pressable accessibilityLabel="Notifications" style={styles.headerIconButton} onPress={() => setNotificationsOpen(true)}><Ionicons name="notifications-outline" size={21} color={tokens.colors.text} />{orders.flatMap(order => order.notifications || []).filter(notification => !readNotificationIds.includes(notification.id)).length > 0 && <Text style={styles.cartBadge}>{orders.flatMap(order => order.notifications || []).filter(notification => !readNotificationIds.includes(notification.id)).length}</Text>}</Pressable>
               <Pressable style={styles.headerIconButton} onPress={() => {
                 setCheckoutStep('cart');
                 setCheckoutOpen(true);
               }}>
-                <Ionicons name="bag-outline" size={21} color="#29384d" />
+                <Ionicons name="bag-outline" size={21} color="#171B25" />
                 {cart.length ? <Text style={styles.cartBadge}>{cart.reduce((sum, item) => sum + item.quantity, 0)}</Text> : null}
               </Pressable>
-              <Pressable style={styles.profileButton} onPress={() => setProfileOpen(true)}>
-                {customer.profileImageUrl ? <Image source={imageSource(customer.profileImageUrl)} style={styles.profileButtonImage} /> : <Ionicons name="person-outline" size={21} color="#29384d" />}
-              </Pressable>
+
             </View>
           </View>
 
+          {tab === 'home' && <View style={styles.welcome}><Text style={styles.pageTitle}>What are you craving?</Text><Text style={styles.cardCopy}>Discover delicious meals freshly prepared for you.</Text></View>}
           {['home', 'meals', 'favorites'].includes(tab) ? (
             <View style={styles.searchBox}>
-              <TextInput style={styles.searchInput} placeholder={t(language, 'search')} placeholderTextColor="#9aa4ad" value={search} onChangeText={setSearch} />
-              <Ionicons name="search" size={21} color={brandRed} />
+              <TextInput style={styles.searchInput} placeholder="Search meals, drinks and more." placeholderTextColor="#9aa4ad" value={search} onChangeText={setSearch} />
+              <Pressable accessibilityLabel="Filter meals" style={styles.quantityAction} onPress={() => setFiltersOpen(current => !current)}><Ionicons name="options-outline" size={21} color={brandRed} /></Pressable>
+              {search ? <Pressable accessibilityLabel="Clear search" style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }} onPress={() => setSearch('')}><Ionicons name="close" size={20} color={tokens.colors.muted} /></Pressable> : <Ionicons name="search" size={21} color={tokens.colors.muted} />}
             </View>
           ) : null}
 
+          {filtersOpen && <ScrollView horizontal style={{ maxHeight: 64 }} contentContainerStyle={styles.categoryRail}>{['all', ...menuCategories.map(category => category.name)].map(name => <Pressable key={name} style={[styles.categoryChip, categoryFilter === name && styles.categoryChipActive]} onPress={() => { setCategoryFilter(name); setFiltersOpen(false); }}><Text style={styles.cardCopy}>{name === 'all' ? 'All Meals' : name}</Text></Pressable>)}</ScrollView>}
           <ScrollView
             style={styles.content}
             contentContainerStyle={styles.contentBody}
@@ -1593,17 +1629,19 @@ export default function App() {
               }
             }}
           >
+            {menuError ? <View style={styles.card}><Text style={styles.cardCopy}>{menuError}</Text><Pressable style={styles.secondaryButton} onPress={refreshApp}><Text style={styles.secondaryButtonText}>Retry</Text></Pressable></View> : null}
             {tab === 'home' ? (
               <HomeView
                 items={filteredItems}
                 menuCategories={menuCategories}
+                categoryFilter={categoryFilter} onFilter={setCategoryFilter}
                 categoryLimit={homeCategoryLimit}
                 favorites={favorites}
                 promotions={promotions}
                 marketing={marketing}
                 flashSale={flashSale}
                 language={language}
-                onOpen={setSelectedMeal}
+                onOpen={openMeal}
                 onFavorite={toggleFavorite}
                 onShare={shareMeal}
                 onFlashSale={() => setFlashSaleOpen(true)}
@@ -1621,19 +1659,20 @@ export default function App() {
                 }}
               />
             ) : null}
+            {tab === 'home' && recentMealIds.length > 0 ? <View style={styles.section}><Text style={styles.sectionTitle}>Recently viewed</Text><View style={styles.mealGrid}>{recentMealIds.map(id => items.find(item => item.id === id)).filter(Boolean).slice(0, 4).map(item => <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onOpen={openMeal} onFavorite={toggleFavorite} />)}</View></View> : null}
             {tab === 'meals' ? <MealsView title={t(language, 'meals')} items={filteredItems} favorites={favorites} onOpen={setSelectedMeal} onFavorite={toggleFavorite} onShare={shareMeal} language={language} /> : null}
             {tab === 'favorites' ? <MealsView title={t(language, 'favorites')} items={favoriteItems} favorites={favorites} onOpen={setSelectedMeal} onFavorite={toggleFavorite} onShare={shareMeal} language={language} /> : null}
             {tab === 'orders' ? <OrdersView orders={orders} activeOrders={activeOrders} language={language} statusFilter={orderStatusFilter} onFilter={setOrderStatusFilter} onOpen={setSelectedOrder} /> : null}
             {tab === 'support' ? <SupportView settings={settings} language={language} onReserve={() => setReservationOpen(true)} onPromote={() => setPromotionOpen(true)} /> : null}
           </ScrollView>
 
-          <BottomTabs tab={tab} setTab={setTab} language={language} activeOrderCount={activeOrderCount} pulse={activeOrderPulse} />
+          <BottomTabs tab={checkoutOpen ? 'cart' : profileOpen ? 'account' : tab} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} setTab={(id) => { if (id === 'cart') { setCheckoutStep('cart'); setCheckoutOpen(true); } else if (id === 'account') setProfileOpen(true); else setTab(id); }} language={language} activeOrderCount={activeOrderCount} pulse={activeOrderPulse} />
           {marketing.floatingRewards?.length ? (
             <Pressable style={styles.rewardFab} onPress={() => setRewardOpen(true)}>
               <Ionicons name="gift-outline" size={24} color="#fff" />
             </Pressable>
           ) : null}
-          <MealDetail item={selectedMeal} visible={Boolean(selectedMeal)} customer={customer} settings={settings} language={language} onClose={() => setSelectedMeal(null)} onAdd={addToCart} onShare={shareMeal} />
+          <MealDetail item={selectedMeal} visible={Boolean(selectedMeal)} customer={customer} settings={settings} language={language} onClose={() => setSelectedMeal(null)} onAdd={addToCart} onShare={shareMeal} favorite={favorites.includes(selectedMeal?.id)} onFavorite={toggleFavorite} relatedItems={items.filter(item => item.id !== selectedMeal?.id && item.categoryId === selectedMeal?.categoryId).slice(0, 4)} onOpenRelated={openMeal} />
           <CheckoutModal
             visible={checkoutOpen}
             language={language}
@@ -1674,18 +1713,22 @@ export default function App() {
             onShareReferral={shareReferral}
             onPickAvatar={pickAvatar}
             onUpdateProfile={updateProfile}
-            onSwitchAccount={switchAccount}
+            onNavigate={(id) => { setProfileOpen(false); if (id === 'notifications') setNotificationsOpen(true); else setTab(id); }}
+            onSwitchAccount={() => Alert.alert('Log out?', 'Your saved orders will remain on your account.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log out', style: 'destructive', onPress: switchAccount }])}
           />
           <SuccessModal
             visible={Boolean(checkoutSuccess)}
             language={language}
             order={checkoutSuccess}
+            onWhatsApp={() => reopenWhatsApp(checkoutSuccess)}
+            onView={() => { setSelectedOrder(checkoutSuccess); setCheckoutSuccess(null); setTab('orders'); }}
             onClose={() => {
               setCheckoutSuccess(null);
               setCheckoutOpen(false);
               setTab('home');
             }}
           />
+          <Modal visible={notificationsOpen} animationType="slide"><SafeAreaView style={styles.detailScreen}><View style={styles.checkoutHeader}><Text style={styles.pageTitle}>Notifications</Text><Pressable accessibilityLabel="Close notifications" onPress={() => { setReadNotificationIds(orders.flatMap(order => order.notifications || []).map(notification => notification.id)); setNotificationsOpen(false); }}><Ionicons name="close" size={26} /></Pressable></View><ScrollView contentContainerStyle={styles.checkoutBody}>{orders.flatMap(order => order.notifications || []).length ? orders.flatMap(order => order.notifications || []).map(notification => <View key={notification.id} style={styles.card}><Text style={styles.cardTitle}>{notification.title}</Text><Text style={styles.cardCopy}>{notification.body}</Text></View>) : <Text style={styles.emptyText}>No notifications yet.</Text>}</ScrollView></SafeAreaView></Modal>
           <FlashSaleModal visible={flashSaleOpen} code={flashSale} onClose={dismissFlashSale} onShare={shareFlashSale} />
           <RewardModal
             visible={rewardOpen}
@@ -1696,13 +1739,13 @@ export default function App() {
             onClaim={claimReward}
             onClose={() => setRewardOpen(false)}
           />
-          <OrderDetailModal visible={Boolean(selectedOrder)} order={selectedOrder} language={language} onClose={() => setSelectedOrder(null)} />
+          <OrderDetailModal visible={Boolean(selectedOrder)} order={selectedOrder} language={language} onWhatsApp={() => reopenWhatsApp(selectedOrder)} onReorder={() => { const available = (selectedOrder.items || []).map(row => ({ row, meal: items.find(item => item.id === row.menuItemId && item.isAvailable !== false) })).filter(entry => entry.meal); if (!available.length) return Alert.alert('Unavailable', 'These meals are no longer available.'); available.forEach(({ row, meal }) => addToCart(meal, Math.min(99, row.quantity), mealVariations(meal).some(v => v.name === row.variationName) ? row.variationName : '')); setSelectedOrder(null); setCheckoutStep('cart'); setCheckoutOpen(true); }} onClose={() => setSelectedOrder(null)} />
           <ReservationModal visible={reservationOpen} language={language} form={reservationForm} setForm={setReservationForm} saving={saving} onClose={() => setReservationOpen(false)} onSubmit={submitReservation} />
           <PromotionModal visible={promotionOpen} language={language} form={promotionForm} setForm={setPromotionForm} saving={saving} onPickImage={pickPromotionImage} onClose={() => setPromotionOpen(false)} onSubmit={submitPromotion} />
           </>
         )}
       </SafeAreaView>
-    </SafeAreaView>
+    </SafeAreaView></CartActionsContext.Provider>
   );
 }
 
@@ -1717,7 +1760,7 @@ function LegacyHomeView({ items, favorites, promotions, activeOrders, flashSale,
             <Text style={styles.flashTitle}>{flashSale.title}</Text>
             <Text style={styles.flashText}>Use code {flashSale.code} for {flashSale.discountPercent || 10}% off onsite.</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#151923" />
+          <Ionicons name="chevron-forward" size={20} color="#171B25" />
         </Pressable>
       ) : null}
 
@@ -1814,103 +1857,23 @@ function groupMealsByCategory(items, categories = []) {
   }, seededGroups);
 }
 
-function HomeView({ items, menuCategories, categoryLimit, favorites, promotions, marketing, flashSale, language, onOpen, onFavorite, onShare, onFlashSale, onCampaignAction }) {
-  const categories = groupMealsByCategory(items, menuCategories).filter((category) => category.items.length > 0);
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const visibleCategories = selectedCategory === 'all' ? categories : categories.filter((category) => category.name === selectedCategory);
-  const visibleItems = selectedCategory === 'all' ? items : visibleCategories.flatMap((category) => category.items);
-  const featuredMeals = visibleItems.slice(0, 6);
-  const displayedCategories = selectedCategory === 'all' ? visibleCategories.slice(0, categoryLimit) : visibleCategories;
-  const marketingBanners = [
-    ...(marketing?.banners || []),
-    ...(marketing?.hero ? [marketing.hero] : []),
-    ...(marketing?.items || []).filter((item) => customerFacingMarketingTypes.includes(item.type))
-  ].filter((item, index, source) => item?.id && source.findIndex((entry) => entry?.id === item.id) === index);
-  const bannerSlides = [
-    ...marketingBanners.map((item) => ({ ...item, label: item.type?.replaceAll('_', ' ') || 'Campaign' })),
-    ...promotions.map((item) => ({ ...item, label: item.businessName || 'Promotion', deepLink: item.ctaUrl }))
-  ];
-  const visibleBannerSlides = bannerSlides.length ? bannerSlides : [fallbackPromotionSlide];
-  return (
-    <View>
-      <PromotionCarousel slides={visibleBannerSlides} onAction={onCampaignAction} />
-
-      <View style={styles.categoryQuickAccess}>
-        <View style={styles.categoryGridTop}>
-          <CategoryTile label="All" variant="meal" active={selectedCategory === 'all'} onPress={() => setSelectedCategory('all')} featured />
-          {categories.slice(0, 1).map((category, index) => (
-            <CategoryTile key={category.name} label={category.name} variant={variantForCategory(category.name, index)} active={selectedCategory === category.name} onPress={() => setSelectedCategory(category.name)} featured badge={promotions.length ? 'Promo' : ''} />
-          ))}
-        </View>
-        <View style={styles.categoryGridBottom}>
-          {categories.slice(1, 5).map((category, index) => (
-            <CategoryTile key={category.name} label={category.name} variant={variantForCategory(category.name, index + 1)} active={selectedCategory === category.name} onPress={() => setSelectedCategory(category.name)} />
-          ))}
-          {categories.length > 5 ? <CategoryTile label="More" variant="more" active={false} onPress={() => setSelectedCategory('all')} /> : null}
-        </View>
-      </View>
-
-      {flashSale ? (
-        <Pressable style={styles.flashBanner} onPress={onFlashSale}>
-          <View style={styles.flashIcon}><Ionicons name="flash" size={22} color="#fff" /></View>
-          <View style={styles.flashCopy}>
-            <Text style={styles.flashTitle}>{flashSale.title}</Text>
-            <Text style={styles.flashText}>Use code {flashSale.code} for {flashSale.discountPercent || 10}% off onsite.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#151923" />
-        </Pressable>
-      ) : null}
-
-      <View style={styles.sectionBlock}>
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.pageTitle}>{t(language, 'todaysMenu')}</Text>
-          <Text style={styles.sectionCount}>{visibleItems.length} meals</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredMealRail}>
-          {featuredMeals.length ? featuredMeals.map((item) => (
-            <FeaturedMealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />
-          )) : <Text style={styles.emptyText}>{t(language, 'noMeals')}</Text>}
-        </ScrollView>
-      </View>
-
-      {displayedCategories.map((category) => (
-        <CategoryMealSection key={category.name} category={category} favorites={favorites} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />
-      ))}
-
-      {selectedCategory === 'all' && displayedCategories.length < visibleCategories.length ? (
-        <View style={styles.loadingMoreBox}>
-          <ActivityIndicator color={brandRed} />
-          <Text style={styles.loadingMoreText}>{t(language, 'loadingMeals')}</Text>
-        </View>
-      ) : null}
-
-      {promotions.length ? (
-        <View style={styles.promotionStrip}>
-          <Text style={styles.sectionTitle}>{t(language, 'promotions')}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.promotionRail}>
-            {promotions.slice(0, 4).map((promotion) => (
-              <Pressable key={promotion.id || promotion.title} style={styles.promotionTile} onPress={promotion.ctaUrl ? () => openExternalUrl(promotion.ctaUrl) : undefined}>
-                {promotion.imageUrl ? <Image source={imageSource(promotion.imageUrl)} style={styles.promotionTileImage} /> : <View style={styles.promotionTileFallback}><Ionicons name="sparkles-outline" size={24} color={brandRed} /></View>}
-                <Text style={styles.promoEyebrow}>{t(language, 'offer')}</Text>
-                <Text style={styles.promoTitle} numberOfLines={2}>{promotion.title}</Text>
-                <Text style={styles.cardCopy} numberOfLines={2}>{promotion.description}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function variantForCategory(name = '', fallback = 0) {
-  const value = name.toLowerCase();
-  if (value.includes('drink') || value.includes('beverage') || value.includes('juice') || value.includes('sweet')) return 'drinks';
-  if (value.includes('alcohol') || value.includes('beer') || value.includes('wine')) return 'bottles';
-  if (value.includes('ice') || value.includes('cream') || value.includes('dessert') || value.includes('sweet')) return 'icecream';
-  if (value.includes('grocery') || value.includes('store')) return 'basket';
-  if (value.includes('african') || value.includes('main') || value.includes('meal') || value.includes('food')) return 'meal';
-  return ['meal', 'basket', 'drinks', 'bottles', 'icecream'][fallback % 5];
+function HomeView({ items, menuCategories, categoryFilter, onFilter, favorites, promotions, marketing, flashSale, language, onOpen, onFavorite, onShare, onFlashSale, onCampaignAction }) {
+  const selectedCategory = categoryFilter;
+  const setSelectedCategory = onFilter;
+  const categories = groupMealsByCategory(items, menuCategories);
+  const visibleItems = selectedCategory === 'all' ? items : items.filter(item => item.category?.name === selectedCategory);
+  const campaigns = [...(marketing?.banners || []), ...(marketing?.hero ? [marketing.hero] : []), ...(marketing?.items || []).filter(item => customerFacingMarketingTypes.includes(item.type))].filter((item,index,all) => item?.id && all.findIndex(other => other.id === item.id) === index);
+  const slides = [...campaigns, ...promotions];
+  return <View>
+    {slides.length > 0 && <PromotionCarousel slides={slides} onAction={onCampaignAction} />}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRail}>
+      {['all', ...categories.map(category => category.name)].map(name => <Pressable key={name} style={[styles.categoryChip, selectedCategory === name && styles.categoryChipActive]} accessibilityState={{ selected: selectedCategory === name }} onPress={() => setSelectedCategory(name)}><Ionicons name="restaurant-outline" size={18} color={selectedCategory === name ? brandRed : tokens.colors.muted} /><Text style={styles.cardCopy}>{name === 'all' ? 'All Meals' : name}</Text></Pressable>)}
+    </ScrollView>
+    {flashSale && <Pressable style={styles.flashBanner} onPress={onFlashSale}><Ionicons name="pricetag-outline" size={22} color={brandRed} /><View style={{ flex: 1 }}><Text style={styles.cardTitle}>{flashSale.title}</Text><Text style={styles.cardCopy}>{flashSale.description || 'View this onsite offer'}</Text></View></Pressable>}
+    <View style={styles.sectionHeaderRow}><Text style={styles.pageTitle}>Today's menu</Text><Text style={styles.cardCopy}>{visibleItems.length} meals</Text></View>
+    <View style={styles.mealGrid}>{visibleItems.map(item => <MealCard key={item.id} item={item} favorite={favorites.includes(item.id)} onOpen={onOpen} onFavorite={onFavorite} onShare={onShare} />)}</View>
+    {!visibleItems.length && <Text style={styles.emptyText}>No meals match your search. Try another category or clear your search.</Text>}
+  </View>;
 }
 
 function PromotionCarousel({ slides, onAction }) {
@@ -1939,8 +1902,8 @@ function PromotionCarousel({ slides, onAction }) {
           <Pressable key={slide.id || slide.title} style={[styles.promotionHeroCard, { width: cardWidth }]} onPress={() => onAction?.(campaignActionFor(slide), slide)}>
             <View style={styles.promotionHeroText}>
               <Text style={styles.promoEyebrow}>{slide.label || 'Featured'}</Text>
-              <Text style={styles.promotionHeroTitle} numberOfLines={1}>{slide.title}</Text>
-              {slide.description ? <Text style={styles.promotionHeroCopy} numberOfLines={1}>{slide.description}</Text> : null}
+              <Text style={styles.promotionHeroTitle}>{slide.title}</Text>
+              {slide.description ? <Text style={styles.promotionHeroCopy}>{slide.description}</Text> : null}
               <View style={styles.promotionHeroCta}>
                 <Text style={styles.promotionHeroCtaText}>{slide.ctaLabel || 'View offer'}</Text>
                 <Ionicons name="chevron-forward" size={15} color="#fff" />
@@ -2004,7 +1967,7 @@ function CategorySvg({ variant, large }) {
         <Path d="M33 16c7 9 2 17-8 20 3-7-2-10 8-20z" fill="#ffd0b8" />
         <Ellipse cx="28" cy="42" rx="15" ry="8" fill="#9dd8ff" />
         <Path d="M18 42c5 10 17 11 27 0" fill="#4766d8" opacity="0.7" />
-        <Circle cx="48" cy="47" r="5" fill="#d71920" />
+        <Circle cx="48" cy="47" r="5" fill="#E51924" />
         <Path d="M50 42c2-5 5-7 8-8" stroke="#4c7a38" strokeWidth="2" />
       </Svg>
     );
@@ -2012,7 +1975,7 @@ function CategorySvg({ variant, large }) {
   if (variant === 'more') {
     return (
       <Svg width={size} height={size} viewBox="0 0 64 64">
-        <Circle cx="22" cy="32" r="4" fill="#d71920" />
+        <Circle cx="22" cy="32" r="4" fill="#E51924" />
         <Circle cx="32" cy="32" r="4" fill="#111827" />
         <Circle cx="42" cy="32" r="4" fill="#111827" />
       </Svg>
@@ -2063,7 +2026,7 @@ function FeaturedMealCard({ item, favorite, onOpen, onFavorite, onShare }) {
     <Pressable style={styles.featuredMealCard} onPress={() => onOpen(item)}>
       <Image source={imageSource(item.imageUrl, fallbackImage)} style={styles.featuredMealImage} />
       <Pressable style={styles.shareButton} onPress={() => onShare(item)}>
-        <Ionicons name="share-social-outline" size={18} color="#29384d" />
+        <Ionicons name="share-social-outline" size={18} color="#171B25" />
       </Pressable>
       <Pressable style={styles.favoriteButton} onPress={() => onFavorite(item.id)}>
         <Ionicons name={favorite ? 'heart' : 'heart-outline'} size={18} color={favorite ? brandRed : '#666'} />
@@ -2175,24 +2138,19 @@ function OrderTrackingCard({ order }) {
     <View style={styles.trackingCard}>
       <View style={styles.trackingHeader}>
         <View>
-          <Text style={styles.trackingEyebrow}>Live tracking</Text>
+          <Text style={styles.trackingEyebrow}>Order progress</Text>
           <Text style={styles.trackingTitle}>{deliveryStatusLabels[currentStatus] || currentStatus.replaceAll('_', ' ')}</Text>
         </View>
         <View style={styles.etaPill}>
           <Ionicons name="time-outline" size={15} color={brandRed} />
-          <Text style={styles.etaText}>{order.etaMinutes ? `${order.etaMinutes} min` : 'ETA soon'}</Text>
+          <Text style={styles.etaText}>{order.etaMinutes ? `${order.etaMinutes} min` : 'Time not confirmed'}</Text>
         </View>
       </View>
 
       {mapUrl ? (
         <Image source={imageSource(mapUrl)} style={styles.mapPreview} />
       ) : (
-        <View style={styles.mapPreview}>
-          <View style={styles.routeLine} />
-          <View style={[styles.mapMarker, styles.restaurantMarker]}><Ionicons name="restaurant" size={14} color="#fff" /></View>
-          <View style={[styles.mapMarker, styles.driverMarker]}><Ionicons name="bicycle" size={16} color="#fff" /></View>
-          <View style={[styles.mapMarker, styles.customerMarker]}><Ionicons name="home" size={14} color="#fff" /></View>
-        </View>
+        <View style={[styles.mapPreview, { justifyContent: 'center', padding: 20 }]}><Text style={styles.cardCopy}>Live location is not available for this order. Status updates appear below.</Text></View>
       )}
 
       <View style={styles.trackingStats}>
@@ -2202,7 +2160,7 @@ function OrderTrackingCard({ order }) {
       </View>
 
       <View style={styles.driverBox}>
-        {order.driverPhotoUrl ? <Image source={imageSource(order.driverPhotoUrl)} style={styles.driverPhoto} /> : <View style={styles.driverPhotoFallback}><Ionicons name="person" size={18} color="#29384d" /></View>}
+        {order.driverPhotoUrl ? <Image source={imageSource(order.driverPhotoUrl)} style={styles.driverPhoto} /> : <View style={styles.driverPhotoFallback}><Ionicons name="person" size={18} color="#171B25" /></View>}
         <View style={styles.driverInfo}>
           <Text style={styles.driverName}>{order.driverName || 'Driver not assigned yet'}</Text>
           <Text style={styles.driverMeta}>{order.vehicleInfo || 'Vehicle details will appear here'}</Text>
@@ -2227,7 +2185,7 @@ function OrderTrackingCard({ order }) {
   );
 }
 
-function OrderDetailModal({ visible, order, language, onClose }) {
+function OrderDetailModal({ visible, order, language, onClose, onWhatsApp, onReorder }) {
   if (!order) return null;
   const items = order.items || [];
   const deliveryFeeValue = Number(order.deliveryFee || 0);
@@ -2250,6 +2208,7 @@ function OrderDetailModal({ visible, order, language, onClose }) {
             <Text style={styles.orderMeta}>{order.customerPhone}</Text>
             <Text style={styles.orderMeta}>{order.deliveryAddress || 'Not provided'}</Text>
           </View>
+          <Pressable style={styles.secondaryButton} onPress={onWhatsApp}><Ionicons name="logo-whatsapp" size={20} color={brandRed} /><Text style={styles.secondaryButtonText}>Contact ChopASAP</Text></Pressable><Pressable style={styles.secondaryButton} onPress={onReorder}><Text style={styles.secondaryButtonText}>Reorder available meals</Text></Pressable>
           <OrderTrackingCard order={order} />
           <View style={styles.checkoutList}>
             {items.length ? items.map((item, index) => (
@@ -2320,9 +2279,10 @@ function SupportView({ settings, language, onReserve, onPromote }) {
   );
 }
 
-function ProfileView({ customer, customerForm, setCustomerForm, language, chooseLanguage, profileTab, setProfileTab, rank, orders, referralLink, saving, onShareReferral, onPickAvatar, onUpdateProfile, onSwitchAccount }) {
+function ProfileView({ customer, customerForm, setCustomerForm, language, chooseLanguage, profileTab, setProfileTab, rank, orders, referralLink, saving, onShareReferral, onPickAvatar, onUpdateProfile, onSwitchAccount, onNavigate }) {
   return (
     <View>
+      <View style={styles.accountLinks}>{[['favorites','heart-outline','Favourites'],['support','headset-outline','Contact support'],['orders','receipt-outline','Order history'],['notifications','notifications-outline','Notifications']].map(([id,icon,label]) => <Pressable key={id} style={styles.accountLink} onPress={() => onNavigate(id)}><Ionicons name={icon} size={20} color={brandRed} /><Text style={styles.cardTitle}>{label}</Text><Ionicons name="chevron-forward" size={18} color={tokens.colors.muted} /></Pressable>)}</View>
       <View style={styles.profileHeader}>
         <Pressable onPress={onPickAvatar}>
           {customer.profileImageUrl ? <Image source={imageSource(customer.profileImageUrl)} style={styles.avatar} /> : <View style={styles.avatarFallback}><Ionicons name="person" size={34} color="#fff" /></View>}
@@ -2406,26 +2366,12 @@ function ProfileModal({ visible, onClose, ...profileProps }) {
   );
 }
 
-function CheckoutItem({ item, address, updateQty }) {
-  return (
-    <View style={styles.checkoutItem}>
-      <Image source={imageSource(item.imageUrl, fallbackImage)} style={styles.checkoutItemImage} />
-      <View style={styles.checkoutItemInfo}>
-        <Text style={styles.checkoutItemName} numberOfLines={1}>{item.name}</Text>
-        {item.variationName ? <Text style={styles.checkoutItemVariation} numberOfLines={1}>{item.variationName}</Text> : null}
-        <Text style={styles.checkoutItemMeta}>{item.quantity} item - {formatMoney(item.price * item.quantity)}</Text>
-        <Text style={styles.checkoutItemMeta} numberOfLines={1}>Deliver to {address || 'Bonanjo Biyamassi'}</Text>
-      </View>
-      <Pressable style={styles.checkoutRemove} onPress={() => updateQty(item.cartItemId, -999)}>
-        <Ionicons name="trash-outline" size={16} color={brandRed} />
-      </Pressable>
-      <View style={styles.checkoutQty}>
-        <Pressable onPress={() => updateQty(item.cartItemId, -1)}><Ionicons name="remove" size={17} color="#5f646b" /></Pressable>
-        <Text style={styles.qtyText}>{item.quantity}</Text>
-        <Pressable onPress={() => updateQty(item.cartItemId, 1)}><Ionicons name="add" size={17} color="#5f646b" /></Pressable>
-      </View>
-    </View>
-  );
+function CheckoutItem({ item, updateQty }) {
+  const remove = () => Alert.alert('Remove meal?', item.name, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => updateQty(item.cartItemId, -999) }]);
+  return <View style={styles.cartItemNew}>
+    <View style={{ flexDirection: 'row', gap: 12 }}><Image source={imageSource(item.imageUrl, fallbackImage)} style={{ width: 72, height: 72, borderRadius: 12 }} /><View style={{ flex: 1 }}><Text style={styles.cardTitle}>{item.name}</Text>{item.variationName ? <Text style={styles.cardCopy}>{item.variationName}</Text> : null}{item.note ? <Text style={styles.cardCopy}>Instructions: {item.note}</Text> : null}<Text style={styles.cardCopy}>{fcfa(item.price)} each</Text><Text style={styles.mealPrice}>{fcfa(item.price * item.quantity)}</Text></View></View>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><Pressable accessibilityLabel="Remove meal" style={styles.quantityAction} onPress={remove}><Ionicons name="trash-outline" size={20} color={brandRed} /></Pressable><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Pressable accessibilityLabel="Decrease quantity" style={styles.quantityAction} onPress={() => item.quantity === 1 ? remove() : updateQty(item.cartItemId, -1)}><Ionicons name="remove" size={20} /></Pressable><Text>{item.quantity}</Text><Pressable accessibilityLabel="Increase quantity" style={styles.quantityAction} disabled={item.quantity >= 99} onPress={() => updateQty(item.cartItemId, 1)}><Ionicons name="add" size={20} /></Pressable></View></View>
+  </View>;
 }
 
 function PriceRows({ language, subtotal, deliveryFee, serviceFee, total }) {
@@ -2443,7 +2389,7 @@ function PriceRows({ language, subtotal, deliveryFee, serviceFee, total }) {
 function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, setFulfillment, orderForm, setOrderForm, updateQty, subtotal, deliveryFee, serviceFee, total, saving, onClose, onShop, onSubmit }) {
   return (
     <Modal visible={visible} animationType="slide">
-      <SafeAreaView style={styles.detailScreen}>
+      <SafeAreaView style={styles.detailScreen}><KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.checkoutHeader}>
           <Pressable onPress={step === 'details' ? () => setStep('cart') : onClose}><Ionicons name={step === 'details' ? 'chevron-back' : 'close'} size={26} color="#111" /></Pressable>
           <Text style={styles.checkoutTitle}>{t(language, 'checkout')}</Text>
@@ -2451,7 +2397,7 @@ function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, se
         </View>
         {step === 'cart' ? (
           cart.length ? (
-            <ScrollView contentContainerStyle={styles.checkoutBodyFlush}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.checkoutBodyFlush}>
               <View style={styles.checkoutList}>
                 {cart.map((item) => <CheckoutItem key={item.cartItemId} item={item} address={orderForm.deliveryAddress} updateQty={updateQty} />)}
               </View>
@@ -2520,7 +2466,7 @@ function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, se
             ) : null}
             <View style={styles.deliveryTimeRow}>
               <Text style={styles.priceTotalLabel}>{fulfillment === 'delivery' ? 'Delivery time' : 'Reserve time'}</Text>
-              <Text style={styles.priceValue}>{fulfillment === 'delivery' ? '15-30 min(s)' : 'Restaurant confirmation'}</Text>
+              <Text style={styles.priceValue}>Restaurant confirmation</Text>
             </View>
             <View style={styles.noteBox}>
               <Text style={styles.noteLabel}>{t(language, 'restaurantMessage')}</Text>
@@ -2538,14 +2484,14 @@ function CheckoutModal({ visible, language, cart, step, setStep, fulfillment, se
               <Text style={styles.addMoreText}>{t(language, 'addMoreItems')}</Text>
             </Pressable>
             <PriceRows language={language} subtotal={subtotal} deliveryFee={deliveryFee} serviceFee={serviceFee} total={total} />
-            <View style={styles.checkoutCtaBox}>
-              <Pressable style={[styles.checkoutButton, (saving || !cart.length) && styles.disabled]} onPress={onSubmit} disabled={saving || !cart.length}>
-                <Text style={styles.primaryButtonText}>{saving ? 'Placing order...' : 'Confirm order'}</Text>
+            <View style={styles.checkoutCtaBox}><Text style={styles.cardCopy}>Your order is saved first. WhatsApp opens a prepared message for you to send and finalize arrangements.</Text>
+              <Pressable style={[styles.checkoutButton, (saving || !cart.length) && styles.disabled]} onPress={onSubmit} disabled={saving || !cart.length || (fulfillment === 'delivery' && !orderForm.deliveryAddress.trim())}>
+                <Text style={styles.primaryButtonText}>{saving ? 'Saving your order?' : 'Place Order & Continue to WhatsApp'}</Text>
               </Pressable>
             </View>
           </ScrollView>
         )}
-      </SafeAreaView>
+      </KeyboardAvoidingView></SafeAreaView>
     </Modal>
   );
 }
@@ -2563,29 +2509,18 @@ function FieldRow({ icon, label, hint, children }) {
   );
 }
 
-function SuccessModal({ visible, order, language, onClose }) {
-  return (
-    <Modal visible={visible} animationType="slide">
-      <SafeAreaView style={styles.successScreen}>
-        <View style={styles.successCard}>
-          <View style={styles.successIcon}><Ionicons name="checkmark" size={54} color="#fff" /></View>
-          <Text style={styles.successTitle}>{t(language, 'orderPlacedSuccess')}</Text>
-          <Text style={styles.cardCopy}>{order?.orderNo ? `Track ${order.orderNo} in Orders.` : 'Track your order in Orders.'}</Text>
-          <Text style={styles.supportTitle}>{t(language, 'rateYourOrder')}</Text>
-          <View style={styles.ratingRow}>
-            {[1, 2, 3, 4, 5].map((rating) => (
-              <Pressable key={rating} style={styles.ratingButton} onPress={() => Alert.alert('ChopASAP', `Thanks for rating ${rating} star${rating === 1 ? '' : 's'}.`)}>
-                <Ionicons name="star" size={22} color="#f5a400" />
-              </Pressable>
-            ))}
-          </View>
-          <Pressable style={styles.primaryButton} onPress={onClose}>
-            <Text style={styles.primaryButtonText}>{t(language, 'backHome')}</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </Modal>
-  );
+function SuccessModal({ visible, order, language, onClose, onWhatsApp, onView }) {
+  return <Modal visible={visible} animationType="slide"><SafeAreaView style={styles.successScreen}><ScrollView contentContainerStyle={styles.successCard}>
+    <Ionicons name="checkmark-circle-outline" size={56} color={tokens.colors.success} />
+    <Text style={styles.successTitle}>Order received</Text><Text style={styles.cardTitle}>{order?.orderNo}</Text>
+    <Text style={styles.cardCopy}>{orderStatusLabels[order?.status] || order?.status}</Text>
+    <Text style={styles.cardCopy}>Your order is saved. Send the prepared WhatsApp message to finalize arrangements.</Text>
+    {order?.items?.map(item => <Text key={item.id} style={styles.cardCopy}>{item.quantity} ? {item.menuItem?.name} ? {fcfa(item.total)}</Text>)}
+    <Text style={styles.priceTotal}>{fcfa(order?.total)}</Text>
+    <Pressable style={styles.primaryButton} onPress={onWhatsApp}><Text style={styles.primaryButtonText}>Continue to WhatsApp</Text></Pressable>
+    <Pressable style={styles.secondaryButton} onPress={onView}><Text style={styles.secondaryButtonText}>View order</Text></Pressable>
+    <Pressable style={styles.secondaryButton} onPress={onClose}><Text style={styles.secondaryButtonText}>Continue shopping</Text></Pressable>
+  </ScrollView></SafeAreaView></Modal>;
 }
 
 function FlashSaleModal({ visible, code, onClose, onShare }) {
@@ -2722,13 +2657,13 @@ function PromotionModal({ visible, language, form, setForm, saving, onPickImage,
   );
 }
 
-function BottomTabs({ tab, setTab, language, activeOrderCount = 0, pulse }) {
+function BottomTabs({ tab, setTab, language, activeOrderCount = 0, cartCount = 0, pulse }) {
   const tabs = [
     ['home', 'home-outline', t(language, 'home')],
     ['meals', 'restaurant-outline', t(language, 'meals')],
-    ['support', 'headset-outline', t(language, 'support')],
-    ['favorites', 'heart-outline', t(language, 'favorites')],
-    ['orders', 'receipt-outline', t(language, 'orders')]
+    ['cart', 'bag-outline', 'Cart'],
+    ['orders', 'receipt-outline', t(language, 'orders')],
+    ['account', 'person-outline', 'Account']
   ];
   return (
     <View style={styles.bottomTabs}>
@@ -2736,9 +2671,9 @@ function BottomTabs({ tab, setTab, language, activeOrderCount = 0, pulse }) {
         <Pressable key={id} style={styles.tabButton} onPress={() => setTab(id)}>
           <View>
             <Ionicons name={icon} size={21} color={tab === id ? brandRed : '#42495a'} />
-            {id === 'orders' && activeOrderCount ? (
+            {(id === 'orders' && activeOrderCount) || (id === 'cart' && cartCount) ? (
               <Animated.View style={[styles.activeOrderTabBadge, { opacity: pulse || 1 }]}>
-                <Text style={styles.activeOrderTabText}>{activeOrderCount}</Text>
+                <Text style={styles.activeOrderTabText}>{id === 'cart' ? cartCount : activeOrderCount}</Text>
               </Animated.View>
             ) : null}
           </View>
@@ -2750,66 +2685,74 @@ function BottomTabs({ tab, setTab, language, activeOrderCount = 0, pulse }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#eaf5f8', paddingTop: Platform.OS === 'android' ? NativeStatusBar.currentHeight || 0 : 0 },
-  appSafe: { flex: 1, backgroundColor: '#eaf5f8' },
+  cartItemNew: { padding: 16, gap: 12, borderBottomWidth: 1, borderBottomColor: tokens.colors.border, backgroundColor: '#fff' },
+  quantityAction: { width: 44, height: 44, borderRadius: 12, backgroundColor: tokens.colors.background, alignItems: 'center', justifyContent: 'center' },
+  welcome: { paddingHorizontal: 16, paddingBottom: 16, gap: 4 },
+  categoryRail: { gap: 8, paddingVertical: 16 },
+  categoryChip: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: tokens.colors.border, backgroundColor: '#fff' },
+  categoryChipActive: { borderColor: tokens.colors.primary, backgroundColor: '#fff5f5' },
+  accountLinks: { gap: 12, marginBottom: 16 },
+  accountLink: { flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 56, padding: 16, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: tokens.colors.border },
+  safe: { flex: 1, backgroundColor: '#F8F9FB', paddingTop: 0 },
+  appSafe: { flex: 1, backgroundColor: '#F8F9FB' },
   loader: { flex: 1, backgroundColor: '#fff8ef' },
   splashShell: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 22, paddingTop: 54, paddingBottom: 34, backgroundColor: '#fff8ef' },
   splashTop: { alignItems: 'center' },
   splashLogoWrap: { width: 106, height: 106, alignItems: 'center', justifyContent: 'center' },
   splashLogoGlow: { position: 'absolute', width: 122, height: 122, borderRadius: 61, backgroundColor: '#ffd071', opacity: 0.28 },
   splashLogo: { width: 84, height: 84, borderRadius: 24, shadowColor: brandRed, shadowOpacity: 0.18, shadowRadius: 20 },
-  splashBrand: { marginTop: 12, color: brandRed, fontSize: 24, fontWeight: '900', letterSpacing: 0 },
-  splashTagline: { marginTop: 4, color: '#29384d', fontSize: 13, fontWeight: '800' },
+  splashBrand: { marginTop: 12, color: brandRed, fontSize: 24, fontWeight: '600', letterSpacing: 0 },
+  splashTagline: { marginTop: 4, color: '#171B25', fontSize: 13, fontWeight: '600' },
   splashFoodStage: { height: 238, justifyContent: 'center' },
   splashFoodCard: { position: 'absolute', borderRadius: 24, backgroundColor: '#fff', padding: 8, shadowColor: '#4b2d12', shadowOpacity: 0.13, shadowRadius: 18, elevation: 6 },
   splashFoodCardLeft: { left: 0, top: 58, width: 116, transform: [{ rotate: '-5deg' }] },
   splashFoodCardMain: { alignSelf: 'center', top: 18, width: 152, zIndex: 2 },
   splashFoodCardRight: { right: 0, top: 82, width: 116, transform: [{ rotate: '5deg' }] },
   splashFoodImage: { width: '100%', height: 92, borderRadius: 18, backgroundColor: '#fff1ca' },
-  splashFoodLabel: { marginTop: 7, minHeight: 30, color: '#151923', fontSize: 10, lineHeight: 14, fontWeight: '900', textAlign: 'center' },
+  splashFoodLabel: { marginTop: 7, minHeight: 30, color: '#171B25', fontSize: 10, lineHeight: 14, fontWeight: '600', textAlign: 'center' },
   splashSteamOne: { position: 'absolute', top: 8, left: '43%', width: 10, height: 42, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.72)', transform: [{ rotate: '-14deg' }] },
   splashSteamTwo: { position: 'absolute', top: 18, left: '52%', width: 8, height: 34, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.6)', transform: [{ rotate: '12deg' }] },
-  splashRouteBox: { borderRadius: 24, backgroundColor: '#151923', padding: 16, gap: 12 },
+  splashRouteBox: { borderRadius: 24, backgroundColor: '#171B25', padding: 16, gap: 12 },
   splashRouteRail: { height: 42, justifyContent: 'center' },
   splashRouteFill: { height: 5, borderRadius: 5, backgroundColor: '#2fbf71' },
   splashScooter: { position: 'absolute', left: 8, width: 38, height: 38, borderRadius: 19, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
   splashRouteMeta: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
   splashRoutePill: { minHeight: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  splashRouteText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  splashRouteText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   splashMessageBox: { alignItems: 'center', gap: 8 },
-  splashMessage: { color: '#151923', fontSize: 21, lineHeight: 27, fontWeight: '900', textAlign: 'center' },
-  splashLoadingText: { color: '#667085', fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  splashMessage: { color: '#171B25', fontSize: 21, lineHeight: 27, fontWeight: '600', textAlign: 'center' },
+  splashLoadingText: { color: '#667085', fontSize: 12, fontWeight: '600', textAlign: 'center' },
   splashProgressTrack: { marginTop: 8, width: '76%', height: 7, borderRadius: 7, backgroundColor: '#ffe2b4', overflow: 'hidden' },
   splashProgressFill: { height: '100%', borderRadius: 7, backgroundColor: brandRed },
   overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(21,25,35,0.65)', padding: 18 },
   languageCard: { width: '100%', maxWidth: 380, borderRadius: 26, backgroundColor: '#fff', padding: 22, alignItems: 'center' },
   languageIcon: { width: 58, height: 58, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },
-  modalTitle: { marginTop: 14, fontSize: 24, fontWeight: '900', color: '#151923', textAlign: 'center' },
+  modalTitle: { marginTop: 14, fontSize: 24, fontWeight: '600', color: '#171B25', textAlign: 'center' },
   mutedCenter: { marginTop: 8, color: '#667085', textAlign: 'center', fontWeight: '700' },
-  languageOption: { width: '100%', height: 50, borderRadius: 18, borderWidth: 1, borderColor: '#dbe5e8', alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  languageOption: { width: '100%', height: 50, borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   languageOptionActive: { backgroundColor: brandRed, borderColor: brandRed },
-  languageOptionText: { fontWeight: '900', color: '#151923' },
+  languageOptionText: { fontWeight: '600', color: '#171B25' },
   languageOptionTextActive: { color: '#fff' },
   gate: { flex: 1, padding: 0, backgroundColor: '#eef7f9' },
   gateScroll: { flexGrow: 1 },
   gateCard: { overflow: 'hidden', width: '100%', minHeight: '100%', flex: 1, backgroundColor: '#fff', shadowColor: '#171a1f', shadowOpacity: 0.08, shadowRadius: 28, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
   gateHeader: { alignItems: 'flex-start', backgroundColor: '#fff', padding: 24 },
-  gateBadgeText: { fontSize: 12, fontWeight: '900', color: brandRed, letterSpacing: 0.6, textTransform: 'uppercase' },
-  gateTitle: { marginTop: 18, color: '#151923', fontSize: 28, fontWeight: '900', lineHeight: 36 },
+  gateBadgeText: { fontSize: 12, fontWeight: '600', color: brandRed, letterSpacing: 0.6, textTransform: 'uppercase' },
+  gateTitle: { marginTop: 18, color: '#171B25', fontSize: 28, fontWeight: '600', lineHeight: 36 },
   gateCopy: { marginTop: 10, color: '#5f6770', fontSize: 15, lineHeight: 22, fontWeight: '700' },
   gateArtwork: { width: '100%', alignItems: 'center', paddingVertical: 14 },
   stepBar: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 22 },
   stepSegment: { flex: 1, height: 4, borderRadius: 999, backgroundColor: '#f0f4f7' },
   stepSegmentActive: { backgroundColor: brandRed },
   stepRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 16 },
-  stepLabel: { color: '#151923', fontSize: 18, fontWeight: '900' },
+  stepLabel: { color: '#171B25', fontSize: 18, fontWeight: '600' },
   stepHighlight: { color: '#5f6770', fontSize: 14, fontWeight: '700' },
   stepIndicatorRow: { flexDirection: 'row', gap: 10, marginTop: 24 },
   stepDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#f3f6f8', alignItems: 'center', justifyContent: 'center' },
   stepDotActive: { backgroundColor: brandRed },
-  stepDotText: { color: '#5f6770', fontWeight: '900' },
+  stepDotText: { color: '#5f6770', fontWeight: '600' },
   stepDotTextActive: { color: '#fff' },
-  stepTitle: { marginTop: 20, color: '#151923', fontSize: 26, fontWeight: '900', lineHeight: 34 },
+  stepTitle: { marginTop: 20, color: '#171B25', fontSize: 26, fontWeight: '600', lineHeight: 34 },
   stepSubtitle: { marginTop: 10, color: '#5f6770', fontSize: 15, lineHeight: 22, fontWeight: '600' },
   stepCard: { padding: 24, gap: 18, backgroundColor: '#fdfdfd' },
   optionalText: { color: '#5f6770', fontSize: 13, lineHeight: 20, marginTop: 0, marginBottom: 10, fontWeight: '700' },
@@ -2817,74 +2760,74 @@ const styles = StyleSheet.create({
   field: { borderWidth: 1, borderColor: '#e4e7eb', backgroundColor: '#f8fbfc', borderRadius: 18, padding: 16 },
   fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   fieldIcon: { marginTop: 2 },
-  fieldLabel: { fontSize: 12, color: '#5f6770', fontWeight: '900', letterSpacing: 0.5 },
-  input: { fontSize: 17, color: '#151923', fontWeight: '800', minHeight: 26 },
+  fieldLabel: { fontSize: 12, color: '#5f6770', fontWeight: '600', letterSpacing: 0.5 },
+  input: { fontSize: 17, color: '#171B25', fontWeight: '600', minHeight: 26 },
   primaryButton: { minHeight: 56, borderRadius: 20, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 20, shadowColor: brandRed, shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
-  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', letterSpacing: 0.4 },
   softButton: { marginTop: 10, minHeight: 52, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f8fb' },
-  softButtonText: { color: '#2b3b4c', fontWeight: '900', fontSize: 15 },
+  softButtonText: { color: '#2b3b4c', fontWeight: '600', fontSize: 15 },
   skipButton: { marginTop: 10, minHeight: 52, borderRadius: 20, borderWidth: 1, borderColor: '#d1d9e0', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  skipButtonText: { color: '#5f6770', fontWeight: '900', fontSize: 15 },
-  referralBadge: { backgroundColor: '#fff4d7', color: '#8b5f00', padding: 12, borderRadius: 16, textAlign: 'center', fontWeight: '900' },
+  skipButtonText: { color: '#5f6770', fontWeight: '600', fontSize: 15 },
+  referralBadge: { backgroundColor: '#fff4d7', color: '#8b5f00', padding: 12, borderRadius: 16, textAlign: 'center', fontWeight: '600' },
   primaryButton: { minHeight: 56, borderRadius: 20, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 20, shadowColor: brandRed, shadowOpacity: 0.18, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 6 },
-  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
+  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600', letterSpacing: 0.4 },
   softButton: { marginTop: 10, minHeight: 52, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f8fb' },
-  softButtonText: { color: '#2b3b4c', fontWeight: '900', fontSize: 15 },
+  softButtonText: { color: '#2b3b4c', fontWeight: '600', fontSize: 15 },
   driverModeButton: { minHeight: 44, borderRadius: 14, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff8f8', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
-  driverModeText: { color: brandRed, fontWeight: '900' },
+  driverModeText: { color: brandRed, fontWeight: '600' },
   driverGateHeader: { alignItems: 'center', backgroundColor: brandRed, padding: 24 },
   driverHeader: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  driverHeaderTitle: { color: '#151923', fontWeight: '900', fontSize: 20, marginTop: 2 },
-  driverHeaderMeta: { color: '#6d6f76', fontWeight: '800', marginTop: 2 },
+  driverHeaderTitle: { color: '#171B25', fontWeight: '600', fontSize: 20, marginTop: 2 },
+  driverHeaderMeta: { color: '#717680', fontWeight: '600', marginTop: 2 },
   driverStatsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   driverStatCard: { flex: 1, borderRadius: 18, backgroundColor: '#fff', padding: 14, borderWidth: 1, borderColor: '#edf0f2' },
-  driverStatValue: { color: '#151923', fontSize: 20, fontWeight: '900' },
-  driverStatLabel: { marginTop: 4, color: '#6d6f76', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  driverStatValue: { color: '#171B25', fontSize: 20, fontWeight: '600' },
+  driverStatLabel: { marginTop: 4, color: '#717680', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
   driverOrderCard: { backgroundColor: '#fff', borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#edf0f2', gap: 10 },
-  driverCommission: { color: brandRed, fontWeight: '900' },
-  driverItemsBox: { gap: 8, borderRadius: 16, backgroundColor: '#f7fbfc', padding: 10 },
+  driverCommission: { color: brandRed, fontWeight: '600' },
+  driverItemsBox: { gap: 8, borderRadius: 16, backgroundColor: '#F8F9FB', padding: 10 },
   driverItemRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   driverItemImage: { width: 34, height: 34, borderRadius: 10 },
-  driverItemName: { flex: 1, color: '#151923', fontSize: 12, fontWeight: '800' },
+  driverItemName: { flex: 1, color: '#171B25', fontSize: 12, fontWeight: '600' },
   driverActionRow: { gap: 8 },
-  driverHint: { color: '#6d6f76', fontSize: 12, fontWeight: '800' },
+  driverHint: { color: '#717680', fontSize: 12, fontWeight: '600' },
   driverProfileRow: { flexDirection: 'row', gap: 16, alignItems: 'center', flex: 1 },
   driverAvatarCard: { width: 96, minHeight: 96, borderRadius: 24, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 10, shadowColor: '#1b2431', shadowOpacity: 0.05, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 4 },
   driverAvatar: { width: 72, height: 72, borderRadius: 18, backgroundColor: '#f1f5f8' },
   uploadPhotoButton: { marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: '#fde2e4', backgroundColor: '#fff8f8' },
-  uploadPhotoText: { color: brandRed, fontWeight: '900', fontSize: 12 },
+  uploadPhotoText: { color: brandRed, fontWeight: '600', fontSize: 12 },
   driverHeaderDetails: { flex: 1, justifyContent: 'center' },
-  driverBadge: { marginTop: 8, color: '#151923', fontWeight: '900', fontSize: 13 },
-  driverBadgeMeta: { marginTop: 2, color: '#6d6f76', fontSize: 12, fontWeight: '700' },
+  driverBadge: { marginTop: 8, color: '#171B25', fontWeight: '600', fontSize: 13 },
+  driverBadgeMeta: { marginTop: 2, color: '#717680', fontSize: 12, fontWeight: '700' },
   driverProfileHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingBottom: 14, borderBottomWidth: 1, borderColor: '#edf0f2' },
-  driverProfileAvatarWrapper: { width: 88, height: 88, borderRadius: 26, backgroundColor: '#f7fbfc', alignItems: 'center', justifyContent: 'center' },
+  driverProfileAvatarWrapper: { width: 88, height: 88, borderRadius: 26, backgroundColor: '#F8F9FB', alignItems: 'center', justifyContent: 'center' },
   driverAvatarLarge: { width: 76, height: 76, borderRadius: 22, backgroundColor: '#eef3f4' },
   driverProfileHeaderText: { flex: 1 },
-  driverProfileTitle: { fontSize: 20, fontWeight: '900', color: '#151923' },
-  driverProfileSubtitle: { marginTop: 4, color: '#6d6f76', fontWeight: '700' },
+  driverProfileTitle: { fontSize: 20, fontWeight: '600', color: '#171B25' },
+  driverProfileSubtitle: { marginTop: 4, color: '#717680', fontWeight: '700' },
   driverProfileStatsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  driverProfileStatCard: { flex: 1, borderRadius: 18, backgroundColor: '#f7fbfc', padding: 14, alignItems: 'center' },
-  driverProfileStatValue: { color: '#151923', fontSize: 16, fontWeight: '900' },
-  driverProfileStatLabel: { marginTop: 6, color: '#6d6f76', fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
+  driverProfileStatCard: { flex: 1, borderRadius: 18, backgroundColor: '#F8F9FB', padding: 14, alignItems: 'center' },
+  driverProfileStatValue: { color: '#171B25', fontSize: 16, fontWeight: '600' },
+  driverProfileStatLabel: { marginTop: 6, color: '#717680', fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
   driverProfileDetailsRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
   driverProfileDetailItem: { flex: 1, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 14 },
   driverBottomNav: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e6eaee', paddingVertical: 10, paddingBottom: Platform.OS === 'ios' ? 28 : 10, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: -3 }, elevation: 12 },
   driverBottomNavButton: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
   driverBottomNavButtonActive: { backgroundColor: '#fff4f5' },
-  driverBottomNavText: { marginTop: 2, fontSize: 11, color: '#5f6770', fontWeight: '900' },
+  driverBottomNavText: { marginTop: 2, fontSize: 11, color: '#5f6770', fontWeight: '600' },
   driverBottomNavTextActive: { color: brandRed },
   driverHomeGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', marginTop: 14 },
   driverMetricCard: { flex: 1, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 16 },
-  driverMetricValue: { color: '#151923', fontSize: 24, fontWeight: '900' },
-  driverMetricLabel: { marginTop: 8, color: '#6d6f76', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  driverMetricValue: { color: '#171B25', fontSize: 24, fontWeight: '600' },
+  driverMetricLabel: { marginTop: 8, color: '#717680', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
   walletCard: { borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 18, marginBottom: 12 },
-  walletLabel: { color: '#6d6f76', fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
-  walletBalance: { marginTop: 8, color: '#151923', fontSize: 28, fontWeight: '900' },
-  walletText: { marginTop: 8, color: '#6d6f76', fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  walletLabel: { color: '#717680', fontWeight: '600', fontSize: 12, textTransform: 'uppercase' },
+  walletBalance: { marginTop: 8, color: '#171B25', fontSize: 28, fontWeight: '600' },
+  walletText: { marginTop: 8, color: '#717680', fontSize: 13, lineHeight: 18, fontWeight: '700' },
   driverProfileCard: { borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', padding: 18, gap: 10 },
-  driverProfileLabel: { color: '#6d6f76', fontWeight: '900', fontSize: 12, textTransform: 'uppercase' },
-  driverProfileValue: { color: '#151923', fontWeight: '900', fontSize: 15 },
-  driverMoreItems: { color: '#6d6f76', fontSize: 12, fontWeight: '900', marginTop: 6 },
+  driverProfileLabel: { color: '#717680', fontWeight: '600', fontSize: 12, textTransform: 'uppercase' },
+  driverProfileValue: { color: '#171B25', fontWeight: '600', fontSize: 15 },
+  driverMoreItems: { color: '#717680', fontSize: 12, fontWeight: '600', marginTop: 6 },
   orderDetailModal: { width: '100%', maxWidth: 520, backgroundColor: '#fff', borderRadius: 28, padding: 18, maxHeight: '90%' },
   modalHeader: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   mapPreview: { width: '100%', height: 160, borderRadius: 18, marginTop: 8, backgroundColor: '#f0f4f7' },
@@ -2893,33 +2836,33 @@ const styles = StyleSheet.create({
   header: { padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   logo: { width: 42, height: 42, borderRadius: 12 },
-  brand: { color: brandRed, fontWeight: '900', fontSize: 18 },
-  location: { color: '#29384d', fontWeight: '800', maxWidth: 170 },
+  brand: { color: brandRed, fontWeight: '600', fontSize: 18 },
+  location: { color: '#171B25', fontWeight: '600', maxWidth: 170 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerIconButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   profileButton: { width: 42, height: 42, borderRadius: 21, overflow: 'hidden', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   profileButtonImage: { width: '100%', height: '100%' },
   cartButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  cartBadge: { position: 'absolute', top: -4, right: -2, backgroundColor: brandRed, color: '#fff', borderRadius: 9, overflow: 'hidden', minWidth: 18, textAlign: 'center', fontSize: 12, fontWeight: '900' },
-  searchBox: { marginHorizontal: 16, height: 46, borderWidth: 1, borderColor: '#f15b66', borderRadius: 16, backgroundColor: '#fff', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center' },
-  searchInput: { flex: 1, fontWeight: '800', color: '#29384d' },
+  cartBadge: { position: 'absolute', top: -4, right: -2, backgroundColor: brandRed, color: '#fff', borderRadius: 9, overflow: 'hidden', minWidth: 18, textAlign: 'center', fontSize: 12, fontWeight: '600' },
+  searchBox: { marginHorizontal: 16, height: 48, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, backgroundColor: '#fff', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center' },
+  searchInput: { flex: 1, fontWeight: '600', color: '#171B25' },
   content: { flex: 1 },
   contentBody: { padding: 16, paddingBottom: 100 },
-  pageTitle: { fontSize: 24, fontWeight: '900', color: '#151923', marginBottom: 14 },
+  pageTitle: { fontSize: 24, fontWeight: '600', color: '#171B25', marginBottom: 14 },
   promotionHeroBlock: { marginBottom: 8 },
   promotionHeroRail: { gap: 8 },
-  promotionHeroCard: { height: 82, borderRadius: 14, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#ffd08a', overflow: 'hidden', flexDirection: 'row' },
+  promotionHeroCard: { minHeight: 160, borderRadius: 14, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden', flexDirection: 'row' },
   promotionHeroText: { flex: 1, paddingVertical: 8, paddingLeft: 10, paddingRight: 8, justifyContent: 'center' },
-  promotionHeroTitle: { color: '#151923', fontSize: 14, lineHeight: 17, fontWeight: '900' },
-  promotionHeroCopy: { marginTop: 2, color: '#6c6250', fontSize: 11, lineHeight: 13, fontWeight: '700' },
-  promotionHeroCta: { marginTop: 6, alignSelf: 'flex-start', height: 24, borderRadius: 12, backgroundColor: '#151923', paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 3 },
-  promotionHeroCtaText: { color: '#fff', fontSize: 11, fontWeight: '900' },
-  promotionHeroMedia: { width: 72, backgroundColor: '#ffe6a3', alignItems: 'center', justifyContent: 'center' },
+  promotionHeroTitle: { color: '#171B25', fontSize: 20, lineHeight: 28, fontWeight: '600' },
+  promotionHeroCopy: { marginTop: 8, color: '#717680', fontSize: 14, lineHeight: 21, fontWeight: '700' },
+  promotionHeroCta: { marginTop: 6, alignSelf: 'flex-start', height: 24, borderRadius: 12, backgroundColor: '#171B25', paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 3 },
+  promotionHeroCtaText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  promotionHeroMedia: { width: 100, backgroundColor: '#ffe6a3', alignItems: 'center', justifyContent: 'center' },
   promotionHeroImage: { width: '100%', height: '100%' },
   promotionHeroDots: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
   promotionHeroDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#d8dee2' },
   promotionHeroDotActive: { width: 16, backgroundColor: brandRed },
-  promotionHeroStatus: { position: 'absolute', right: 2, bottom: -1, color: brandRed, fontSize: 8, fontWeight: '900', textTransform: 'uppercase' },
+  promotionHeroStatus: { position: 'absolute', right: 2, bottom: -1, color: brandRed, fontSize: 8, fontWeight: '600', textTransform: 'uppercase' },
   categoryQuickAccess: { marginBottom: 10, gap: 6 },
   categoryGridTop: { flexDirection: 'row', gap: 8 },
   categoryGridBottom: { flexDirection: 'row', gap: 7 },
@@ -2927,118 +2870,118 @@ const styles = StyleSheet.create({
   categoryTileSmall: { flex: 1, minWidth: 0, height: 58, borderRadius: 8, backgroundColor: '#eef3f4', paddingVertical: 5, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'space-between', overflow: 'visible' },
   categoryTileActive: { borderWidth: 2, borderColor: '#2fbf71', backgroundColor: '#f2fbf5' },
   categoryTileText: { alignSelf: 'flex-start', color: '#333b45', fontSize: 12, fontWeight: '600' },
-  categoryTileTextActive: { color: '#0f7f45', fontWeight: '800' },
-  categoryBadge: { position: 'absolute', top: -12, alignSelf: 'center', zIndex: 2, borderRadius: 12, backgroundColor: '#23b35d', color: '#fff', paddingHorizontal: 10, paddingVertical: 3, fontSize: 12, fontWeight: '900', overflow: 'hidden' },
+  categoryTileTextActive: { color: '#0f7f45', fontWeight: '600' },
+  categoryBadge: { position: 'absolute', top: -12, alignSelf: 'center', zIndex: 2, borderRadius: 12, backgroundColor: '#23b35d', color: '#fff', paddingHorizontal: 10, paddingVertical: 3, fontSize: 12, fontWeight: '600', overflow: 'hidden' },
   sectionBlock: { marginTop: 6, marginBottom: 16 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  sectionCount: { color: '#6d6f76', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
+  sectionCount: { color: '#717680', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
   featuredMealRail: { gap: 8, paddingRight: 10 },
-  featuredMealCard: { width: 118, borderRadius: 14, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#f5c45d' },
+  featuredMealCard: { width: 118, borderRadius: 14, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' },
   featuredMealImage: { width: '100%', height: 84 },
   featuredMealBody: { padding: 8, gap: 3 },
   categorySection: { marginTop: 18 },
-  categoryTitle: { color: '#151923', fontSize: 19, fontWeight: '900' },
+  categoryTitle: { color: '#171B25', fontSize: 19, fontWeight: '600' },
   mealGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  mealCard: { width: '48%', borderRadius: 16, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#f5c45d' },
-  mealImage: { width: '100%', height: 124 },
-  shareButton: { position: 'absolute', top: 8, left: 8, width: 34, height: 34, borderRadius: 17, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  mealCard: { width: '48%', borderRadius: 16, backgroundColor: '#fff', overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB' },
+  mealImage: { width: '100%', aspectRatio: 4 / 3 },
+  shareButton: { position: 'absolute', top: 8, left: 8, width: 44, height: 44, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   favoriteButton: { position: 'absolute', top: 8, right: 8, width: 34, height: 34, borderRadius: 17, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   mealBody: { padding: 12 },
-  mealName: { minHeight: 40, color: '#151923', fontWeight: '900' },
-  mealMeta: { marginTop: 4, color: '#737373', fontSize: 12, fontWeight: '800' },
+  mealName: { minHeight: 44, fontSize: 15, lineHeight: 22, color: '#171B25', fontWeight: '600' },
+  mealMeta: { marginTop: 4, color: '#737373', fontSize: 12, fontWeight: '600' },
   mealFooter: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  mealPrice: { color: brandRed, fontWeight: '900' },
+  mealPrice: { color: brandRed, fontWeight: '600' },
   addCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center' },
-  emptyText: { width: '100%', textAlign: 'center', color: '#737373', fontWeight: '800', padding: 28 },
+  emptyText: { width: '100%', textAlign: 'center', color: '#737373', fontWeight: '600', padding: 28 },
   loadingMoreBox: { paddingVertical: 18, alignItems: 'center', gap: 8 },
-  loadingMoreText: { color: '#6d6f76', fontSize: 12, fontWeight: '800' },
+  loadingMoreText: { color: '#717680', fontSize: 12, fontWeight: '600' },
   detailScreen: { flex: 1, backgroundColor: '#fff' },
   detailContent: { paddingBottom: 120 },
   detailImage: { width: '100%', height: 300 },
   detailIcon: { position: 'absolute', top: 18, right: 18, width: 42, height: 42, borderRadius: 12, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   detailShare: { left: 18, right: 'auto' },
   detailBody: { padding: 22 },
-  detailTitle: { fontSize: 24, fontWeight: '900', color: '#151923' },
-  detailPrice: { marginTop: 8, fontSize: 18, color: brandRed, fontWeight: '900' },
-  detailCopy: { marginTop: 14, color: '#5f646b', lineHeight: 22, fontWeight: '600' },
+  detailTitle: { fontSize: 24, fontWeight: '600', color: '#171B25' },
+  detailPrice: { marginTop: 8, fontSize: 18, color: brandRed, fontWeight: '600' },
+  detailCopy: { marginTop: 14, color: '#717680', lineHeight: 22, fontWeight: '600' },
   restaurantInfoCard: { marginTop: 14, borderRadius: 18, borderWidth: 1, borderColor: '#edf0f2', backgroundColor: '#fff', padding: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   restaurantLogo: { width: 44, height: 44, borderRadius: 22 },
   restaurantInfoText: { flex: 1 },
-  restaurantName: { color: '#151923', fontWeight: '900' },
-  restaurantMeta: { marginTop: 2, color: '#6d6f76', fontSize: 12, fontWeight: '700' },
+  restaurantName: { color: '#171B25', fontWeight: '600' },
+  restaurantMeta: { marginTop: 2, color: '#717680', fontSize: 12, fontWeight: '700' },
   openBadge: { borderRadius: 14, backgroundColor: '#e7f8ef', paddingHorizontal: 10, paddingVertical: 6 },
-  openBadgeText: { color: '#0b8f4f', fontSize: 12, fontWeight: '900' },
+  openBadgeText: { color: '#0b8f4f', fontSize: 12, fontWeight: '600' },
   section: { marginTop: 22 },
-  sectionTitle: { fontWeight: '900', marginBottom: 10, color: '#151923' },
-  optionHelp: { marginTop: -4, marginBottom: 10, color: '#6d6f76', fontSize: 13, fontWeight: '700' },
-  variationCard: { marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#fff', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  sectionTitle: { fontWeight: '600', marginBottom: 10, color: '#171B25' },
+  optionHelp: { marginTop: -4, marginBottom: 10, color: '#717680', fontSize: 13, fontWeight: '700' },
+  variationCard: { marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#fff', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
   variationCardActive: { borderColor: brandRed, backgroundColor: '#fff4d7' },
   variationTextBox: { flex: 1 },
   optionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
-  optionText: { fontWeight: '700', color: '#5f646b' },
+  optionText: { fontWeight: '700', color: '#717680' },
   detailFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#edf0f2', flexDirection: 'row', gap: 8 },
   qtyBox: { width: 76, height: 46, borderWidth: 1, borderColor: brandRed, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 6 },
-  qtyText: { fontWeight: '900', color: '#151923' },
+  qtyText: { fontWeight: '600', color: '#171B25' },
   orderCard: { backgroundColor: '#fff', borderRadius: 18, padding: 16, marginBottom: 12 },
   orderCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  orderNo: { fontWeight: '900', color: '#151923' },
+  orderNo: { fontWeight: '600', color: '#171B25' },
   orderMeta: { marginTop: 5, color: '#737373', fontWeight: '700' },
-  status: { marginTop: 8, color: '#0b8f4f', fontWeight: '900' },
+  status: { marginTop: 8, color: '#0b8f4f', fontWeight: '600' },
   supportCard: { backgroundColor: '#fff', borderRadius: 24, padding: 22, alignItems: 'center', gap: 10 },
-  supportTitle: { fontSize: 18, fontWeight: '900', color: '#151923' },
-  supportText: { color: '#737373', fontWeight: '800' },
-  profileHeader: { backgroundColor: '#151923', borderRadius: 24, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  supportTitle: { fontSize: 18, fontWeight: '600', color: '#171B25' },
+  supportText: { color: '#737373', fontWeight: '600' },
+  profileHeader: { backgroundColor: '#171B25', borderRadius: 24, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 76, height: 76, borderRadius: 22 },
   avatarFallback: { width: 76, height: 76, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  avatarEditBadge: { position: 'absolute', right: -5, bottom: -5, width: 28, height: 28, borderRadius: 14, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#151923' },
+  avatarEditBadge: { position: 'absolute', right: -5, bottom: -5, width: 28, height: 28, borderRadius: 14, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#171B25' },
   avatarUploadButton: { alignSelf: 'flex-start', marginTop: 8, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 10, paddingVertical: 7 },
-  avatarUploadText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  avatarUploadText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   profileNameBox: { flex: 1 },
-  profileName: { color: '#fff', fontWeight: '900', fontSize: 22 },
-  profilePhone: { color: 'rgba(255,255,255,0.7)', fontWeight: '800', marginTop: 4 },
+  profileName: { color: '#fff', fontWeight: '600', fontSize: 22 },
+  profilePhone: { color: 'rgba(255,255,255,0.7)', fontWeight: '600', marginTop: 4 },
   statsRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   statPill: { flex: 1, alignItems: 'center', backgroundColor: '#fff', borderRadius: 18, padding: 12 },
-  statValue: { marginTop: 5, fontSize: 22, fontWeight: '900', color: '#151923' },
-  statLabel: { fontSize: 12, color: '#737373', fontWeight: '900', textTransform: 'uppercase' },
-  rankCard: { marginTop: 12, backgroundColor: '#151923', borderRadius: 18, padding: 14 },
-  rankLabel: { color: '#fff', fontWeight: '900' },
+  statValue: { marginTop: 5, fontSize: 22, fontWeight: '600', color: '#171B25' },
+  statLabel: { fontSize: 12, color: '#737373', fontWeight: '600', textTransform: 'uppercase' },
+  rankCard: { marginTop: 12, backgroundColor: '#171B25', borderRadius: 18, padding: 14 },
+  rankLabel: { color: '#fff', fontWeight: '600' },
   rankCopy: { color: 'rgba(255,255,255,0.68)', marginTop: 4, fontWeight: '700' },
   segment: { flexDirection: 'row', backgroundColor: '#edf0f2', borderRadius: 18, padding: 4, marginTop: 14, gap: 4 },
   segmentButton: { flex: 1, minHeight: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   segmentActive: { backgroundColor: '#fff' },
-  segmentText: { color: '#737373', fontWeight: '900', textAlign: 'center' },
+  segmentText: { color: '#737373', fontWeight: '600', textAlign: 'center' },
   segmentTextActive: { color: brandRed },
   card: { backgroundColor: '#fff', borderRadius: 22, padding: 16, marginTop: 12, gap: 12 },
-  cardTitle: { fontWeight: '900', color: '#151923' },
-  cardCopy: { color: '#737373', fontWeight: '700', lineHeight: 20 },
-  linkText: { backgroundColor: '#f7fbfc', borderRadius: 14, padding: 12, color: '#151923', fontWeight: '900' },
+  cardTitle: { fontWeight: '600', color: '#171B25' },
+  cardCopy: { fontSize: 14, lineHeight: 21, color: '#737373', fontWeight: '700', lineHeight: 20 },
+  linkText: { backgroundColor: '#F8F9FB', borderRadius: 14, padding: 12, color: '#171B25', fontWeight: '600' },
   languageSwitch: { borderTopWidth: 1, borderTopColor: '#edf0f2', paddingTop: 12 },
   languageButtons: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  smallLang: { flex: 1, height: 40, borderRadius: 12, backgroundColor: '#f7fbfc', alignItems: 'center', justifyContent: 'center' },
+  smallLang: { flex: 1, height: 40, borderRadius: 12, backgroundColor: '#F8F9FB', alignItems: 'center', justifyContent: 'center' },
   smallLangActive: { backgroundColor: brandRed },
-  smallLangText: { color: '#737373', fontWeight: '900' },
-  smallLangTextActive: { color: '#fff', fontWeight: '900' },
-  checkoutHeader: { minHeight: 92, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#eef8fa' },
+  smallLangText: { color: '#737373', fontWeight: '600' },
+  smallLangTextActive: { color: '#fff', fontWeight: '600' },
+  checkoutHeader: { minHeight: 92, paddingHorizontal: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8F9FB' },
   checkoutTitle: { flex: 1, textAlign: 'center', fontSize: 20, color: '#07142a', fontWeight: '500' },
   headerSpacer: { width: 26 },
   checkoutBody: { padding: 16, paddingBottom: 34, gap: 12 },
   checkoutBodyFlush: { paddingBottom: 34 },
   checkoutList: { backgroundColor: '#fff' },
-  checkoutItem: { minHeight: 102, borderBottomWidth: 1, borderBottomColor: '#dbe5e8', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checkoutItem: { minHeight: 102, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   checkoutItemImage: { width: 74, height: 74, borderRadius: 37 },
   checkoutItemInfo: { flex: 1, paddingRight: 28 },
   checkoutItemName: { color: '#111827', fontSize: 15, fontWeight: '600' },
-  checkoutItemVariation: { marginTop: 2, color: brandRed, fontSize: 12, fontWeight: '800' },
-  checkoutItemMeta: { marginTop: 3, color: '#6d6f76', fontSize: 13, fontWeight: '600' },
+  checkoutItemVariation: { marginTop: 2, color: brandRed, fontSize: 12, fontWeight: '600' },
+  checkoutItemMeta: { marginTop: 3, color: '#717680', fontSize: 13, fontWeight: '600' },
   checkoutRemove: { position: 'absolute', right: 14, top: 12 },
   checkoutQty: { position: 'absolute', right: 12, bottom: 8, width: 84, height: 28, borderRadius: 6, borderWidth: 1, borderColor: '#818892', backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
-  cartTotals: { marginTop: 20, borderTopWidth: 1, borderTopColor: '#dbe5e8', paddingHorizontal: 24, paddingTop: 14, gap: 14 },
-  cartGrandTotal: { marginTop: 22, borderTopWidth: 1, borderTopColor: '#dbe5e8', paddingTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cartTotals: { marginTop: 20, borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingHorizontal: 24, paddingTop: 14, gap: 14 },
+  cartGrandTotal: { marginTop: 22, borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingTop: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   checkoutCtaBox: { paddingHorizontal: 24, paddingTop: 36, paddingBottom: 10 },
   checkoutButton: { minHeight: 48, borderRadius: 6, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 16 },
-  emptyCartScreen: { flex: 1, minHeight: 620, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: '#eef8fa' },
+  emptyCartScreen: { flex: 1, minHeight: 620, alignItems: 'center', justifyContent: 'center', padding: 28, backgroundColor: '#F8F9FB' },
   emptyCartTitle: { marginTop: 18, color: '#07142a', fontSize: 20, fontWeight: '500', textAlign: 'center' },
-  emptyCartCopy: { marginTop: 12, color: '#5f646b', fontSize: 16, lineHeight: 24, textAlign: 'center' },
+  emptyCartCopy: { marginTop: 12, color: '#717680', fontSize: 16, lineHeight: 24, textAlign: 'center' },
   segmentPill: { marginHorizontal: 20, height: 52, borderRadius: 26, backgroundColor: '#e9e9e9', padding: 4, flexDirection: 'row', gap: 4 },
   segmentPillButton: { flex: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   segmentPillActive: { backgroundColor: '#fff' },
@@ -3048,7 +2991,7 @@ const styles = StyleSheet.create({
   fieldRowBody: { flex: 1 },
   rowInput: { minHeight: 28, color: '#07142a', fontSize: 16, fontWeight: '600' },
   rowStatic: { minHeight: 28, color: '#07142a', fontSize: 16, fontWeight: '600' },
-  fieldHint: { marginTop: 4, color: '#6d6f76', fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  fieldHint: { marginTop: 4, color: '#717680', fontSize: 13, lineHeight: 18, fontWeight: '600' },
   giftPanel: { marginTop: 16, padding: 18, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   giftText: { flex: 1 },
   giftFields: { padding: 16, gap: 12, backgroundColor: '#fff' },
@@ -3062,7 +3005,7 @@ const styles = StyleSheet.create({
   addMoreText: { color: '#07142a', fontSize: 14, fontWeight: '600' },
   priceRows: { paddingHorizontal: 24, gap: 13 },
   priceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  priceLabel: { color: '#6d6f76', fontSize: 16 },
+  priceLabel: { color: '#717680', fontSize: 16 },
   priceValue: { color: '#07142a', fontSize: 16, fontWeight: '600' },
   discountValue: { color: '#00a35b', fontSize: 16, fontWeight: '600' },
   priceTotalLabel: { color: '#07142a', fontSize: 16, fontWeight: '500' },
@@ -3071,24 +3014,24 @@ const styles = StyleSheet.create({
   cartRow: { backgroundColor: '#fff', borderRadius: 18, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
   cartImage: { width: 56, height: 56, borderRadius: 14 },
   cartInfo: { flex: 1 },
-  cartName: { fontWeight: '900', color: '#151923' },
-  totalBox: { backgroundColor: '#151923', borderRadius: 18, padding: 16, gap: 8 },
+  cartName: { fontWeight: '600', color: '#171B25' },
+  totalBox: { backgroundColor: '#171B25', borderRadius: 18, padding: 16, gap: 8 },
   totalLine: { color: 'rgba(255,255,255,0.72)', fontWeight: '700' },
-  totalValue: { color: '#fff', fontWeight: '900', fontSize: 18 },
+  totalValue: { color: '#fff', fontWeight: '600', fontSize: 18 },
   flashBanner: { marginBottom: 12, borderRadius: 20, backgroundColor: '#fff4d7', borderWidth: 1, borderColor: '#ffd08a', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 },
   flashIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center' },
   flashCopy: { flex: 1 },
-  flashTitle: { color: '#151923', fontWeight: '900' },
-  flashText: { marginTop: 3, color: '#6d6f76', fontWeight: '700', lineHeight: 18 },
+  flashTitle: { color: '#171B25', fontWeight: '600' },
+  flashText: { marginTop: 3, color: '#717680', fontWeight: '700', lineHeight: 18 },
   actionRow: { flexDirection: 'row', gap: 10, marginTop: 12, marginBottom: 12 },
   actionButton: { flex: 1, minHeight: 48, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#ffd5d7', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, paddingHorizontal: 10 },
-  actionText: { color: '#151923', fontWeight: '900' },
+  actionText: { color: '#171B25', fontWeight: '600' },
   promoCard: { backgroundColor: '#fff', borderRadius: 22, overflow: 'hidden', marginBottom: 14, borderWidth: 1, borderColor: '#edf0f2' },
   promoImage: { width: '100%', height: 132 },
   promoImageFallback: { height: 116, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },
   promoBody: { padding: 16, gap: 8 },
-  promoEyebrow: { color: brandRed, textTransform: 'uppercase', fontSize: 12, fontWeight: '900' },
-  promoTitle: { color: '#151923', fontSize: 18, fontWeight: '900' },
+  promoEyebrow: { color: brandRed, textTransform: 'uppercase', fontSize: 12, fontWeight: '600' },
+  promoTitle: { color: '#171B25', fontSize: 18, fontWeight: '600' },
   promotionStrip: { marginTop: 22, marginBottom: 6 },
   marketingHeroRail: { gap: 12, paddingRight: 12, paddingVertical: 4 },
   marketingHero: { width: 286, marginTop: 14, borderRadius: 20, backgroundColor: '#fff4d7', overflow: 'hidden', borderWidth: 1, borderColor: '#ffd08a' },
@@ -3098,93 +3041,93 @@ const styles = StyleSheet.create({
   promotionTile: { width: 230, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#edf0f2', overflow: 'hidden', paddingBottom: 12 },
   promotionTileImage: { width: '100%', height: 106 },
   promotionTileFallback: { height: 106, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff1ca' },
-  orderDetailSummary: { backgroundColor: '#151923', borderRadius: 22, padding: 18, gap: 6 },
-  orderDetailNo: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  orderDetailSummary: { backgroundColor: '#171B25', borderRadius: 22, padding: 18, gap: 6 },
+  orderDetailNo: { color: '#fff', fontSize: 22, fontWeight: '600' },
   trackingCard: { borderRadius: 22, backgroundColor: '#fff', padding: 14, gap: 12, borderWidth: 1, borderColor: '#e2edf0' },
   trackingHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  trackingEyebrow: { color: brandRed, fontSize: 11, fontWeight: '900', textTransform: 'uppercase' },
-  trackingTitle: { color: '#151923', fontSize: 18, fontWeight: '900', marginTop: 2 },
+  trackingEyebrow: { color: brandRed, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' },
+  trackingTitle: { color: '#171B25', fontSize: 18, fontWeight: '600', marginTop: 2 },
   etaPill: { height: 30, borderRadius: 15, backgroundColor: '#fff4f4', paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  etaText: { color: brandRed, fontSize: 12, fontWeight: '900' },
-  mapPreview: { height: 150, borderRadius: 18, backgroundColor: '#eaf5f8', overflow: 'hidden', justifyContent: 'center' },
+  etaText: { color: brandRed, fontSize: 12, fontWeight: '600' },
+  mapPreview: { height: 150, borderRadius: 18, backgroundColor: '#F8F9FB', overflow: 'hidden', justifyContent: 'center' },
   routeLine: { position: 'absolute', left: 44, right: 44, height: 4, borderRadius: 4, backgroundColor: '#2fbf71', transform: [{ rotate: '-14deg' }] },
   mapMarker: { position: 'absolute', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#fff' },
-  restaurantMarker: { left: 22, top: 82, backgroundColor: '#151923' },
+  restaurantMarker: { left: 22, top: 82, backgroundColor: '#171B25' },
   driverMarker: { left: '48%', top: 58, backgroundColor: brandRed },
   customerMarker: { right: 24, top: 42, backgroundColor: '#2fbf71' },
   trackingStats: { flexDirection: 'row', gap: 8 },
-  trackingStat: { flex: 1, borderRadius: 12, backgroundColor: '#f7fbfc', padding: 8, color: '#42495a', fontSize: 11, fontWeight: '900', textAlign: 'center' },
+  trackingStat: { flex: 1, borderRadius: 12, backgroundColor: '#F8F9FB', padding: 8, color: '#42495a', fontSize: 11, fontWeight: '600', textAlign: 'center' },
   driverBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, backgroundColor: '#fff8e8', padding: 10 },
   driverPhoto: { width: 38, height: 38, borderRadius: 19 },
   driverPhotoFallback: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   driverInfo: { flex: 1 },
-  driverName: { color: '#151923', fontSize: 13, fontWeight: '900' },
-  driverMeta: { color: '#6d6f76', fontSize: 11, fontWeight: '800', marginTop: 2 },
+  driverName: { color: '#171B25', fontSize: 13, fontWeight: '600' },
+  driverMeta: { color: '#717680', fontSize: 11, fontWeight: '600', marginTop: 2 },
   progressTrack: { height: 8, borderRadius: 8, backgroundColor: '#edf0f2', overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 8, backgroundColor: brandRed },
   timelineList: { gap: 10 },
   timelineRow: { flexDirection: 'row', gap: 10 },
   timelineDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: brandRed, marginTop: 4 },
   timelineCopy: { flex: 1 },
-  timelineTitle: { color: '#151923', fontSize: 12, fontWeight: '900' },
-  timelineTime: { color: '#6d6f76', fontSize: 11, fontWeight: '800', marginTop: 1 },
+  timelineTitle: { color: '#171B25', fontSize: 12, fontWeight: '600' },
+  timelineTime: { color: '#717680', fontSize: 11, fontWeight: '600', marginTop: 1 },
   timelineMessage: { color: '#42495a', fontSize: 11, fontWeight: '700', marginTop: 2 },
   orderDetailItem: { minHeight: 76, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   orderDetailImage: { width: 52, height: 52, borderRadius: 14, backgroundColor: '#fff' },
   secondaryButton: { minHeight: 42, borderRadius: 14, backgroundColor: '#fff1ca', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
-  secondaryButtonText: { color: brandRed, fontWeight: '900' },
+  secondaryButtonText: { color: brandRed, fontWeight: '600' },
   activeOrdersBox: { backgroundColor: '#fff', borderRadius: 20, padding: 14, marginBottom: 14, gap: 10 },
   activeOrderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#edf0f2', paddingTop: 10 },
   faqCard: { backgroundColor: '#fff', borderRadius: 18, padding: 16, marginTop: 12, gap: 6 },
-  successScreen: { flex: 1, backgroundColor: '#eaf5f8', justifyContent: 'center', padding: 18 },
+  successScreen: { flex: 1, backgroundColor: '#F8F9FB', justifyContent: 'center', padding: 18 },
   successCard: { backgroundColor: '#fff', borderRadius: 24, padding: 24, alignItems: 'center', gap: 16 },
   successIcon: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#33c85a', alignItems: 'center', justifyContent: 'center' },
-  successTitle: { color: '#33c85a', fontSize: 20, fontWeight: '900' },
+  successTitle: { color: '#33c85a', fontSize: 20, fontWeight: '600' },
   ratingRow: { flexDirection: 'row', gap: 8 },
   ratingButton: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff1ca', alignItems: 'center', justifyContent: 'center' },
   reviewSection: { marginTop: 24, gap: 10 },
-  reviewScore: { color: brandRed, fontSize: 13, fontWeight: '900' },
-  reviewCard: { borderRadius: 16, backgroundColor: '#f7fbfc', borderWidth: 1, borderColor: '#edf0f2', padding: 12, gap: 6 },
-  reviewStars: { color: '#f5a400', fontSize: 12, fontWeight: '900' },
+  reviewScore: { color: brandRed, fontSize: 13, fontWeight: '600' },
+  reviewCard: { borderRadius: 16, backgroundColor: '#F8F9FB', borderWidth: 1, borderColor: '#edf0f2', padding: 12, gap: 6 },
+  reviewStars: { color: '#f5a400', fontSize: 12, fontWeight: '600' },
   reviewForm: { marginTop: 6, borderRadius: 18, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff', padding: 14, gap: 10 },
-  reviewInput: { minHeight: 76, borderRadius: 14, borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#f7fbfc', padding: 12, color: '#151923', textAlignVertical: 'top', fontWeight: '700' },
+  reviewInput: { minHeight: 76, borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#F8F9FB', padding: 12, color: '#171B25', textAlignVertical: 'top', fontWeight: '700' },
   orderReviewBox: { marginTop: 10, borderRadius: 16, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff', padding: 12, gap: 10 },
   orderDetailItemBlock: { borderRadius: 18, backgroundColor: '#fff4d7', padding: 12, gap: 8 },
   filterRail: { gap: 8, paddingBottom: 12 },
-  filterChip: { borderRadius: 999, borderWidth: 1, borderColor: '#dbe5e8', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8 },
+  filterChip: { borderRadius: 999, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8 },
   filterChipActive: { borderColor: brandRed, backgroundColor: '#fff4f4' },
-  filterChipText: { color: '#5f646b', fontSize: 12, fontWeight: '900' },
+  filterChipText: { color: '#717680', fontSize: 12, fontWeight: '600' },
   filterChipTextActive: { color: brandRed },
   switchAccountButton: { marginTop: 12, minHeight: 46, borderRadius: 16, borderWidth: 1, borderColor: '#ffd5d7', backgroundColor: '#fff8f8', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
-  switchAccountText: { color: brandRed, fontSize: 12, fontWeight: '900' },
+  switchAccountText: { color: brandRed, fontSize: 12, fontWeight: '600' },
   flashModal: { width: '100%', maxWidth: 380, borderRadius: 26, backgroundColor: '#fff', padding: 22, alignItems: 'center', gap: 12 },
-  codeBox: { width: '100%', borderRadius: 18, backgroundColor: '#151923', color: '#fff', textAlign: 'center', padding: 16, fontSize: 24, fontWeight: '900', letterSpacing: 1 },
+  codeBox: { width: '100%', borderRadius: 18, backgroundColor: '#171B25', color: '#fff', textAlign: 'center', padding: 16, fontSize: 24, fontWeight: '600', letterSpacing: 1 },
   linkButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  linkButtonText: { color: '#5f646b', fontWeight: '900' },
-  uploadCard: { backgroundColor: '#fff', borderRadius: 18, padding: 14, alignItems: 'center', justifyContent: 'center', gap: 12, borderWidth: 1, borderColor: '#dbe5e8' },
+  linkButtonText: { color: '#717680', fontWeight: '600' },
+  uploadCard: { backgroundColor: '#fff', borderRadius: 18, padding: 14, alignItems: 'center', justifyContent: 'center', gap: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   uploadPreview: { width: '100%', height: 150, borderRadius: 14 },
   bottomTabs: { position: 'absolute', left: 0, right: 0, bottom: 0, minHeight: 74, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#dde7ea', flexDirection: 'row', paddingHorizontal: 4, paddingBottom: 4 },
   tabButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tabText: { fontSize: 12, color: '#42495a', fontWeight: '900' },
+  tabText: { fontSize: 12, color: '#42495a', fontWeight: '600' },
   tabTextActive: { color: brandRed },
   activeOrderTabBadge: { position: 'absolute', top: -8, right: -10, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
-  activeOrderTabText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  activeOrderTabText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   rewardFab: { position: 'absolute', right: 18, bottom: 92, width: 56, height: 56, borderRadius: 28, backgroundColor: brandRed, alignItems: 'center', justifyContent: 'center', shadowColor: brandRed, shadowOpacity: 0.28, shadowRadius: 18, elevation: 8 },
   rewardOverlay: { flex: 1, backgroundColor: 'rgba(21,25,35,0.45)', justifyContent: 'flex-end' },
   rewardSheet: { maxHeight: '78%', borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#fff', overflow: 'hidden' },
-  streakPanel: { marginHorizontal: 16, marginBottom: 4, borderRadius: 18, backgroundColor: '#151923', padding: 14, overflow: 'hidden' },
-  streakLabel: { color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
-  streakValue: { marginTop: 2, color: '#fff', fontSize: 24, fontWeight: '900' },
+  streakPanel: { marginHorizontal: 16, marginBottom: 4, borderRadius: 18, backgroundColor: '#171B25', padding: 14, overflow: 'hidden' },
+  streakLabel: { color: 'rgba(255,255,255,0.62)', fontSize: 12, fontWeight: '600', textTransform: 'uppercase' },
+  streakValue: { marginTop: 2, color: '#fff', fontSize: 24, fontWeight: '600' },
   streakTrack: { marginTop: 12, height: 9, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.16)', overflow: 'hidden' },
   streakFill: { height: '100%', borderRadius: 8, backgroundColor: '#2fbf71' },
-  streakHint: { marginTop: 7, color: 'rgba(255,255,255,0.72)', fontSize: 12, fontWeight: '800' },
+  streakHint: { marginTop: 7, color: 'rgba(255,255,255,0.72)', fontSize: 12, fontWeight: '600' },
   rewardBurst: { position: 'absolute', right: 14, top: 16, flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 16, backgroundColor: brandRed, paddingHorizontal: 10, paddingVertical: 6 },
-  rewardBurstText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  rewardBurstText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   rewardCard: { borderRadius: 18, backgroundColor: '#fff8e8', padding: 14, gap: 12, marginBottom: 12, borderWidth: 1, borderColor: '#ffd08a' },
   rewardCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   rewardIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   rewardCardCopy: { flex: 1 },
   claimButton: { height: 42, borderRadius: 16, backgroundColor: brandRed, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  claimButtonText: { color: '#fff', fontSize: 12, fontWeight: '900' },
-  claimResult: { color: '#16894d', fontSize: 12, fontWeight: '900' }
+  claimButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  claimResult: { color: '#16894d', fontSize: 12, fontWeight: '600' }
 });

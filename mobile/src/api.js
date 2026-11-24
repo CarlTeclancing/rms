@@ -36,20 +36,29 @@ function getApiUrl() {
 
 export const API_URL = getApiUrl();
 
+let customerToken = '';
+export const setCustomerToken = token => { customerToken = token || ''; };
+
 async function request(path, options = {}) {
   const url = `${API_URL}${path}`;
   let response;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
 
   try {
     response = await fetch(url, {
       ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
+        ...(customerToken ? { 'X-Customer-Token': customerToken } : {}),
         ...(options.headers || {})
       }
     });
   } catch (error) {
-    throw new Error(`Network request failed: ${url}`);
+    throw new Error(error.name === 'AbortError' ? 'The request took too long. Please try again.' : 'Could not connect. Check your internet connection and try again.');
+  } finally {
+    clearTimeout(timer);
   }
 
   const data = await response.json().catch(() => null);

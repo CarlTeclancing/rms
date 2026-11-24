@@ -7,11 +7,6 @@
     "icon": "./assets/expo-app-icon.png",
     "scheme": "chopasap",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/auth-brand.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -33,7 +28,16 @@
       }
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/auth-brand.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ]
     ]
   }
 }

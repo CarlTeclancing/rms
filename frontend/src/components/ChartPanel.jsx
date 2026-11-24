@@ -10,6 +10,8 @@ import {
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 
+ChartJS.defaults.font.family = 'Poppins, sans-serif';
+
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
 
 const baseOptions = {
